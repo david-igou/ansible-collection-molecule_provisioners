@@ -109,13 +109,45 @@ jobs:
       - name: Create molecule namespace
         run: kubectl create namespace molecule
 
+      - name: Watch VM/VMI state in background
+        run: |
+          (while true; do
+             echo "=== $(date -u +%H:%M:%S) ==="
+             kubectl -n molecule get vm,vmi,pod,svc -o wide 2>/dev/null || true
+             sleep 15
+           done) > /tmp/vm-watch.log 2>&1 &
+          echo "$!" > /tmp/vm-watch.pid
+
       - name: Run kubevirt_ci scenario
         working-directory: ansible_collections/david_igou/molecule_provisioners
         env:
           PROVISIONER: kubevirt
           MOLECULE_KUBEVIRT_ENABLED: "1"
           ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
-        run: pytest tests/integration -v -k kubevirt_ci
+        run: |
+          # Override pyproject.toml addopts to disable xdist (-n 2) which captures
+          # all molecule output. We need molecule's PLAY RECAP visible in CI logs
+          # to confirm the scenario actually exercised create/prepare/converge/verify.
+          pytest tests/integration -v -k kubevirt_ci -s -o addopts=""
+
+      - name: Stop VM watcher and dump trace
+        if: always()
+        run: |
+          if [[ -f /tmp/vm-watch.pid ]]; then
+            kill "$(cat /tmp/vm-watch.pid)" 2>/dev/null || true
+          fi
+          echo "::group::VM/VMI watch trace"
+          cat /tmp/vm-watch.log 2>/dev/null || echo "(no trace)"
+          echo "::endgroup::"
+
+      - name: Assert a VirtualMachine existed during the run
+        run: |
+          # Fail loudly if our watch trace never observed a VirtualMachine — that
+          # would mean molecule passed without actually exercising kubevirt.
+          if ! grep -qE "VirtualMachine|virtualmachine\.kubevirt\.io" /tmp/vm-watch.log; then
+            echo "::error::No VirtualMachine ever appeared in the molecule namespace — scenario was a no-op."
+            exit 1
+          fi
 
       - name: Collect cluster diagnostics on failure
         if: failure()
