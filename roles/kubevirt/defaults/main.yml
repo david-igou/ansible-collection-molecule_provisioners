@@ -1,0 +1,15 @@
+---
+# Defaults for david_igou.molecule_provisioners.kubevirt.
+
+# SSH keypair lives in the molecule ephemeral dir so destroy can find it.
+mp_kubevirt_ssh_key_path: "{{ molecule_ephemeral_directory }}/identity_file"
+
+# Default namespace if a platform doesn't set its own.
+mp_kubevirt_namespace: molecule
+
+# wait_for_connection timeout (seconds) for prepare phase.
+mp_kubevirt_wait_timeout: 120
+
+# Allowed ssh_service.type values. v1 supports NodePort only.
+mp_kubevirt_allowed_ssh_service_types:
+  - NodePort
