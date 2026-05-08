@@ -133,11 +133,15 @@ platforms:
 
 `$PROVISIONER` env var, evaluated at dispatcher runtime. Default `podman` when unset/empty. Only `podman` and `kubevirt` are accepted in v1; anything else fails fast in the dispatcher's first `assert`.
 
+### Molecule driver mode
+
+The design assumes the consumer uses Molecule's `driver: name: default` with `options.managed: true` (the same mode devhost uses today). Under that mode Molecule auto-generates inventory from `platforms[].name`, which is what podman relies on. We deliberately do **not** adopt Molecule's newer `shared_state` / shared-default-scenario pattern in v1 — see "Out of scope".
+
 ### Inventory contract
 
 Both backends produce a host group named `molecule` containing all platform hosts.
 
-- **podman**: relies on Molecule's auto-inventory generation from `platforms[].name`.
+- **podman**: relies on Molecule's auto-inventory generation from `platforms[].name`. No inventory writing in the role.
 - **kubevirt**: explicitly writes `$MOLECULE_EPHEMERAL_DIRECTORY/inventory/molecule_inventory.yml` (SSH host/port come from the K8s NodePort service after VM creation), then `meta: refresh_inventory`, then asserts `'molecule' in groups`.
 
 ### Consumer-overridable variables
@@ -228,8 +232,10 @@ Before tagging v1.0: take a copy of devhost, replace its `extensions/molecule/pr
 - `extensions/molecule/integration_hello_world/`
 - `tests/integration/targets/hello_world/`
 
-**Keep & reuse:**
-- `extensions/molecule/utils/` shared converge/noop pattern — repurposed so collection self-tests reuse it; the integration target name maps to the scenario backend name (`podman`, `kubevirt`).
+**Also delete:**
+- `extensions/molecule/utils/` — its shared converge stripped an `integration_` prefix that no longer applies. The two self-test scenarios (`podman/`, `kubevirt/`) each carry their own minimal `converge.yml` and `verify.yml` inline.
+
+**Keep:**
 - `tests/integration/test_integration.py` + `pytest_ansible.molecule` plumbing (extended with the conftest-based env gate above).
 
 ## `galaxy.yml` updates
@@ -277,7 +283,7 @@ For each consumer (devhost first):
    ```
    (likewise `destroy.yml`, `prepare.yml`).
 3. Update each scenario's `molecule.yml`:
-   - Remove `dependency.options.requirements-file` pointing at the deleted provisioners dir.
+   - Repoint `dependency.options.requirements-file` at the consumer's top-level `requirements.yml` (which now lists `david_igou.molecule_provisioners`). Transitive deps — `containers.podman`, `kubernetes.core`, `community.crypto` — are pulled in by the collection's `galaxy.yml`. Alternatively, drop the `dependency` block entirely and rely on the consumer's CI step `ansible-galaxy collection install -r requirements.yml` before molecule runs.
    - Change `provisioner.playbooks.create` from `../provisioners/${PROVISIONER:-podman}/create.yml` to `create.yml`. Same for `destroy`, `prepare`.
    - Remove `inventory.links.group_vars` entry (collection roles handle their own group vars internally).
 4. Delete the entire `extensions/molecule/provisioners/` tree from the consumer repo.
@@ -302,3 +308,4 @@ Called out explicitly in README so consumers don't ask:
 - Windows/macOS guests
 - Per-platform networks beyond `podman.podman_network`
 - Molecule `shared_state` / shared default-scenario pattern (deferred — current design uses copy-paste starter template instead)
+- Switching consumers off `driver: default, managed: true` to a fully ansible-native shared inventory model
