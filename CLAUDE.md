@@ -17,16 +17,18 @@ ln -snf "$PWD" "$HOME/.ansible/collections/ansible_collections/david_igou/molecu
 
 ## Architecture (one-paragraph version)
 
-Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) read `$PROVISIONER` (default `podman`), validate platform shape, and `include_role` into one of two roles (`roles/podman`, `roles/kubevirt`). Each role uses `tasks_from` for lifecycle dispatch. Consumers' scenario `create.yml`/`destroy.yml`/`prepare.yml` are one-liners that `import_playbook: david_igou.molecule_provisioners.<phase>`. Public contract: each platform in `molecule.yml` has multi-keyed `podman:` and/or `kubevirt:` blocks; same `molecule.yml` works under either backend by switching `$PROVISIONER`.
+Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) read `mp_backend` from the molecule group's hostvars (`hostvars[groups['molecule'][0]].mp_backend`), validate the inventory shape, and `include_role` into one of two roles (`roles/podman`, `roles/kubevirt`). Each role uses `tasks_from` for lifecycle dispatch and starts with a 3-level merge (role defaults <- `mp_defaults.<backend>` <- `hostvars[item].mp.<backend>`) before looping `groups['molecule']`. Consumers' scenario `create.yml`/`destroy.yml`/`prepare.yml` are one-liners that `import_playbook: david_igou.molecule_provisioners.<phase>`. The molecule.yml itself uses molecule's ansible-native shape (`ansible:` block — no `driver:`, no `platforms:`, no `provisioner:`).
 
 ### Key files
 
 - `playbooks/{create,destroy,prepare}.yml` — dispatcher entry points; the `import_playbook` targets that consumers reference by FQCN.
+- `playbooks/group_vars/all.yml` — declares `mp_supported_backends`.
 - `roles/podman/tasks/{create,destroy,prepare,_networks}.yml` — podman lifecycle. `_networks.yml` is shared between create and destroy.
-- `roles/kubevirt/tasks/{create,destroy,prepare,_create_vm,_create_vm_dictionary}.yml` — kubevirt lifecycle. `_create_vm*.yml` are per-platform helpers included in a loop with `loop_var: vm`.
-- `extensions/molecule/{podman,kubevirt}/` — self-test scenarios. Discovered by `pytest_ansible.molecule_scenario` fixture in `tests/integration/test_integration.py`. The kubevirt scenario is cluster-agnostic — it talks to whatever `KUBECONFIG` points at, as long as KubeVirt is installed there. CI provisions kind + KubeVirt with `useEmulation` before running it.
-- `docs/examples/` — copy-paste starter for consumers.
-- `docs/MIGRATION.md` — converting devhost-style consumers.
+- `roles/kubevirt/tasks/{create,destroy,prepare,_create_vm,_create_vm_dictionary}.yml` — kubevirt lifecycle. `_create_vm*.yml` are per-host helpers included in a loop over `groups['molecule']`.
+- `roles/<backend>/defaults/main.yml` — role-level defaults including the `mp_<backend>_role_defaults` dict that feeds the merge.
+- `extensions/molecule/default/` — single self-test scenario carrying both backends' specs per host. Discovered by `pytest_ansible.molecule_scenario` fixture in `tests/integration/test_integration.py`. The kubevirt-backend run is cluster-agnostic — it talks to whatever `KUBECONFIG` points at, as long as KubeVirt is installed there. CI provisions kind + KubeVirt with `useEmulation` before running it.
+- `docs/examples/` — copy-paste starter for consumers (`molecule.yml` boilerplate + `inventory/` shape).
+- `docs/MIGRATION.md` — translating from molecule's pre-ansible-native `platforms:` shape to this collection.
 
 ## Do not depend on `molecule-plugins`
 
@@ -38,9 +40,9 @@ This collection must never list `molecule-plugins` (or any of its extras like `m
 | --- | --- |
 | Install runtime/test deps | `pip install -r requirements.txt -r test-requirements.txt` |
 | Lint everything | `ansible-lint && yamllint .` |
-| Run podman self-test | `pytest tests/integration -v -k podman` |
-| Run kubevirt self-test (requires `$KUBECONFIG` pointing at a cluster with KubeVirt) | `pytest tests/integration -v -k kubevirt` |
-| Run a single scenario directly | `cd extensions/molecule/<podman\|kubevirt> && molecule test` |
+| Run podman self-test | `PROVISIONER=podman pytest tests/integration -v -k default` |
+| Run kubevirt self-test (requires `$KUBECONFIG` pointing at a cluster with KubeVirt) | `PROVISIONER=kubevirt pytest tests/integration -v -k default` |
+| Run a single scenario directly | `cd extensions/molecule/default && PROVISIONER=<backend> molecule test` |
 | Ansible sanity | `ansible-test sanity --docker` (run from the symlink path) |
 | Build collection artifact | `ansible-galaxy collection build` |
 | Pre-commit | `pre-commit run --all-files` |
@@ -49,35 +51,45 @@ This collection must never list `molecule-plugins` (or any of its extras like `m
 
 ## Public contract (the thing we don't break without a major bump)
 
-The platform schema in `molecule.yml`:
+The inventory shape consumers ship:
 
 ```yaml
-platforms:
-  - name: <str>                 # required
-    podman:                     # required when PROVISIONER=podman
-      image: <str>              # required
-      # optional: command, privileged, volumes, capabilities,
-      # podman_network, env, tmpfs, exposed_ports, published_ports
-    kubevirt:                   # required when PROVISIONER=kubevirt
-      image: <str>              # required (containerdisk)
-      namespace: <str>          # required
-      ansible_user: <str>       # required
-      memory: <str>             # required
-      ssh_service:
-        type: NodePort          # only NodePort in v1
+all:
+  children:
+    molecule:
+      hosts:
+        <name>:
+          mp:
+            podman:                     # required when mp_backend == podman
+              image: <str>              # required
+              # optional: command, privileged, volumes, capabilities,
+              # podman_network, env, tmpfs, exposed_ports, published_ports
+            kubevirt:                   # required when mp_backend == kubevirt
+              image: <str>              # required (containerdisk)
+              namespace: <str>          # optional, role default 'molecule'
+              ssh_user: <str>           # optional, role default 'cloud-user'
+              memory: <str>             # optional, role default '1Gi'
+              ssh_service:
+                type: NodePort          # optional, only NodePort in v1
 ```
 
-Breaking changes to the above keys → major version bump. New optional keys → minor.
+Plus:
+- `inventory/group_vars/molecule.yml` must define `mp_backend` (one of `mp_supported_backends`).
+- `mp_defaults.<backend>.<field>` is an optional group-var layer between role defaults and per-host hostvars.
+- `molecule.yml` uses molecule's ansible-native shape (`ansible:` block).
+
+Breaking changes to the above keys → major version bump. New optional fields → minor.
 
 ## When updating provisioner logic
 
 1. Make changes in the role (`roles/<backend>/tasks/`).
 2. Run `ansible-lint roles/<backend>/`.
-3. Run the self-test scenario: `cd extensions/molecule/<backend> && molecule test`.
-4. If the change affects the platform schema, also update:
+3. Run the self-test scenario: `cd extensions/molecule/default && PROVISIONER=<backend> molecule test`.
+4. If the change affects the per-host schema, also update:
+   - `roles/<backend>/defaults/main.yml` (`mp_<backend>_role_defaults`)
    - `roles/<backend>/meta/argument_specs.yml`
    - `roles/<backend>/README.md`
-   - `docs/examples/platforms.yml`
+   - `docs/examples/inventory/hosts.yml` (and `group_vars/molecule.yml` if a default value moves)
    - the schema section above
 
 ## Lint conventions
@@ -94,7 +106,7 @@ Runs `update-docs` (collection_prep), `prettier`, `isort`, `black`, `flake8`, pl
 
 ## CI
 
-`.github/workflows/tests.yml` runs the reusable workflows from `ansible/ansible-content-actions` (changelog, build-import, ansible-lint, sanity, unit-galaxy) plus `unit-source`, an `integration` job that exercises the podman scenario via pytest, and a `kubevirt` job that exercises the kubevirt scenario on an in-CI kind cluster with KubeVirt in `useEmulation` mode. `release.yml` publishes to Galaxy on GitHub release.
+`.github/workflows/tests.yml` runs the reusable workflows from `ansible/ansible-content-actions` (changelog, build-import, ansible-lint, sanity, unit-galaxy) plus `unit-source`, an `integration-podman` job that exercises the default scenario via pytest with `PROVISIONER=podman`, and an `integration-kubevirt` job that exercises the same scenario with `PROVISIONER=kubevirt` on an in-CI kind cluster with KubeVirt in `useEmulation` mode. `release.yml` publishes to Galaxy on GitHub release.
 
 ## Out of scope (per the v1.0 spec)
 
