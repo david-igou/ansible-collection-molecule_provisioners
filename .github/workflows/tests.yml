@@ -106,6 +106,9 @@ jobs:
             -p '{"spec":{"configuration":{"developerConfiguration":{"useEmulation":true}}}}'
           kubectl -n kubevirt wait --for=condition=Available kv/kubevirt --timeout=10m
 
+      - name: Create molecule namespace
+        run: kubectl create namespace molecule
+
       - name: Run kubevirt_ci scenario
         working-directory: ansible_collections/david_igou/molecule_provisioners
         env:
