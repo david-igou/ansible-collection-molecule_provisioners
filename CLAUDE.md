@@ -24,7 +24,7 @@ Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) 
 - `playbooks/{create,destroy,prepare}.yml` — dispatcher entry points; the `import_playbook` targets that consumers reference by FQCN.
 - `roles/podman/tasks/{create,destroy,prepare,_networks}.yml` — podman lifecycle. `_networks.yml` is shared between create and destroy.
 - `roles/kubevirt/tasks/{create,destroy,prepare,_create_vm,_create_vm_dictionary}.yml` — kubevirt lifecycle. `_create_vm*.yml` are per-platform helpers included in a loop with `loop_var: vm`.
-- `extensions/molecule/{podman,kubevirt}/` — self-test scenarios. Discovered by `pytest_ansible.molecule_scenario` fixture in `tests/integration/test_integration.py`.
+- `extensions/molecule/{podman,kubevirt,kubevirt_ci}/` — self-test scenarios. Discovered by `pytest_ansible.molecule_scenario` fixture in `tests/integration/test_integration.py`. `kubevirt/` targets a developer-provisioned cluster; `kubevirt_ci/` is the in-CI fixture (kind + emulation).
 - `tests/integration/conftest.py` — skips kubevirt unless `MOLECULE_KUBEVIRT_ENABLED` is truthy.
 - `docs/examples/` — copy-paste starter for consumers.
 - `docs/MIGRATION.md` — converting devhost-style consumers.
@@ -37,7 +37,8 @@ Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) 
 | Lint everything | `ansible-lint && yamllint .` |
 | Run podman self-test | `pytest tests/integration -v -k podman` |
 | Run a single scenario directly | `cd extensions/molecule/podman && PROVISIONER=podman molecule test` |
-| Run kubevirt self-test (needs cluster) | `MOLECULE_KUBEVIRT_ENABLED=1 pytest tests/integration -v -k kubevirt` |
+| Run kubevirt self-test against a real cluster | `MOLECULE_KUBEVIRT_ENABLED=1 pytest tests/integration -v -k "kubevirt and not ci"` |
+| Run kubevirt_ci self-test (CI fixture; needs kind+KubeVirt) | `MOLECULE_KUBEVIRT_ENABLED=1 pytest tests/integration -v -k kubevirt_ci` |
 | Ansible sanity | `ansible-test sanity --docker` (run from the symlink path) |
 | Build collection artifact | `ansible-galaxy collection build` |
 | Pre-commit | `pre-commit run --all-files` |
@@ -92,7 +93,7 @@ Runs `update-docs` (collection_prep), `prettier`, `isort`, `black`, `flake8`, pl
 
 ## CI
 
-`.github/workflows/tests.yml` runs the reusable workflows from `ansible/ansible-content-actions` (changelog, build-import, ansible-lint, sanity, unit-galaxy) plus `unit-source` and an `integration` job that exercises the podman scenario via pytest. `release.yml` publishes to Galaxy on GitHub release.
+`.github/workflows/tests.yml` runs the reusable workflows from `ansible/ansible-content-actions` (changelog, build-import, ansible-lint, sanity, unit-galaxy) plus `unit-source`, an `integration` job that exercises the podman scenario via pytest, and a `kubevirt` job that exercises the kubevirt scenario on an in-CI kind cluster with KubeVirt in `useEmulation` mode. `release.yml` publishes to Galaxy on GitHub release.
 
 ## Out of scope (per the v1.0 spec)
 
