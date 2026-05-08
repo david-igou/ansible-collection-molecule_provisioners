@@ -27,60 +27,80 @@ collections:
 
 ## Using
 
-In your collection's `extensions/molecule/<scenario>/` directory, create three one-line files:
+In your collection's `extensions/molecule/<scenario>/` directory:
+
+**`molecule.yml`** (boilerplate, identical for every consumer):
 
 ```yaml
-# create.yml
-- import_playbook: david_igou.molecule_provisioners.create
-```
-
-```yaml
-# destroy.yml
-- import_playbook: david_igou.molecule_provisioners.destroy
-```
-
-```yaml
-# prepare.yml
-- import_playbook: david_igou.molecule_provisioners.prepare
-```
-
-Then point your scenario's `molecule.yml` at them and define your platforms with both `podman` and `kubevirt` blocks (consumers can omit a block if they never use that backend):
-
-```yaml
-provisioner:
-  name: ansible
+---
+ansible:
+  executor:
+    args:
+      ansible_playbook:
+        - --inventory=inventory/
+        - --inventory=${MOLECULE_EPHEMERAL_DIRECTORY}/inventory/
   playbooks:
     create: create.yml
     destroy: destroy.yml
     prepare: prepare.yml
     converge: converge.yml
+    verify: verify.yml
 
-platforms:
-  - name: ubuntu-24
-    podman:
-      image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
-      command: sleep 1d
-    kubevirt:
-      image: quay.io/containerdisks/ubuntu:24.04
-      namespace: molecule
-      ssh_service:
-        type: NodePort
-      ansible_user: cloud-user
-      memory: 4Gi
+scenario:
+  name: default
+  test_sequence: [dependency, syntax, create, prepare, converge, verify, destroy]
+
+verifier:
+  name: ansible
 ```
 
-Switch backends per run:
+**`create.yml` / `destroy.yml` / `prepare.yml`** (one-liners using FQCN):
 
-```bash
-PROVISIONER=podman   molecule test    # default
-PROVISIONER=kubevirt molecule test
+```yaml
+- name: Provision molecule instances
+  import_playbook: david_igou.molecule_provisioners.create
 ```
 
-A complete starter template is in [`docs/examples/`](docs/examples/). To migrate an existing collection, see [`docs/MIGRATION.md`](docs/MIGRATION.md).
+(Mirror this for `destroy.yml` and `prepare.yml`. Names are required by ansible-lint 26.4+.)
+
+**`inventory/hosts.yml`** (per scenario — describes WHICH instances to test):
+
+```yaml
+all:
+  children:
+    molecule:
+      hosts:
+        ubuntu-24:
+          mp:
+            podman:
+              image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
+            kubevirt:
+              image: quay.io/containerdisks/ubuntu:24.04
+              ssh_user: ubuntu
+```
+
+**`inventory/group_vars/molecule.yml`** (backend selector + DRY defaults):
+
+```yaml
+mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
+
+mp_defaults:
+  podman:
+    command: /sbin/init
+    privileged: true
+  kubevirt:
+    namespace: molecule
+    memory: 1Gi
+    ssh_user: cloud-user
+```
+
+Switch backends at runtime: `PROVISIONER=podman molecule test` or `PROVISIONER=kubevirt molecule test`.
+
+See [`docs/examples/`](docs/examples/) for the canonical starter and [`docs/MIGRATION.md`](docs/MIGRATION.md) if you're translating from a `platforms:`-based scenario.
 
 ## What's in the box
 
-- `playbooks/{create,destroy,prepare}.yml` — top-level dispatchers; read `$PROVISIONER`, validate, dispatch.
+- `playbooks/{create,destroy,prepare}.yml` — top-level dispatchers; read `mp_backend` (driven by `$PROVISIONER` env var by convention), validate, dispatch.
 - `roles/podman/` — uses `containers.podman.podman_container` + `containers.podman.podman_network`.
 - `roles/kubevirt/` — generates an SSH keypair, creates `VirtualMachine` + `NodePort` Service per platform, writes the molecule inventory file.
 

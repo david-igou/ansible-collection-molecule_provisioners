@@ -1,6 +1,6 @@
 ---
 - name: Molecule provisioner — prepare
-  hosts: all
+  hosts: molecule
   gather_facts: false
   tasks:
     - name: Assert molecule group exists in inventory
@@ -11,21 +11,15 @@
         fail_msg: "Inventory must define a 'molecule' group with at least one host."
       run_once: true  # noqa: run-once[task]
 
-    - name: Determine backend from molecule group
-      ansible.builtin.set_fact:
-        _mp_backend: "{{ hostvars[groups['molecule'][0]].mp_backend | default(none) }}"
-      run_once: true  # noqa: run-once[task]
-
     - name: Validate backend
       ansible.builtin.assert:
-        that: _mp_backend in mp_supported_backends
+        that: mp_backend in mp_supported_backends
         fail_msg: >-
           mp_backend must be one of {{ mp_supported_backends | join(', ') }}
-          (got '{{ _mp_backend or '(unset)' }}'). Set it in
+          (got '{{ mp_backend | default('(unset)') }}'). Set it in
           inventory/group_vars/molecule.yml.
-      run_once: true  # noqa: run-once[task]
 
     - name: Run provisioner prepare
       ansible.builtin.include_role:
-        name: "david_igou.molecule_provisioners.{{ _mp_backend }}"
+        name: "david_igou.molecule_provisioners.{{ mp_backend }}"
         tasks_from: prepare

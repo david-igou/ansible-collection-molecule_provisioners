@@ -239,14 +239,14 @@ Each dispatcher reads `mp_backend` from the molecule group's hostvars, validates
         tasks_from: destroy
 ```
 
-- [ ] **Step 3: Replace `playbooks/prepare.yml` with the content below**
+- [x] **Step 3: Replace `playbooks/prepare.yml` with the content below**
 
-(Runs on `hosts: all` so each host's `wait_for_connection` runs against the right target. Backend determination and validation use `run_once: true` so they fire once per play, not per host.)
+(Uses `hosts: molecule` so every host has `mp_backend` from group_vars. Drops the `set_fact`+`run_once` indirection — `mp_backend` is read directly per host. Fixed in final-review commit.)
 
 ```yaml
 ---
 - name: Molecule provisioner — prepare
-  hosts: all
+  hosts: molecule
   gather_facts: false
   tasks:
     - name: Assert molecule group exists in inventory
@@ -257,23 +257,17 @@ Each dispatcher reads `mp_backend` from the molecule group's hostvars, validates
         fail_msg: "Inventory must define a 'molecule' group with at least one host."
       run_once: true  # noqa: run-once[task]
 
-    - name: Determine backend from molecule group
-      ansible.builtin.set_fact:
-        _mp_backend: "{{ hostvars[groups['molecule'][0]].mp_backend | default(none) }}"
-      run_once: true  # noqa: run-once[task]
-
     - name: Validate backend
       ansible.builtin.assert:
-        that: _mp_backend in mp_supported_backends
+        that: mp_backend in mp_supported_backends
         fail_msg: >-
           mp_backend must be one of {{ mp_supported_backends | join(', ') }}
-          (got '{{ _mp_backend or '(unset)' }}'). Set it in
+          (got '{{ mp_backend | default('(unset)') }}'). Set it in
           inventory/group_vars/molecule.yml.
-      run_once: true  # noqa: run-once[task]
 
     - name: Run provisioner prepare
       ansible.builtin.include_role:
-        name: "david_igou.molecule_provisioners.{{ _mp_backend }}"
+        name: "david_igou.molecule_provisioners.{{ mp_backend }}"
         tasks_from: prepare
 ```
 
