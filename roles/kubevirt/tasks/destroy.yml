@@ -11,7 +11,7 @@
     loop_var: vm
     label: "{{ vm.name }}"
 
-- name: Delete NodePort service in KubeVirt
+- name: Delete NodePort SSH service
   kubernetes.core.k8s:
     state: absent
     api_version: v1

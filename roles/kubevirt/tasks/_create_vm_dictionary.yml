@@ -1,8 +1,4 @@
 ---
-- name: Initialize systems dict on first iteration
-  ansible.builtin.set_fact:
-    __mp_kubevirt_molecule_systems: "{{ __mp_kubevirt_molecule_systems | default({}) }}"
-
 - name: "Look up NodePort service for: {{ vm.name }}"
   kubernetes.core.k8s_info:
     api_version: v1
@@ -10,20 +6,11 @@
     name: "{{ vm.name }}"
     namespace: "{{ vm.kubevirt.namespace | default(mp_kubevirt_namespace) }}"
   register: __mp_kubevirt_svc
-
-- name: "Look up a Ready node (for NodePort connection)"
-  kubernetes.core.k8s_info:
-    api_version: v1
-    kind: Node
-  register: __mp_kubevirt_nodes
-  run_once: true  # noqa: run-once[task]
-
-- name: "Choose first node InternalIP"
-  ansible.builtin.set_fact:
-    __mp_kubevirt_node_ip: >-
-      {{ (__mp_kubevirt_nodes.resources[0].status.addresses
-          | selectattr('type','equalto','InternalIP') | list | first).address }}
-  run_once: true  # noqa: run-once[task]
+  until:
+    - __mp_kubevirt_svc.resources | length > 0
+    - (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort | default(0)) | int > 0
+  retries: 10
+  delay: 3
 
 - name: "Add VM to molecule inventory dict: {{ vm.name }}"
   ansible.builtin.set_fact:

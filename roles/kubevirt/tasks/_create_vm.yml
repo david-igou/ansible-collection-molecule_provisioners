@@ -43,10 +43,17 @@
                   image: "{{ vm.kubevirt.image }}"
               - name: cloudinitdisk
                 cloudInitNoCloud:
+                  # Use the explicit `users:` list form so we always create the
+                  # named user regardless of the containerdisk image's baked-in
+                  # default_user (Ubuntu images have `ubuntu`, RHEL/CentOS
+                  # images have `cloud-user`, etc.).
                   userData: |
                     #cloud-config
-                    user: {{ vm.kubevirt.ansible_user }}
-                    ssh_authorized_keys:
-                      - {{ temporary_ssh_public_key }}
+                    users:
+                      - name: {{ vm.kubevirt.ansible_user }}
+                        ssh_authorized_keys:
+                          - {{ temporary_ssh_public_key }}
+                        sudo: ALL=(ALL) NOPASSWD:ALL
+                        shell: /bin/bash
                     chpasswd:
                       expire: false

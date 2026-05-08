@@ -1,13 +1,15 @@
 ---
+# An unset platforms[].kubevirt.ssh_service.type defaults to NodePort everywhere
+# (assert, Service-create when:, etc.) — keep both expressions in sync.
 - name: Validate ssh_service.type per platform
   ansible.builtin.assert:
     that:
-      - vm.kubevirt.ssh_service.type | default('NodePort')
+      - (vm.kubevirt.ssh_service.type | default('NodePort'))
         in mp_kubevirt_allowed_ssh_service_types
     fail_msg: >-
       Platform '{{ vm.name }}' has unsupported ssh_service.type
-      '{{ vm.kubevirt.ssh_service.type }}'. v1 supports only:
-      {{ mp_kubevirt_allowed_ssh_service_types | join(', ') }}.
+      '{{ vm.kubevirt.ssh_service.type | default('(missing)') }}'.
+      v1 supports only: {{ mp_kubevirt_allowed_ssh_service_types | join(', ') }}.
   loop: "{{ molecule_yml.platforms }}"
   loop_control:
     loop_var: vm
@@ -16,7 +18,7 @@
 - name: Generate SSH key pair
   community.crypto.openssh_keypair:
     path: "{{ mp_kubevirt_ssh_key_path }}"
-    size: 2048
+    type: ed25519
   register: __mp_kubevirt_ssh_keypair
 
 - name: Set SSH public key fact
@@ -47,11 +49,34 @@
         selector:
           kubevirt.io/domain: "{{ vm.name }}"
         type: NodePort
-  when: vm.kubevirt.ssh_service.type | default('') == 'NodePort'
+  when: (vm.kubevirt.ssh_service.type | default('NodePort')) == 'NodePort'
   loop: "{{ molecule_yml.platforms }}"
   loop_control:
     loop_var: vm
     label: "{{ vm.name }}"
+
+# Look up cluster nodes once, before the per-VM dictionary loop, so every VM
+# uses the same node IP. Subsequent dictionary build is purely local.
+- name: Look up cluster nodes (for NodePort connection IP)
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Node
+  register: __mp_kubevirt_nodes
+
+- name: Assert at least one cluster node is available
+  ansible.builtin.assert:
+    that: __mp_kubevirt_nodes.resources | length > 0
+    fail_msg: "No cluster nodes returned from Kubernetes API. Check kubeconfig and cluster health."
+
+- name: Choose first node InternalIP
+  ansible.builtin.set_fact:
+    __mp_kubevirt_node_ip: >-
+      {{ (__mp_kubevirt_nodes.resources[0].status.addresses
+          | selectattr('type', 'equalto', 'InternalIP') | list | first).address }}
+
+- name: Initialize VM inventory dict
+  ansible.builtin.set_fact:
+    __mp_kubevirt_molecule_systems: {}
 
 - name: Build VM dictionary entries
   ansible.builtin.include_tasks: _create_vm_dictionary.yml
