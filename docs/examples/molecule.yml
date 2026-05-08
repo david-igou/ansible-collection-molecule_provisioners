@@ -12,8 +12,9 @@ driver:
   name: default
   options:
     managed: true
+    # When PROVISIONER=kubevirt, override to: connection: ssh
     ansible_connection_options:
-      connection: local
+      connection: containers.podman.podman
 
 platforms:
   - name: ubuntu-24
