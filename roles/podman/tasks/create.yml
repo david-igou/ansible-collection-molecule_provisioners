@@ -1,0 +1,77 @@
+---
+- name: Build podman network list
+  ansible.builtin.import_tasks: _networks.yml
+
+- name: Create podman network(s)
+  containers.podman.podman_network:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ __mp_podman_networks | default([]) | unique }}"
+  when:
+    - item not in mp_podman_reserved_networks
+    - item is not match('^ns:')
+    - item is not match('^container:')
+
+# Launch all containers simultaneously (poll: 0), then wait for each below.
+# A failure during the wait leaves the still-running async jobs in flight;
+# run destroy to clean up partially-created instances.
+- name: Create molecule instance(s)
+  containers.podman.podman_container:
+    name: "{{ item.name }}"
+    image: "{{ item.podman.image }}"
+    state: started
+    recreate: false
+    command: "{{ item.podman.command | default(omit) }}"
+    privileged: "{{ item.podman.privileged | default(false) }}"
+    volume: "{{ item.podman.volumes | default(omit) }}"
+    cap_add: "{{ item.podman.capabilities | default(omit) }}"
+    expose: "{{ item.podman.exposed_ports | default(omit) }}"
+    publish: "{{ item.podman.published_ports | default(omit) }}"
+    network: "{{ item.podman.podman_network | default(omit) }}"
+    env: "{{ item.podman.env | default({}) }}"
+    tmpfs: "{{ item.podman.tmpfs | default(omit) }}"
+  register: __mp_podman_create
+  loop: "{{ molecule_yml.platforms }}"
+  loop_control:
+    label: "{{ item.name }}"
+  async: "{{ mp_podman_async_timeout }}"
+  poll: 0
+
+- name: Wait for instance(s) creation to complete
+  ansible.builtin.async_status:
+    jid: "{{ item.ansible_job_id }}"
+  register: __mp_podman_jobs
+  until: __mp_podman_jobs.finished
+  retries: "{{ mp_podman_async_retries }}"
+  delay: "{{ mp_podman_async_delay }}"
+  loop: "{{ __mp_podman_create.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+# Molecule's `driver: default` doesn't add hosts to a `molecule` group on its
+# own — it only puts them in `ungrouped`. Each molecule phase (create, prepare,
+# converge, verify, destroy) is a separate ansible-playbook invocation, so
+# in-memory tricks like add_host don't persist across phases. Write the
+# inventory to disk in MOLECULE_EPHEMERAL_DIRECTORY so subsequent phases
+# rediscover the molecule group. Same approach the kubevirt role uses.
+- name: Build molecule hosts dict
+  ansible.builtin.set_fact:
+    __mp_podman_molecule_hosts: "{{ __mp_podman_molecule_hosts | default({}) | combine({item.name: {}}) }}"
+  loop: "{{ molecule_yml.platforms }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Write molecule inventory file
+  vars:
+    molecule_inventory:
+      all:
+        children:
+          molecule:
+            hosts: "{{ __mp_podman_molecule_hosts }}"
+  ansible.builtin.copy:
+    content: "{{ molecule_inventory | to_nice_yaml }}"
+    dest: "{{ molecule_ephemeral_directory }}/inventory/molecule_inventory.yml"
+    mode: "0600"
+
+- name: Refresh inventory
+  ansible.builtin.meta: refresh_inventory

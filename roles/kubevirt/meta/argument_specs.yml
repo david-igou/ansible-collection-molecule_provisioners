@@ -1,0 +1,28 @@
+---
+argument_specs:
+  main:
+    short_description: >-
+      Default entry point — does nothing on its own; use tasks_from=create|destroy|prepare.
+    options: {}
+  create:
+    short_description: Create KubeVirt VirtualMachines and NodePort services for molecule platforms.
+    options:
+      mp_kubevirt_ssh_key_path:
+        type: path
+        description: Where the SSH keypair is generated (defaults to molecule_ephemeral_directory/identity_file).
+      mp_kubevirt_namespace:
+        type: str
+        default: molecule
+        description: Default namespace if a platform's kubevirt block doesn't set one.
+  destroy:
+    short_description: Delete KubeVirt VirtualMachines and NodePort services.
+    options:
+      mp_kubevirt_namespace:
+        type: str
+        default: molecule
+  prepare:
+    short_description: Wait for KubeVirt-provisioned hosts to be reachable.
+    options:
+      mp_kubevirt_wait_timeout:
+        type: int
+        default: 120

@@ -1,0 +1,30 @@
+---
+- name: Molecule provisioner — create
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    _mp_provisioner: "{{ lookup('env', 'PROVISIONER') | default(mp_default_provisioner | default('podman'), true) }}"
+    _mp_supported: [podman, kubevirt]
+  tasks:
+    - name: Validate PROVISIONER
+      ansible.builtin.assert:
+        that: _mp_provisioner in _mp_supported
+        fail_msg: >-
+          PROVISIONER must be one of {{ _mp_supported | join(', ') }}
+          (got '{{ _mp_provisioner }}').
+
+    - name: Validate every platform has the active provisioner's key
+      ansible.builtin.assert:
+        that: item[_mp_provisioner] is defined
+        fail_msg: >-
+          Platform '{{ item.name }}' is missing a '{{ _mp_provisioner }}'
+          block in molecule.yml.
+      loop: "{{ molecule_yml.platforms }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Run provisioner create
+      ansible.builtin.include_role:
+        name: "david_igou.molecule_provisioners.{{ _mp_provisioner }}"
+        tasks_from: create

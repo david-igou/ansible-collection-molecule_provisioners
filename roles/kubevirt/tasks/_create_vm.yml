@@ -1,0 +1,59 @@
+---
+- name: "Define VirtualMachine: {{ vm.name }}"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: kubevirt.io/v1
+      kind: VirtualMachine
+      metadata:
+        name: "{{ vm.name }}"
+        namespace: "{{ vm.kubevirt.namespace | default(mp_kubevirt_namespace) }}"
+        labels:
+          kubevirt.io/domain: "{{ vm.name }}"
+      spec:
+        running: true
+        template:
+          metadata:
+            labels:
+              kubevirt.io/domain: "{{ vm.name }}"
+          spec:
+            domain:
+              cpu:
+                cores: 2
+              resources:
+                requests:
+                  memory: "{{ vm.kubevirt.memory }}"
+              devices:
+                disks:
+                  - name: containerdisk
+                    disk:
+                      bus: virtio
+                  - name: cloudinitdisk
+                    disk:
+                      bus: virtio
+                interfaces:
+                  - name: default
+                    masquerade: {}
+            networks:
+              - name: default
+                pod: {}
+            volumes:
+              - name: containerdisk
+                containerDisk:
+                  image: "{{ vm.kubevirt.image }}"
+              - name: cloudinitdisk
+                cloudInitNoCloud:
+                  # Use the explicit `users:` list form so we always create the
+                  # named user regardless of the containerdisk image's baked-in
+                  # default_user (Ubuntu images have `ubuntu`, RHEL/CentOS
+                  # images have `cloud-user`, etc.).
+                  userData: |
+                    #cloud-config
+                    users:
+                      - name: {{ vm.kubevirt.ansible_user }}
+                        ssh_authorized_keys:
+                          - {{ temporary_ssh_public_key }}
+                        sudo: ALL=(ALL) NOPASSWD:ALL
+                        shell: /bin/bash
+                    chpasswd:
+                      expire: false

@@ -1,0 +1,45 @@
+---
+driver:
+  name: default
+  options:
+    managed: true
+    ansible_connection_options:
+      connection: containers.podman.podman
+
+platforms:
+  - name: ubuntu-24
+    podman:
+      image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
+      command: sleep 1d
+  - name: centos-stream-10
+    podman:
+      image: quay.io/centos/centos:stream10
+      command: sleep 1d
+
+provisioner:
+  name: ansible
+  playbooks:
+    create: create.yml
+    destroy: destroy.yml
+    prepare: prepare.yml
+    converge: converge.yml
+    verify: verify.yml
+  env:
+    PROVISIONER: podman
+  inventory:
+    links:
+      group_vars: group_vars/
+
+verifier:
+  name: ansible
+
+scenario:
+  name: podman
+  test_sequence:
+    - dependency
+    - syntax
+    - create
+    - prepare
+    - converge
+    - verify
+    - destroy

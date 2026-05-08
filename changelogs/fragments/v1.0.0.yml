@@ -1,0 +1,8 @@
+---
+release_summary: |
+  Initial release. Reusable Molecule provisioner playbooks and roles
+  for podman and kubevirt backends. Consumers' scenario lifecycle
+  files become one-line ``import_playbook`` wrappers; backend selected
+  via ``$PROVISIONER`` (default ``podman``).
+major_changes:
+  - Initial v1.0.0 release.

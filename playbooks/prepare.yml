@@ -1,0 +1,20 @@
+---
+- name: Molecule provisioner — prepare
+  hosts: all
+  gather_facts: false
+  vars:
+    _mp_provisioner: "{{ lookup('env', 'PROVISIONER') | default(mp_default_provisioner | default('podman'), true) }}"
+    _mp_supported: [podman, kubevirt]
+  tasks:
+    - name: Validate PROVISIONER
+      ansible.builtin.assert:
+        that: _mp_provisioner in _mp_supported
+        fail_msg: >-
+          PROVISIONER must be one of {{ _mp_supported | join(', ') }}
+          (got '{{ _mp_provisioner }}').
+      run_once: true  # noqa: run-once[task]
+
+    - name: Run provisioner prepare
+      ansible.builtin.include_role:
+        name: "david_igou.molecule_provisioners.{{ _mp_provisioner }}"
+        tasks_from: prepare

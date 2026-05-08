@@ -1,0 +1,18 @@
+---
+- name: Initialize podman network list
+  ansible.builtin.set_fact:
+    __mp_podman_networks: []
+
+- name: Collect networks from platforms[].podman.podman_network
+  ansible.builtin.set_fact:
+    __mp_podman_networks: >-
+      {{ __mp_podman_networks +
+         (item.podman.podman_network
+          if (item.podman.podman_network is sequence and item.podman.podman_network is not string)
+          else [item.podman.podman_network]) }}
+  loop: "{{ molecule_yml.platforms }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - item.podman is defined
+    - item.podman.podman_network is defined

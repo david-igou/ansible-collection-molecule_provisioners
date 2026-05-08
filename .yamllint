@@ -1,0 +1,17 @@
+---
+# yamllint config for david_igou.molecule_provisioners.
+# Aligned with ansible-lint's required yamllint settings so both tools
+# agree on what's a violation.
+extends: default
+rules:
+  line-length:
+    max: 120
+    level: warning
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: false
+  braces:
+    max-spaces-inside: 1
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true

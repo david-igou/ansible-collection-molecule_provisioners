@@ -1,0 +1,107 @@
+---
+# An unset platforms[].kubevirt.ssh_service.type defaults to NodePort everywhere
+# (assert, Service-create when:, etc.) — keep both expressions in sync.
+- name: Validate ssh_service.type per platform
+  ansible.builtin.assert:
+    that:
+      - (vm.kubevirt.ssh_service.type | default('NodePort'))
+        in mp_kubevirt_allowed_ssh_service_types
+    fail_msg: >-
+      Platform '{{ vm.name }}' has unsupported ssh_service.type
+      '{{ vm.kubevirt.ssh_service.type | default('(missing)') }}'.
+      v1 supports only: {{ mp_kubevirt_allowed_ssh_service_types | join(', ') }}.
+  loop: "{{ molecule_yml.platforms }}"
+  loop_control:
+    loop_var: vm
+    label: "{{ vm.name }}"
+
+- name: Generate SSH key pair
+  community.crypto.openssh_keypair:
+    path: "{{ mp_kubevirt_ssh_key_path }}"
+    type: ed25519
+  register: __mp_kubevirt_ssh_keypair
+
+- name: Set SSH public key fact
+  ansible.builtin.set_fact:
+    temporary_ssh_public_key: "{{ __mp_kubevirt_ssh_keypair.public_key }}"
+
+- name: Create VirtualMachine in KubeVirt
+  ansible.builtin.include_tasks: _create_vm.yml
+  loop: "{{ molecule_yml.platforms }}"
+  loop_control:
+    loop_var: vm
+    label: "{{ vm.name }}"
+
+- name: Create SSH NodePort Kubernetes service
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: "{{ vm.name }}"
+        namespace: "{{ vm.kubevirt.namespace | default(mp_kubevirt_namespace) }}"
+      spec:
+        ports:
+          - port: 22
+            protocol: TCP
+            targetPort: 22
+        selector:
+          kubevirt.io/domain: "{{ vm.name }}"
+        type: NodePort
+  when: (vm.kubevirt.ssh_service.type | default('NodePort')) == 'NodePort'
+  loop: "{{ molecule_yml.platforms }}"
+  loop_control:
+    loop_var: vm
+    label: "{{ vm.name }}"
+
+# Look up cluster nodes once, before the per-VM dictionary loop, so every VM
+# uses the same node IP. Subsequent dictionary build is purely local.
+- name: Look up cluster nodes (for NodePort connection IP)
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Node
+  register: __mp_kubevirt_nodes
+
+- name: Assert at least one cluster node is available
+  ansible.builtin.assert:
+    that: __mp_kubevirt_nodes.resources | length > 0
+    fail_msg: "No cluster nodes returned from Kubernetes API. Check kubeconfig and cluster health."
+
+- name: Choose first node InternalIP
+  ansible.builtin.set_fact:
+    __mp_kubevirt_node_ip: >-
+      {{ (__mp_kubevirt_nodes.resources[0].status.addresses
+          | selectattr('type', 'equalto', 'InternalIP') | list | first).address }}
+
+- name: Initialize VM inventory dict
+  ansible.builtin.set_fact:
+    __mp_kubevirt_molecule_systems: {}
+
+- name: Build VM dictionary entries
+  ansible.builtin.include_tasks: _create_vm_dictionary.yml
+  loop: "{{ molecule_yml.platforms }}"
+  loop_control:
+    loop_var: vm
+    label: "{{ vm.name }}"
+
+- name: Create Ansible inventory from dictionary
+  vars:
+    molecule_inventory:
+      all:
+        children:
+          molecule:
+            hosts: "{{ __mp_kubevirt_molecule_systems | default({}) }}"
+  ansible.builtin.copy:
+    content: "{{ molecule_inventory | to_nice_yaml }}"
+    dest: "{{ molecule_ephemeral_directory }}/inventory/molecule_inventory.yml"
+    mode: "0600"
+
+- name: Refresh inventory
+  ansible.builtin.meta: refresh_inventory
+
+- name: Assert molecule group exists in inventory
+  ansible.builtin.assert:
+    that: "'molecule' in groups"
+    fail_msg: "Molecule group was not found in inventory groups: {{ groups }}"
+  run_once: true  # noqa: run-once[task]

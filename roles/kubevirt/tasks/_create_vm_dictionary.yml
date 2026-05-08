@@ -1,0 +1,26 @@
+---
+- name: "Look up NodePort service for: {{ vm.name }}"
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Service
+    name: "{{ vm.name }}"
+    namespace: "{{ vm.kubevirt.namespace | default(mp_kubevirt_namespace) }}"
+  register: __mp_kubevirt_svc
+  until:
+    - __mp_kubevirt_svc.resources | length > 0
+    - (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort | default(0)) | int > 0
+  retries: 10
+  delay: 3
+
+- name: "Add VM to molecule inventory dict: {{ vm.name }}"
+  ansible.builtin.set_fact:
+    __mp_kubevirt_molecule_systems: >-
+      {{ __mp_kubevirt_molecule_systems | combine({
+          vm.name: {
+            'ansible_host': __mp_kubevirt_node_ip,
+            'ansible_port': (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort),
+            'ansible_user': vm.kubevirt.ansible_user,
+            'ansible_ssh_private_key_file': mp_kubevirt_ssh_key_path,
+            'ansible_ssh_common_args': '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+          }
+      }) }}

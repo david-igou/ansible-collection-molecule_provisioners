@@ -1,0 +1,6 @@
+---
+- name: Wait for the host to be reachable
+  ansible.builtin.wait_for_connection:
+    timeout: "{{ mp_kubevirt_wait_timeout }}"
+    delay: 10
+    sleep: 5

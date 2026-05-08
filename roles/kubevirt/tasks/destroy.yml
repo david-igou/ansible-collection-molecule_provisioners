@@ -1,0 +1,24 @@
+---
+- name: Delete VirtualMachine in KubeVirt
+  kubernetes.core.k8s:
+    state: absent
+    api_version: kubevirt.io/v1
+    kind: VirtualMachine
+    name: "{{ vm.name }}"
+    namespace: "{{ vm.kubevirt.namespace | default(mp_kubevirt_namespace) }}"
+  loop: "{{ molecule_yml.platforms }}"
+  loop_control:
+    loop_var: vm
+    label: "{{ vm.name }}"
+
+- name: Delete NodePort SSH service
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Service
+    name: "{{ vm.name }}"
+    namespace: "{{ vm.kubevirt.namespace | default(mp_kubevirt_namespace) }}"
+  loop: "{{ molecule_yml.platforms }}"
+  loop_control:
+    loop_var: vm
+    label: "{{ vm.name }}"

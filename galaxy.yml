@@ -1,0 +1,52 @@
+---
+namespace: david_igou
+name: molecule_provisioners
+version: 1.0.0
+readme: README.md
+authors:
+  - David Igou <igou.david@gmail.com>
+
+description: >-
+  Reusable Molecule provisioner playbooks and roles (podman, kubevirt) for
+  testing other Ansible collections without copy-pasting create/destroy/prepare
+  automation per repo.
+
+license_file: LICENSE
+tags:
+  - molecule
+  - testing
+  - podman
+  - kubevirt
+
+dependencies:
+  containers.podman: ">=1.10.0"
+  kubernetes.core: ">=3.0.0"
+  community.crypto: ">=2.0.0"
+
+repository: https://github.com/david-igou/ansible-collection-molecule_provisioners
+documentation: https://github.com/david-igou/ansible-collection-molecule_provisioners
+homepage: https://github.com/david-igou/ansible-collection-molecule_provisioners
+issues: https://github.com/david-igou/ansible-collection-molecule_provisioners/issues
+
+build_ignore:
+  # Files that aren't part of the published collection.
+  # NOTE: tests/, pyproject.toml, tox-ansible.ini, test-requirements.txt all
+  # SHIP — the unit-source workflow runs `pytest tests/unit` against the
+  # installed collection path, and pyproject.toml carries the pytest config.
+  - .ansible
+  - .ansible-lint
+  - .devcontainer
+  - .github
+  - .gitignore
+  - .isort.cfg
+  - .pre-commit-config.yaml
+  - .prettierignore
+  - .vscode
+  - .yamllint
+  - AGENTS.md
+  - CLAUDE.md
+  - changelogs/.plugin-cache.yaml
+  - changelogs/fragments
+  - devfile.yaml
+  - docs/superpowers
+  - requirements.txt
