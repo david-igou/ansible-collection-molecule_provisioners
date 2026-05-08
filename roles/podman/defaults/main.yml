@@ -1,0 +1,15 @@
+---
+# Defaults for david_igou.molecule_provisioners.podman.
+# These are the role-level overrides; per-platform values come from
+# molecule.yml platforms[].podman.*
+
+# Reserved network names that must NOT be (re)created/deleted as standalone networks.
+mp_podman_reserved_networks:
+  - bridge
+  - none
+  - host
+  - slirp4netns
+
+# Async timing for create/destroy bulk operations (seconds + retry count).
+mp_podman_async_timeout: 7200
+mp_podman_async_retries: 300

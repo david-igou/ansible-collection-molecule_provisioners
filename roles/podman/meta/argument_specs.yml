@@ -1,0 +1,29 @@
+---
+argument_specs:
+  main:
+    short_description: >-
+      Default entry point — does nothing on its own; use tasks_from=create|destroy|prepare.
+    options: {}
+  create:
+    short_description: Create podman containers and networks for molecule platforms.
+    options:
+      mp_podman_async_timeout:
+        type: int
+        default: 7200
+        description: Async timeout (seconds) for bulk container create.
+      mp_podman_async_retries:
+        type: int
+        default: 300
+        description: Number of times to poll for async completion.
+  destroy:
+    short_description: Destroy podman containers and (non-reserved) networks.
+    options:
+      mp_podman_async_timeout:
+        type: int
+        default: 7200
+      mp_podman_async_retries:
+        type: int
+        default: 300
+  prepare:
+    short_description: Run podman-side preparation tasks against created containers.
+    options: {}
