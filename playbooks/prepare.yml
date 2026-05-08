@@ -2,19 +2,29 @@
 - name: Molecule provisioner — prepare
   hosts: all
   gather_facts: false
-  vars:
-    _mp_provisioner: "{{ lookup('env', 'PROVISIONER') | default(mp_default_provisioner | default('podman'), true) }}"
-    _mp_supported: [podman, kubevirt]
   tasks:
-    - name: Validate PROVISIONER
+    - name: Assert molecule group exists in inventory
       ansible.builtin.assert:
-        that: _mp_provisioner in _mp_supported
+        that:
+          - "'molecule' in groups"
+          - groups['molecule'] | length > 0
+        fail_msg: "Inventory must define a 'molecule' group with at least one host."
+      run_once: true  # noqa: run-once[task]
+
+    - name: Determine backend from molecule group
+      ansible.builtin.set_fact:
+        _mp_backend: "{{ hostvars[groups['molecule'][0]].mp_backend | default(none) }}"
+      run_once: true  # noqa: run-once[task]
+
+    - name: Validate backend
+      ansible.builtin.assert:
+        that: _mp_backend in mp_supported_backends
         fail_msg: >-
-          PROVISIONER must be one of {{ _mp_supported | join(', ') }}
-          (got '{{ _mp_provisioner }}').
+          mp_backend must be one of {{ mp_supported_backends | join(', ') }}
+          (got '{{ _mp_backend or '(unset)' }}').
       run_once: true  # noqa: run-once[task]
 
     - name: Run provisioner prepare
       ansible.builtin.include_role:
-        name: "david_igou.molecule_provisioners.{{ _mp_provisioner }}"
+        name: "david_igou.molecule_provisioners.{{ _mp_backend }}"
         tasks_from: prepare
