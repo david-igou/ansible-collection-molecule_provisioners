@@ -1,0 +1,6 @@
+---
+trivial:
+  - Added a CI job that runs the kubevirt provisioner end-to-end on a kind
+    cluster with KubeVirt in software-emulation mode. New
+    ``extensions/molecule/kubevirt_ci/`` scenario backs the job. No
+    user-facing changes.
