@@ -16,6 +16,7 @@
   register: __mp_podman_jobs
   until: __mp_podman_jobs.finished
   retries: "{{ mp_podman_async_retries }}"
+  delay: "{{ mp_podman_async_delay }}"
   loop: "{{ __mp_podman_destroy.results }}"
   loop_control:
     label: "{{ item.item.name }}"
@@ -29,7 +30,6 @@
     state: absent
   loop: "{{ __mp_podman_networks | default([]) | unique }}"
   when:
-    - __mp_podman_networks | default([]) | length > 0
     - item not in mp_podman_reserved_networks
     - item is not match('^ns:')
     - item is not match('^container:')

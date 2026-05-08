@@ -10,6 +10,9 @@ mp_podman_reserved_networks:
   - host
   - slirp4netns
 
-# Async timing for create/destroy bulk operations (seconds + retry count).
+# Async timing for create/destroy bulk operations.
+# Note: retries * delay should equal (or exceed) async_timeout; otherwise
+# async_status can give up while the underlying job is still healthy.
 mp_podman_async_timeout: 7200
 mp_podman_async_retries: 300
+mp_podman_async_delay: 24

@@ -8,11 +8,13 @@
     state: present
   loop: "{{ __mp_podman_networks | default([]) | unique }}"
   when:
-    - __mp_podman_networks | default([]) | length > 0
     - item not in mp_podman_reserved_networks
     - item is not match('^ns:')
     - item is not match('^container:')
 
+# Launch all containers simultaneously (poll: 0), then wait for each below.
+# A failure during the wait leaves the still-running async jobs in flight;
+# run destroy to clean up partially-created instances.
 - name: Create molecule instance(s)
   containers.podman.podman_container:
     name: "{{ item.name }}"
@@ -41,6 +43,7 @@
   register: __mp_podman_jobs
   until: __mp_podman_jobs.finished
   retries: "{{ mp_podman_async_retries }}"
+  delay: "{{ mp_podman_async_delay }}"
   loop: "{{ __mp_podman_create.results }}"
   loop_control:
     label: "{{ item.item.name }}"

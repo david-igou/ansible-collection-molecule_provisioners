@@ -13,4 +13,6 @@
   loop: "{{ molecule_yml.platforms }}"
   loop_control:
     label: "{{ item.name }}"
-  when: item.podman.podman_network is defined
+  when:
+    - item.podman is defined
+    - item.podman.podman_network is defined
