@@ -30,6 +30,9 @@ issues: https://github.com/david-igou/ansible-collection-molecule_provisioners/i
 
 build_ignore:
   # Files that aren't part of the published collection.
+  # NOTE: tests/, pyproject.toml, tox-ansible.ini, test-requirements.txt all
+  # SHIP — the unit-source workflow runs `pytest tests/unit` against the
+  # installed collection path, and pyproject.toml carries the pytest config.
   - .ansible
   - .ansible-lint
   - .devcontainer
@@ -46,8 +49,4 @@ build_ignore:
   - changelogs/fragments
   - devfile.yaml
   - docs/superpowers
-  - pyproject.toml
   - requirements.txt
-  - test-requirements.txt
-  - tests
-  - tox-ansible.ini
