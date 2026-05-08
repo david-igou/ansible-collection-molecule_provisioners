@@ -1,78 +1,100 @@
-# David_igou Molecule_provisioners Collection
+# david_igou.molecule_provisioners
 
-This repository contains the `david_igou.molecule_provisioners` Ansible Collection.
+Reusable [Molecule](https://ansible.readthedocs.io/projects/molecule/) provisioner playbooks and roles for testing Ansible collections.
 
-<!--start requires_ansible-->
-<!--end requires_ansible-->
+Stop redefining `create.yml`/`destroy.yml`/`prepare.yml` per repo. Install this collection, write three one-line files in your scenario, and switch backends with one env var.
 
-## External requirements
+## Supported backends (v1.0)
 
-Some modules and plugins require external libraries. Please check the
-requirements for each plugin or module you use in the documentation to find out
-which requirements are needed.
+| Backend | When to use |
+| --- | --- |
+| `podman` (default) | Containers, fastest CI loop |
+| `kubevirt` | Real VMs in a Kubernetes cluster (requires KubeVirt) |
 
-## Included content
-
-<!--start collection content-->
-<!--end collection content-->
-
-## Using this collection
+## Installing
 
 ```bash
-    ansible-galaxy collection install david_igou.molecule_provisioners
+ansible-galaxy collection install david_igou.molecule_provisioners
 ```
 
-You can also include it in a `requirements.yml` file and install it via
-`ansible-galaxy collection install -r requirements.yml` using the format:
+Or via `requirements.yml`:
 
 ```yaml
 collections:
   - name: david_igou.molecule_provisioners
+    version: ">=1.0.0,<2.0.0"
 ```
 
-To upgrade the collection to the latest available version, run the following
-command:
+## Using
+
+In your collection's `extensions/molecule/<scenario>/` directory, create three one-line files:
+
+```yaml
+# create.yml
+- import_playbook: david_igou.molecule_provisioners.create
+```
+
+```yaml
+# destroy.yml
+- import_playbook: david_igou.molecule_provisioners.destroy
+```
+
+```yaml
+# prepare.yml
+- import_playbook: david_igou.molecule_provisioners.prepare
+```
+
+Then point your scenario's `molecule.yml` at them and define your platforms with both `podman` and `kubevirt` blocks (consumers can omit a block if they never use that backend):
+
+```yaml
+provisioner:
+  name: ansible
+  playbooks:
+    create: create.yml
+    destroy: destroy.yml
+    prepare: prepare.yml
+    converge: converge.yml
+
+platforms:
+  - name: ubuntu-24
+    podman:
+      image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
+      command: sleep 1d
+    kubevirt:
+      image: quay.io/containerdisks/ubuntu:24.04
+      namespace: molecule
+      ssh_service:
+        type: NodePort
+      ansible_user: cloud-user
+      memory: 4Gi
+      disk_size: 30Gi
+```
+
+Switch backends per run:
 
 ```bash
-ansible-galaxy collection install david_igou.molecule_provisioners --upgrade
+PROVISIONER=podman   molecule test    # default
+PROVISIONER=kubevirt molecule test
 ```
 
-You can also install a specific version of the collection, for example, if you
-need to downgrade when something is broken in the latest version (please report
-an issue in this repository). Use the following syntax where `X.Y.Z` can be any
-[available version](https://galaxy.ansible.com/david_igou/molecule_provisioners):
+A complete starter template is in [`docs/examples/`](docs/examples/). To migrate an existing collection, see [`docs/MIGRATION.md`](docs/MIGRATION.md).
 
-```bash
-ansible-galaxy collection install david_igou.molecule_provisioners:==X.Y.Z
-```
+## What's in the box
 
-See
-[Ansible Using Collections](https://docs.ansible.com/ansible/latest/user_guide/collections_using.html)
-for more details.
+- `playbooks/{create,destroy,prepare}.yml` — top-level dispatchers; read `$PROVISIONER`, validate, dispatch.
+- `roles/podman/` — uses `containers.podman.podman_container` + `podman_network`.
+- `roles/kubevirt/` — generates an SSH keypair, creates `VirtualMachine` + `NodePort` Service per platform, writes the molecule inventory file.
 
-## Release notes
+Both roles produce a host group named `molecule` containing all platform hosts.
 
-See the
-[changelog](https://github.com/ansible-collections/david_igou.molecule_provisioners/tree/main/CHANGELOG.rst).
+## Out of scope for v1.0
 
-## Roadmap
-
-<!-- Optional. Include the roadmap for this collection, and the proposed release/versioning strategy so users can anticipate the upgrade/update cycle. -->
-
-## More information
-
-<!-- List out where the user can find additional information, such as working group meeting times, slack/matrix channels, or documentation for the product this collection automates. At a minimum, link to: -->
-
-- [Ansible collection development forum](https://forum.ansible.com/c/project/collection-development/27)
-- [Ansible User guide](https://docs.ansible.com/ansible/devel/user_guide/index.html)
-- [Ansible Developer guide](https://docs.ansible.com/ansible/devel/dev_guide/index.html)
-- [Ansible Collections Checklist](https://docs.ansible.com/ansible/devel/community/collection_contributors/collection_requirements.html)
-- [Ansible Community code of conduct](https://docs.ansible.com/ansible/devel/community/code_of_conduct.html)
-- [The Bullhorn (the Ansible Contributor newsletter)](https://docs.ansible.com/ansible/devel/community/communication.html#the-bullhorn)
-- [News for Maintainers](https://forum.ansible.com/tag/news-for-maintainers)
+- docker, qemu/libvirt, AWS, Azure, GCP backends
+- LoadBalancer / ClusterIP+port-forward kubevirt service types
+- Windows/macOS guests
+- Per-platform networks beyond `podman.podman_network`
+- Molecule `shared_state` / shared default-scenario pattern
 
 ## Licensing
 
-GNU General Public License v3.0 or later.
-
-See [LICENSE](https://www.gnu.org/licenses/gpl-3.0.txt) to see the full text.
+GPL v3.0 or later — see [LICENSE](LICENSE).
