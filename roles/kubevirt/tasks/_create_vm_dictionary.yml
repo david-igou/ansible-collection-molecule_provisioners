@@ -1,0 +1,39 @@
+---
+- name: Initialize systems dict on first iteration
+  ansible.builtin.set_fact:
+    __mp_kubevirt_molecule_systems: "{{ __mp_kubevirt_molecule_systems | default({}) }}"
+
+- name: "Look up NodePort service for: {{ vm.name }}"
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Service
+    name: "{{ vm.name }}"
+    namespace: "{{ vm.kubevirt.namespace | default(mp_kubevirt_namespace) }}"
+  register: __mp_kubevirt_svc
+
+- name: "Look up a Ready node (for NodePort connection)"
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Node
+  register: __mp_kubevirt_nodes
+  run_once: true  # noqa: run-once[task]
+
+- name: "Choose first node InternalIP"
+  ansible.builtin.set_fact:
+    __mp_kubevirt_node_ip: >-
+      {{ (__mp_kubevirt_nodes.resources[0].status.addresses
+          | selectattr('type','equalto','InternalIP') | list | first).address }}
+  run_once: true  # noqa: run-once[task]
+
+- name: "Add VM to molecule inventory dict: {{ vm.name }}"
+  ansible.builtin.set_fact:
+    __mp_kubevirt_molecule_systems: >-
+      {{ __mp_kubevirt_molecule_systems | combine({
+          vm.name: {
+            'ansible_host': __mp_kubevirt_node_ip,
+            'ansible_port': (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort),
+            'ansible_user': vm.kubevirt.ansible_user,
+            'ansible_ssh_private_key_file': mp_kubevirt_ssh_key_path,
+            'ansible_ssh_common_args': '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+          }
+      }) }}
