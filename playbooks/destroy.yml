@@ -6,6 +6,8 @@
   vars:
     _mp_provisioner: "{{ lookup('env', 'PROVISIONER') | default(mp_default_provisioner | default('podman'), true) }}"
     _mp_supported: [podman, kubevirt]
+  # Per-platform key assert is intentionally absent: destroy is idempotent for
+  # platforms that were never created with the active backend.
   tasks:
     - name: Validate PROVISIONER
       ansible.builtin.assert:

@@ -12,6 +12,7 @@
         fail_msg: >-
           PROVISIONER must be one of {{ _mp_supported | join(', ') }}
           (got '{{ _mp_provisioner }}').
+      run_once: true  # noqa: run-once[task]
 
     - name: Run provisioner prepare
       ansible.builtin.include_role:
