@@ -61,7 +61,7 @@ jobs:
         env:
           PROVISIONER: podman
           ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
-        run: pytest tests/integration -v
+        run: pytest tests/integration -v -k podman
   kubevirt:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -118,17 +118,16 @@ jobs:
            done) > /tmp/vm-watch.log 2>&1 &
           echo "$!" > /tmp/vm-watch.pid
 
-      - name: Run kubevirt_ci scenario
+      - name: Run kubevirt scenario
         working-directory: ansible_collections/david_igou/molecule_provisioners
         env:
           PROVISIONER: kubevirt
-          MOLECULE_KUBEVIRT_ENABLED: "1"
           ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
         run: |
           # Override pyproject.toml addopts to disable xdist (-n 2) which captures
           # all molecule output. We need molecule's PLAY RECAP visible in CI logs
           # to confirm the scenario actually exercised create/prepare/converge/verify.
-          pytest tests/integration -v -k kubevirt_ci -s -o addopts=""
+          pytest tests/integration -v -k kubevirt -s -o addopts=""
 
       - name: Stop VM watcher and dump trace
         if: always()

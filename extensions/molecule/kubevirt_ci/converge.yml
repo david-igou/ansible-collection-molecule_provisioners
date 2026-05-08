@@ -1,7 +1,0 @@
----
-- name: Verify each host is reachable
-  hosts: molecule
-  gather_facts: false
-  tasks:
-    - name: Ping
-      ansible.builtin.ping:
