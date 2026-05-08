@@ -30,7 +30,7 @@ jobs:
     with:
       collection_pre_install: >-
         git+https://github.com/ansible-collections/ansible.utils.git
-  integration:
+  integration-podman:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout into the canonical collection path
@@ -61,8 +61,8 @@ jobs:
         env:
           PROVISIONER: podman
           ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
-        run: pytest tests/integration -v -k podman
-  kubevirt:
+        run: pytest tests/integration -v -k default
+  integration-kubevirt:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -127,7 +127,7 @@ jobs:
           # Override pyproject.toml addopts to disable xdist (-n 2) which captures
           # all molecule output. We need molecule's PLAY RECAP visible in CI logs
           # to confirm the scenario actually exercised create/prepare/converge/verify.
-          pytest tests/integration -v -k kubevirt -s -o addopts=""
+          pytest tests/integration -v -k default -s -o addopts=""
 
       - name: Stop VM watcher and dump trace
         if: always()
@@ -164,8 +164,8 @@ jobs:
       - unit-galaxy
       - unit-source
       - ansible-lint
-      - integration
-      - kubevirt
+      - integration-podman
+      - integration-kubevirt
     runs-on: ubuntu-latest
     steps:
       - run: >-
@@ -176,6 +176,6 @@ jobs:
           '${{ needs.unit-galaxy.result }}',
           '${{ needs.ansible-lint.result }}',
           '${{ needs.unit-source.result }}',
-          '${{ needs.integration.result }}',
-          '${{ needs.kubevirt.result }}'
+          '${{ needs.integration-podman.result }}',
+          '${{ needs.integration-kubevirt.result }}'
           ])"
