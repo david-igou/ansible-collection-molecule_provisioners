@@ -47,7 +47,7 @@ jobs:
         working-directory: ansible_collections/david_igou/molecule_provisioners
         run: |
           python -m pip install --upgrade pip
-          pip install ansible-core molecule "molecule-plugins[podman]" \
+          pip install ansible-core molecule \
                       pytest pytest-ansible pytest-xdist
 
       - name: Install collection dependencies
@@ -80,7 +80,7 @@ jobs:
         working-directory: ansible_collections/david_igou/molecule_provisioners
         run: |
           python -m pip install --upgrade pip
-          pip install ansible-core molecule "molecule-plugins[podman]" \
+          pip install ansible-core molecule \
                       pytest pytest-ansible pytest-xdist kubernetes
 
       - name: Install collection dependencies

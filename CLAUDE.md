@@ -28,6 +28,10 @@ Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) 
 - `docs/examples/` — copy-paste starter for consumers.
 - `docs/MIGRATION.md` — converting devhost-style consumers.
 
+## Do not depend on `molecule-plugins`
+
+This collection must never list `molecule-plugins` (or any of its extras like `molecule-plugins[podman]`, `molecule-plugins[kubevirt]`) in `requirements.txt`, `test-requirements.txt`, CI install steps, or scenario `molecule.yml` `driver:` blocks. Both scenarios use `driver: name: default` and delegate the lifecycle to the playbooks shipped here — the whole point of the collection is to replace those plugins, not consume them. If you copy a CI step from another repo and it pulls `molecule-plugins`, strip it.
+
 ## Common commands
 
 | Task | Command |
