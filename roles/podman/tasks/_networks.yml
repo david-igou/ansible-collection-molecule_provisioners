@@ -3,16 +3,17 @@
   ansible.builtin.set_fact:
     __mp_podman_networks: []
 
-- name: Collect networks from platforms[].podman.podman_network
+- name: Collect networks from per-host podman_network
   ansible.builtin.set_fact:
     __mp_podman_networks: >-
       {{ __mp_podman_networks +
-         (item.podman.podman_network
-          if (item.podman.podman_network is sequence and item.podman.podman_network is not string)
-          else [item.podman.podman_network]) }}
-  loop: "{{ molecule_yml.platforms }}"
+         (_mp_specs[item].podman_network
+          if (_mp_specs[item].podman_network is sequence
+              and _mp_specs[item].podman_network is not string)
+          else [_mp_specs[item].podman_network]) }}
+  loop: "{{ groups['molecule'] }}"
   loop_control:
-    label: "{{ item.name }}"
+    label: "{{ item }}"
   when:
-    - item.podman is defined
-    - item.podman.podman_network is defined
+    - _mp_specs[item].podman_network is defined
+    - _mp_specs[item].podman_network
