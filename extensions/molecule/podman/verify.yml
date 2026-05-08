@@ -3,6 +3,11 @@
   hosts: molecule
   gather_facts: false
   tasks:
-    - name: Check sudo
-      ansible.builtin.command: which sudo
-      changed_when: false
+    - name: Stat /usr/bin/sudo
+      ansible.builtin.stat:
+        path: /usr/bin/sudo
+      register: __mp_sudo_stat
+    - name: Assert sudo is installed
+      ansible.builtin.assert:
+        that: __mp_sudo_stat.stat.exists
+        fail_msg: "/usr/bin/sudo missing — prepare phase did not install sudo"
