@@ -29,6 +29,25 @@ homepage: https://github.com/david-igou/ansible-collection-molecule_provisioners
 issues: https://github.com/david-igou/ansible-collection-molecule_provisioners/issues
 
 build_ignore:
+  # Files that aren't part of the published collection.
+  - .ansible
+  - .ansible-lint
+  - .devcontainer
+  - .github
   - .gitignore
+  - .isort.cfg
+  - .pre-commit-config.yaml
+  - .prettierignore
+  - .vscode
+  - .yamllint
+  - AGENTS.md
+  - CLAUDE.md
   - changelogs/.plugin-cache.yaml
+  - changelogs/fragments
+  - devfile.yaml
   - docs/superpowers
+  - pyproject.toml
+  - requirements.txt
+  - test-requirements.txt
+  - tests
+  - tox-ansible.ini
