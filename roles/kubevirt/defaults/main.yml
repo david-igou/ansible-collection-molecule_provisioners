@@ -4,9 +4,6 @@
 # SSH keypair lives in the molecule ephemeral dir so destroy can find it.
 mp_kubevirt_ssh_key_path: "{{ molecule_ephemeral_directory }}/identity_file"
 
-# Default namespace if a platform doesn't set its own.
-mp_kubevirt_namespace: molecule
-
 # wait_for_connection timeout (seconds) for prepare phase.
 mp_kubevirt_wait_timeout: 120
 

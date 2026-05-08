@@ -5,8 +5,13 @@ argument_specs:
       Default entry point — does nothing on its own; use tasks_from=create|destroy|prepare.
     options: {}
   create:
-    short_description: Create podman containers and networks for molecule platforms.
+    short_description: Create podman containers and networks for hosts in groups['molecule'].
     options:
+      mp_podman_role_defaults:
+        type: dict
+        description: >-
+          Per-host field defaults (command, privileged, volumes, etc.).
+          Layered as: this dict <- mp_defaults.podman <- hostvars[item].mp.podman.
       mp_podman_async_timeout:
         type: int
         default: 7200
@@ -24,6 +29,8 @@ argument_specs:
   destroy:
     short_description: Destroy podman containers and (non-reserved) networks.
     options:
+      mp_podman_role_defaults:
+        type: dict
       mp_podman_async_timeout:
         type: int
         default: 7200
