@@ -49,14 +49,29 @@
     label: "{{ item.item.name }}"
 
 # Molecule's `driver: default` doesn't add hosts to a `molecule` group on its
-# own — it only puts them in `ungrouped`. The spec's inventory contract
-# promises both backends produce a `molecule` group, so register each platform
-# explicitly. add_host modifications persist across plays in the same run.
-- name: Register molecule inventory group
-  ansible.builtin.add_host:
-    name: "{{ item.name }}"
-    groups: molecule
+# own — it only puts them in `ungrouped`. Each molecule phase (create, prepare,
+# converge, verify, destroy) is a separate ansible-playbook invocation, so
+# in-memory tricks like add_host don't persist across phases. Write the
+# inventory to disk in MOLECULE_EPHEMERAL_DIRECTORY so subsequent phases
+# rediscover the molecule group. Same approach the kubevirt role uses.
+- name: Build molecule hosts dict
+  ansible.builtin.set_fact:
+    __mp_podman_molecule_hosts: "{{ __mp_podman_molecule_hosts | default({}) | combine({item.name: {}}) }}"
   loop: "{{ molecule_yml.platforms }}"
   loop_control:
     label: "{{ item.name }}"
-  changed_when: false
+
+- name: Write molecule inventory file
+  vars:
+    molecule_inventory:
+      all:
+        children:
+          molecule:
+            hosts: "{{ __mp_podman_molecule_hosts }}"
+  ansible.builtin.copy:
+    content: "{{ molecule_inventory | to_nice_yaml }}"
+    dest: "{{ molecule_ephemeral_directory }}/inventory/molecule_inventory.yml"
+    mode: "0600"
+
+- name: Refresh inventory
+  ansible.builtin.meta: refresh_inventory
