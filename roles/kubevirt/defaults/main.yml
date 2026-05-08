@@ -13,3 +13,13 @@ mp_kubevirt_wait_timeout: 120
 # Allowed ssh_service.type values. v1 supports NodePort only.
 mp_kubevirt_allowed_ssh_service_types:
   - NodePort
+
+# Per-host field defaults. Layered as: this dict <- mp_defaults.kubevirt <- hostvars[item].mp.kubevirt.
+# Only `image` is required and is therefore not present here.
+mp_kubevirt_role_defaults:
+  namespace: molecule
+  ssh_user: cloud-user
+  memory: 1Gi
+  disk_size: 5Gi
+  ssh_service:
+    type: NodePort
