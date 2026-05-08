@@ -80,17 +80,15 @@ Append this block to the existing file (do not remove the existing `mp_podman_re
 
 ```yaml
 # Per-host field defaults. Layered as: this dict <- mp_defaults.podman <- hostvars[item].mp.podman.
-# Only `image` is required and is therefore not present here.
+# Only `image` is required. Fields whose role default is "omit" (podman_network,
+# tmpfs, exposed_ports, published_ports) are intentionally absent — the role's
+# module calls use `| default(omit)` to handle their absence correctly.
 mp_podman_role_defaults:
   command: /sbin/init
   privileged: false
   volumes: []
   capabilities: []
-  podman_network: []
   env: {}
-  tmpfs: []
-  exposed_ports: []
-  published_ports: []
 ```
 
 - [ ] **Step 2: Append `mp_kubevirt_role_defaults` to `roles/kubevirt/defaults/main.yml`**
