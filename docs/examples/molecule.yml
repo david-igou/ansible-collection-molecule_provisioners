@@ -1,47 +1,21 @@
 ---
 # Starter molecule.yml — copy into your collection's
-# extensions/molecule/<scenario>/ directory and adjust platforms.
+# extensions/molecule/<scenario>/ directory.
+# This file is identical for every consumer; the per-scenario variation
+# lives in inventory/hosts.yml and inventory/group_vars/molecule.yml.
 
-dependency:
-  name: galaxy
-  options:
-    requirements-file: requirements.yml
-    force: true
-
-driver:
-  name: default
-  options:
-    managed: true
-    # When PROVISIONER=kubevirt, override to: connection: ssh
-    ansible_connection_options:
-      connection: containers.podman.podman
-
-platforms:
-  - name: ubuntu-24
-    podman:
-      image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
-      command: sleep 1d
-    kubevirt:
-      image: quay.io/containerdisks/ubuntu:24.04
-      namespace: "${MOLECULE_NAMESPACE:-molecule}"
-      ssh_service:
-        type: NodePort
-      ansible_user: cloud-user
-      memory: 4Gi
-
-provisioner:
-  name: ansible
+ansible:
+  executor:
+    args:
+      ansible_playbook:
+        - --inventory=inventory/
+        - --inventory=${MOLECULE_EPHEMERAL_DIRECTORY}/inventory/
   playbooks:
     create: create.yml
     destroy: destroy.yml
     prepare: prepare.yml
     converge: converge.yml
     verify: verify.yml
-  # Switch backend at runtime: PROVISIONER=podman|kubevirt molecule test
-  env: {}
-
-verifier:
-  name: ansible
 
 scenario:
   name: default
@@ -53,3 +27,6 @@ scenario:
     - converge
     - verify
     - destroy
+
+verifier:
+  name: ansible

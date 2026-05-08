@@ -1,0 +1,14 @@
+---
+# Backend selector. Drives which role the dispatcher includes.
+mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
+
+# Per-backend defaults shared across hosts. Per-host overrides go in hosts.yml
+# under mp.<backend>.<field>. Role-shipped defaults apply when neither is set.
+mp_defaults:
+  podman:
+    command: /sbin/init
+    privileged: true
+  kubevirt:
+    namespace: molecule
+    memory: 1Gi
+    ssh_user: cloud-user
