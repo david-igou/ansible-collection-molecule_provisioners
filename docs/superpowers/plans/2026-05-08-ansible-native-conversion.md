@@ -211,6 +211,9 @@ Each dispatcher reads `mp_backend` from the molecule group's hostvars, validates
   hosts: localhost
   connection: local
   gather_facts: false
+  # Per-host mp.<backend> validation is intentionally absent here:
+  # destroy is idempotent for hosts that were never created with the
+  # active backend.
   tasks:
     - name: Assert molecule group exists in inventory
       ansible.builtin.assert:
@@ -228,7 +231,8 @@ Each dispatcher reads `mp_backend` from the molecule group's hostvars, validates
         that: _mp_backend in mp_supported_backends
         fail_msg: >-
           mp_backend must be one of {{ mp_supported_backends | join(', ') }}
-          (got '{{ _mp_backend or '(unset)' }}').
+          (got '{{ _mp_backend or '(unset)' }}'). Set it in
+          inventory/group_vars/molecule.yml.
 
     - name: Run provisioner destroy
       ansible.builtin.include_role:
@@ -264,7 +268,8 @@ Each dispatcher reads `mp_backend` from the molecule group's hostvars, validates
         that: _mp_backend in mp_supported_backends
         fail_msg: >-
           mp_backend must be one of {{ mp_supported_backends | join(', ') }}
-          (got '{{ _mp_backend or '(unset)' }}').
+          (got '{{ _mp_backend or '(unset)' }}'). Set it in
+          inventory/group_vars/molecule.yml.
       run_once: true  # noqa: run-once[task]
 
     - name: Run provisioner prepare
