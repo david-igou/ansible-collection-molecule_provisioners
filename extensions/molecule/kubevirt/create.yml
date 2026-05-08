@@ -1,3 +1,0 @@
----
-- name: Create VMs
-  import_playbook: david_igou.molecule_provisioners.create

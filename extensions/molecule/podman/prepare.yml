@@ -1,3 +1,0 @@
----
-- name: Prepare containers
-  import_playbook: david_igou.molecule_provisioners.prepare

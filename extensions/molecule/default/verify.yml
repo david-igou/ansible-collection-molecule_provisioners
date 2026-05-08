@@ -1,0 +1,9 @@
+---
+- name: Verify — assert every molecule host responded to gather_facts
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Assert ansible_distribution is set
+      ansible.builtin.assert:
+        that: ansible_distribution is defined
+        fail_msg: "ansible_distribution missing — host did not gather facts during converge."
