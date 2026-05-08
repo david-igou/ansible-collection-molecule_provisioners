@@ -1,28 +1,28 @@
 ---
-- name: "Define VirtualMachine: {{ vm.name }}"
+- name: "Define VirtualMachine: {{ item }}"
   kubernetes.core.k8s:
     state: present
     definition:
       apiVersion: kubevirt.io/v1
       kind: VirtualMachine
       metadata:
-        name: "{{ vm.name }}"
-        namespace: "{{ vm.kubevirt.namespace | default(mp_kubevirt_namespace) }}"
+        name: "{{ item }}"
+        namespace: "{{ _mp_specs[item].namespace }}"
         labels:
-          kubevirt.io/domain: "{{ vm.name }}"
+          kubevirt.io/domain: "{{ item }}"
       spec:
         running: true
         template:
           metadata:
             labels:
-              kubevirt.io/domain: "{{ vm.name }}"
+              kubevirt.io/domain: "{{ item }}"
           spec:
             domain:
               cpu:
                 cores: 2
               resources:
                 requests:
-                  memory: "{{ vm.kubevirt.memory }}"
+                  memory: "{{ _mp_specs[item].memory }}"
               devices:
                 disks:
                   - name: containerdisk
@@ -40,7 +40,7 @@
             volumes:
               - name: containerdisk
                 containerDisk:
-                  image: "{{ vm.kubevirt.image }}"
+                  image: "{{ _mp_specs[item].image }}"
               - name: cloudinitdisk
                 cloudInitNoCloud:
                   # Use the explicit `users:` list form so we always create the
@@ -50,7 +50,7 @@
                   userData: |
                     #cloud-config
                     users:
-                      - name: {{ vm.kubevirt.ansible_user }}
+                      - name: {{ _mp_specs[item].ssh_user }}
                         ssh_authorized_keys:
                           - {{ temporary_ssh_public_key }}
                         sudo: ALL=(ALL) NOPASSWD:ALL
