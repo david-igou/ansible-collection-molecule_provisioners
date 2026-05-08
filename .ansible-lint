@@ -1,0 +1,8 @@
+---
+# ansible-lint configuration for david_igou.molecule_provisioners
+profile: basic
+
+skip_list:
+  # The collection uses an mp_podman_* / mp_kubevirt_* namespace convention
+  # that intentionally differs from the role-name prefix that lint expects.
+  - var-naming[no-role-prefix]
