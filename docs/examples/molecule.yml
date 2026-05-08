@@ -1,0 +1,55 @@
+---
+# Starter molecule.yml — copy into your collection's
+# extensions/molecule/<scenario>/ directory and adjust platforms.
+
+dependency:
+  name: galaxy
+  options:
+    requirements-file: requirements.yml
+    force: true
+
+driver:
+  name: default
+  options:
+    managed: true
+    ansible_connection_options:
+      connection: local
+
+platforms:
+  - name: ubuntu-24
+    podman:
+      image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
+      command: sleep 1d
+    kubevirt:
+      image: quay.io/containerdisks/ubuntu:24.04
+      namespace: "${MOLECULE_NAMESPACE:-molecule}"
+      ssh_service:
+        type: NodePort
+      ansible_user: cloud-user
+      memory: 4Gi
+      disk_size: 30Gi
+
+provisioner:
+  name: ansible
+  playbooks:
+    create: create.yml
+    destroy: destroy.yml
+    prepare: prepare.yml
+    converge: converge.yml
+    verify: verify.yml
+  # Switch backend at runtime: PROVISIONER=podman|kubevirt molecule test
+  env: {}
+
+verifier:
+  name: ansible
+
+scenario:
+  name: default
+  test_sequence:
+    - dependency
+    - syntax
+    - create
+    - prepare
+    - converge
+    - verify
+    - destroy
