@@ -24,8 +24,7 @@ Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) 
 - `playbooks/{create,destroy,prepare}.yml` — dispatcher entry points; the `import_playbook` targets that consumers reference by FQCN.
 - `roles/podman/tasks/{create,destroy,prepare,_networks}.yml` — podman lifecycle. `_networks.yml` is shared between create and destroy.
 - `roles/kubevirt/tasks/{create,destroy,prepare,_create_vm,_create_vm_dictionary}.yml` — kubevirt lifecycle. `_create_vm*.yml` are per-platform helpers included in a loop with `loop_var: vm`.
-- `extensions/molecule/{podman,kubevirt}/` — self-test scenarios. Discovered by `pytest_ansible.molecule_scenario` fixture in `tests/integration/test_integration.py`.
-- `tests/integration/conftest.py` — skips kubevirt unless `MOLECULE_KUBEVIRT_ENABLED` is truthy.
+- `extensions/molecule/{podman,kubevirt}/` — self-test scenarios. Discovered by `pytest_ansible.molecule_scenario` fixture in `tests/integration/test_integration.py`. The kubevirt scenario is cluster-agnostic — it talks to whatever `KUBECONFIG` points at, as long as KubeVirt is installed there. CI provisions kind + KubeVirt with `useEmulation` before running it.
 - `docs/examples/` — copy-paste starter for consumers.
 - `docs/MIGRATION.md` — converting devhost-style consumers.
 
@@ -36,13 +35,13 @@ Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) 
 | Install runtime/test deps | `pip install -r requirements.txt -r test-requirements.txt` |
 | Lint everything | `ansible-lint && yamllint .` |
 | Run podman self-test | `pytest tests/integration -v -k podman` |
-| Run a single scenario directly | `cd extensions/molecule/podman && PROVISIONER=podman molecule test` |
-| Run kubevirt self-test (needs cluster) | `MOLECULE_KUBEVIRT_ENABLED=1 pytest tests/integration -v -k kubevirt` |
+| Run kubevirt self-test (requires `$KUBECONFIG` pointing at a cluster with KubeVirt) | `pytest tests/integration -v -k kubevirt` |
+| Run a single scenario directly | `cd extensions/molecule/<podman\|kubevirt> && molecule test` |
 | Ansible sanity | `ansible-test sanity --docker` (run from the symlink path) |
 | Build collection artifact | `ansible-galaxy collection build` |
 | Pre-commit | `pre-commit run --all-files` |
 
-`pyproject.toml` configures pytest with `-n 2` (xdist parallel). `tests/integration/conftest.py` filters scenarios by env var.
+`pyproject.toml` configures pytest with `-n 2` (xdist parallel). The `kubevirt` CI job overrides this with `-o addopts="" -s` so molecule's `PLAY RECAP` output is visible in the runner log — xdist captures stdout per-worker, which made it impossible to tell whether the scenario was actually exercising the lifecycle.
 
 ## Public contract (the thing we don't break without a major bump)
 
@@ -92,7 +91,7 @@ Runs `update-docs` (collection_prep), `prettier`, `isort`, `black`, `flake8`, pl
 
 ## CI
 
-`.github/workflows/tests.yml` runs the reusable workflows from `ansible/ansible-content-actions` (changelog, build-import, ansible-lint, sanity, unit-galaxy) plus `unit-source` and an `integration` job that exercises the podman scenario via pytest. `release.yml` publishes to Galaxy on GitHub release.
+`.github/workflows/tests.yml` runs the reusable workflows from `ansible/ansible-content-actions` (changelog, build-import, ansible-lint, sanity, unit-galaxy) plus `unit-source`, an `integration` job that exercises the podman scenario via pytest, and a `kubevirt` job that exercises the kubevirt scenario on an in-CI kind cluster with KubeVirt in `useEmulation` mode. `release.yml` publishes to Galaxy on GitHub release.
 
 ## Out of scope (per the v1.0 spec)
 

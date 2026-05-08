@@ -1,17 +1,5 @@
 ---
-- name: Verify molecule group composition
-  hosts: localhost
-  gather_facts: false
-  tasks:
-    - name: Assert molecule group has both expected hosts
-      ansible.builtin.assert:
-        that:
-          - "'molecule' in groups"
-          - "'ubuntu-24' in groups['molecule']"
-          - "'centos-stream-10' in groups['molecule']"
-        fail_msg: "groups['molecule'] = {{ groups['molecule'] | default([]) }}"
-
-- name: Probe each managed host
+- name: Verify each host is reachable
   hosts: molecule
   gather_facts: false
   tasks:

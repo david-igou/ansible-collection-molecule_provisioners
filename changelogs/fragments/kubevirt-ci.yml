@@ -1,0 +1,7 @@
+---
+trivial:
+  - Added a CI job that runs the kubevirt provisioner end-to-end against an
+    in-CI kind cluster with KubeVirt in software-emulation mode. The
+    ``kubevirt`` molecule scenario is now cluster-agnostic — it runs against
+    whatever ``$KUBECONFIG`` points at, as long as KubeVirt is installed.
+    No user-facing changes.

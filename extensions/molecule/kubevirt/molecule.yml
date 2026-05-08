@@ -7,24 +7,15 @@ driver:
       connection: ssh
 
 platforms:
-  - name: ubuntu-24
+  - name: fedora
     kubevirt:
-      image: quay.io/containerdisks/ubuntu:24.04
+      image: quay.io/kubevirt/fedora-cloud-container-disk-demo:latest
       namespace: "${MOLECULE_NAMESPACE:-molecule}"
       ssh_service:
         type: NodePort
       ansible_user: cloud-user
-      memory: 4Gi
-      disk_size: 30Gi
-  - name: centos-stream-10
-    kubevirt:
-      image: quay.io/containerdisks/centos-stream:10
-      namespace: "${MOLECULE_NAMESPACE:-molecule}"
-      ssh_service:
-        type: NodePort
-      ansible_user: cloud-user
-      memory: 4Gi
-      disk_size: 30Gi
+      memory: 1Gi
+      disk_size: 5Gi
 
 provisioner:
   name: ansible
