@@ -82,7 +82,7 @@ A complete starter template is in [`docs/examples/`](docs/examples/). To migrate
 ## What's in the box
 
 - `playbooks/{create,destroy,prepare}.yml` — top-level dispatchers; read `$PROVISIONER`, validate, dispatch.
-- `roles/podman/` — uses `containers.podman.podman_container` + `podman_network`.
+- `roles/podman/` — uses `containers.podman.podman_container` + `containers.podman.podman_network`.
 - `roles/kubevirt/` — generates an SSH keypair, creates `VirtualMachine` + `NodePort` Service per platform, writes the molecule inventory file.
 
 Both roles produce a host group named `molecule` containing all platform hosts.
