@@ -1,5 +1,7 @@
 ---
 mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
+# Bump from the role default of 120s — TCG emulation in CI takes longer for VMs to boot.
+mp_kubevirt_wait_timeout: 300
 
 mp_defaults:
   podman:
