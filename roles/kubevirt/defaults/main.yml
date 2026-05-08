@@ -4,12 +4,18 @@
 # SSH keypair lives in the molecule ephemeral dir so destroy can find it.
 mp_kubevirt_ssh_key_path: "{{ molecule_ephemeral_directory }}/identity_file"
 
-# Default namespace if a platform doesn't set its own.
-mp_kubevirt_namespace: molecule
-
 # wait_for_connection timeout (seconds) for prepare phase.
 mp_kubevirt_wait_timeout: 120
 
 # Allowed ssh_service.type values. v1 supports NodePort only.
 mp_kubevirt_allowed_ssh_service_types:
   - NodePort
+
+# Per-host field defaults. Layered as: this dict <- mp_defaults.kubevirt <- hostvars[item].mp.kubevirt.
+# Only `image` is required and is therefore not present here.
+mp_kubevirt_role_defaults:
+  namespace: molecule
+  ssh_user: cloud-user
+  memory: 1Gi
+  ssh_service:
+    type: NodePort

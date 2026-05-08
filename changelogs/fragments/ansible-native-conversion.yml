@@ -1,0 +1,9 @@
+---
+major_changes:
+  - >-
+    Convert v1.0 release shape to molecule's ansible-native config.
+    Consumers describe test instances in ``inventory/hosts.yml`` using
+    nested ``mp.<backend>.<field>`` hostvars; backends are selected via
+    the ``mp_backend`` group var (typically driven from the ``$PROVISIONER``
+    env var by convention). The ``platforms:``, ``driver:``, and
+    ``provisioner:`` blocks no longer appear in the consumer's molecule.yml.

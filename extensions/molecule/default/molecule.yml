@@ -1,9 +1,4 @@
 ---
-# Starter molecule.yml — copy into your collection's
-# extensions/molecule/<scenario>/ directory.
-# This file is identical for every consumer; the per-scenario variation
-# lives in inventory/hosts.yml and inventory/group_vars/molecule.yml.
-
 ansible:
   executor:
     args:

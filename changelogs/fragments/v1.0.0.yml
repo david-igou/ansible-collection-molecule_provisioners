@@ -1,8 +1,12 @@
 ---
 release_summary: |
   Initial release. Reusable Molecule provisioner playbooks and roles
-  for podman and kubevirt backends. Consumers' scenario lifecycle
-  files become one-line ``import_playbook`` wrappers; backend selected
-  via ``$PROVISIONER`` (default ``podman``).
+  for podman and kubevirt backends. Consumers describe test instances
+  in inventory/hosts.yml using nested ``mp.<backend>.<field>`` hostvars
+  and select the backend via the ``mp_backend`` group var (typically
+  driven from the ``$PROVISIONER`` env var). Scenario lifecycle files
+  become one-line ``import_playbook`` wrappers using FQCNs. The
+  molecule.yml itself uses molecule's ansible-native shape — no
+  ``driver:``, ``platforms:``, or ``provisioner:`` blocks.
 major_changes:
-  - Initial v1.0.0 release.
+  - Initial v1.0.0 release using molecule's ansible-native config shape.

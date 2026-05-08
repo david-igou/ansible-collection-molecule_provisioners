@@ -1,19 +1,36 @@
 ---
-# An unset platforms[].kubevirt.ssh_service.type defaults to NodePort everywhere
-# (assert, Service-create when:, etc.) — keep both expressions in sync.
-- name: Validate ssh_service.type per platform
+# Compute per-host merged specs.
+# Order: role defaults <- mp_defaults.kubevirt <- hostvars[item].mp.kubevirt.
+- name: Initialize kubevirt spec map
+  ansible.builtin.set_fact:
+    _mp_specs: {}
+
+- name: Merge per-host specs with mp_defaults and role defaults
+  ansible.builtin.set_fact:
+    _mp_specs: >-
+      {{ _mp_specs | combine({
+           item: mp_kubevirt_role_defaults
+                 | combine(mp_defaults['kubevirt'] | default({}))
+                 | combine(hostvars[item].mp['kubevirt'])
+         }) }}
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+# An unset ssh_service.type defaults to NodePort everywhere (assert,
+# Service-create when:, etc.) — keep both expressions in sync.
+- name: Validate ssh_service.type per host
   ansible.builtin.assert:
     that:
-      - (vm.kubevirt.ssh_service.type | default('NodePort'))
+      - (_mp_specs[item].ssh_service.type | default('NodePort'))
         in mp_kubevirt_allowed_ssh_service_types
     fail_msg: >-
-      Platform '{{ vm.name }}' has unsupported ssh_service.type
-      '{{ vm.kubevirt.ssh_service.type | default('(missing)') }}'.
+      Host '{{ item }}' has unsupported ssh_service.type
+      '{{ _mp_specs[item].ssh_service.type | default('(missing)') }}'.
       v1 supports only: {{ mp_kubevirt_allowed_ssh_service_types | join(', ') }}.
-  loop: "{{ molecule_yml.platforms }}"
+  loop: "{{ groups['molecule'] }}"
   loop_control:
-    loop_var: vm
-    label: "{{ vm.name }}"
+    label: "{{ item }}"
 
 - name: Generate SSH key pair
   community.crypto.openssh_keypair:
@@ -27,10 +44,9 @@
 
 - name: Create VirtualMachine in KubeVirt
   ansible.builtin.include_tasks: _create_vm.yml
-  loop: "{{ molecule_yml.platforms }}"
+  loop: "{{ groups['molecule'] }}"
   loop_control:
-    loop_var: vm
-    label: "{{ vm.name }}"
+    label: "{{ item }}"
 
 - name: Create SSH NodePort Kubernetes service
   kubernetes.core.k8s:
@@ -39,21 +55,20 @@
       apiVersion: v1
       kind: Service
       metadata:
-        name: "{{ vm.name }}"
-        namespace: "{{ vm.kubevirt.namespace | default(mp_kubevirt_namespace) }}"
+        name: "{{ item }}"
+        namespace: "{{ _mp_specs[item].namespace }}"
       spec:
         ports:
           - port: 22
             protocol: TCP
             targetPort: 22
         selector:
-          kubevirt.io/domain: "{{ vm.name }}"
+          kubevirt.io/domain: "{{ item }}"
         type: NodePort
-  when: (vm.kubevirt.ssh_service.type | default('NodePort')) == 'NodePort'
-  loop: "{{ molecule_yml.platforms }}"
+  when: (_mp_specs[item].ssh_service.type | default('NodePort')) == 'NodePort'
+  loop: "{{ groups['molecule'] }}"
   loop_control:
-    loop_var: vm
-    label: "{{ vm.name }}"
+    label: "{{ item }}"
 
 # Look up cluster nodes once, before the per-VM dictionary loop, so every VM
 # uses the same node IP. Subsequent dictionary build is purely local.
@@ -74,34 +89,25 @@
       {{ (__mp_kubevirt_nodes.resources[0].status.addresses
           | selectattr('type', 'equalto', 'InternalIP') | list | first).address }}
 
-- name: Initialize VM inventory dict
+- name: Initialize VM runtime inventory dict
   ansible.builtin.set_fact:
-    __mp_kubevirt_molecule_systems: {}
+    __mp_kubevirt_runtime_hosts: {}
 
-- name: Build VM dictionary entries
+- name: Build VM runtime entries
   ansible.builtin.include_tasks: _create_vm_dictionary.yml
-  loop: "{{ molecule_yml.platforms }}"
+  loop: "{{ groups['molecule'] }}"
   loop_control:
-    loop_var: vm
-    label: "{{ vm.name }}"
+    label: "{{ item }}"
 
-- name: Create Ansible inventory from dictionary
+- name: Write runtime connection inventory file
   vars:
-    molecule_inventory:
+    runtime_inventory:
       all:
-        children:
-          molecule:
-            hosts: "{{ __mp_kubevirt_molecule_systems | default({}) }}"
+        hosts: "{{ __mp_kubevirt_runtime_hosts }}"
   ansible.builtin.copy:
-    content: "{{ molecule_inventory | to_nice_yaml }}"
-    dest: "{{ molecule_ephemeral_directory }}/inventory/molecule_inventory.yml"
+    content: "{{ runtime_inventory | to_nice_yaml }}"
+    dest: "{{ molecule_ephemeral_directory }}/inventory/molecule_runtime.yml"
     mode: "0600"
 
 - name: Refresh inventory
   ansible.builtin.meta: refresh_inventory
-
-- name: Assert molecule group exists in inventory
-  ansible.builtin.assert:
-    that: "'molecule' in groups"
-    fail_msg: "Molecule group was not found in inventory groups: {{ groups }}"
-  run_once: true  # noqa: run-once[task]
