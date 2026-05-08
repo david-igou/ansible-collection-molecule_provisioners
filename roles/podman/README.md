@@ -1,33 +1,39 @@
 # `david_igou.molecule_provisioners.podman`
 
-Molecule provisioner role for podman containers. Not invoked directly — invoked via the collection's top-level `playbooks/{create,destroy,prepare}.yml` dispatchers (which set `PROVISIONER=podman`).
+Molecule provisioner role for podman containers. Not invoked directly — invoked via the collection's top-level `playbooks/{create,destroy,prepare}.yml` dispatchers, which read `mp_backend` from the molecule group's hostvars.
 
 ## Entry points
 
 | `tasks_from` | What it does |
 | --- | --- |
-| `create` | Creates user-defined podman networks (when set), then creates containers from `molecule_yml.platforms[].podman.*` |
-| `destroy` | Removes those containers and any non-reserved networks |
-| `prepare` | Installs `sudo` inside each container |
+| `create` | Computes per-host merged specs, creates user-defined podman networks, then creates containers from `hostvars[item].mp.podman.*` for each host in `groups['molecule']`. Writes `ansible_connection: containers.podman.podman` per host into the runtime inventory file. |
+| `destroy` | Removes those containers and any non-reserved networks. |
+| `prepare` | Installs `sudo` inside each container. |
 
-## Inputs (per-platform, in `molecule.yml`)
+## Inputs (per-host, in inventory)
 
 ```yaml
-platforms:
-  - name: ubuntu-24
-    podman:
-      image: docker.io/...:tag         # required
-      command: sleep 1d                # optional
-      privileged: false                # optional, default false
-      volumes: []                      # optional
-      capabilities: []                 # optional
-      podman_network: []               # optional, list or single string
-      env: {}                          # optional
-      tmpfs: []                        # optional
-      exposed_ports: []                # optional
-      published_ports: []              # optional
+all:
+  children:
+    molecule:
+      hosts:
+        instance:
+          mp:
+            podman:
+              image: docker.io/...:tag         # required
+              command: /sbin/init              # optional, role default '/sbin/init'
+              privileged: false                # optional, role default false
+              volumes: []                      # optional
+              capabilities: []                 # optional
+              podman_network: []               # optional, list or single string
+              env: {}                          # optional
+              tmpfs: []                        # optional
+              exposed_ports: []                # optional
+              published_ports: []              # optional
 ```
+
+Shared defaults can be hoisted into `mp_defaults.podman` in `inventory/group_vars/molecule.yml` (overrides role defaults; per-host fields override mp_defaults). Field resolution order in the role: role defaults <- `mp_defaults.podman` <- `hostvars[item].mp.podman`.
 
 ## Role-level overrides
 
-See `defaults/main.yml`.
+See `defaults/main.yml` (`mp_podman_role_defaults`, `mp_podman_async_*`, `mp_podman_reserved_networks`).
