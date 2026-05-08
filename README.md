@@ -67,7 +67,6 @@ platforms:
         type: NodePort
       ansible_user: cloud-user
       memory: 4Gi
-      disk_size: 30Gi
 ```
 
 Switch backends per run:

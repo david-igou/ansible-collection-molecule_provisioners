@@ -63,7 +63,6 @@ platforms:
       namespace: <str>          # required
       ansible_user: <str>       # required
       memory: <str>             # required
-      disk_size: <str>          # required
       ssh_service:
         type: NodePort          # only NodePort in v1
 ```

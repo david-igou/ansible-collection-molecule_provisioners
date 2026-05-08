@@ -20,6 +20,5 @@ mp_kubevirt_role_defaults:
   namespace: molecule
   ssh_user: cloud-user
   memory: 1Gi
-  disk_size: 5Gi
   ssh_service:
     type: NodePort

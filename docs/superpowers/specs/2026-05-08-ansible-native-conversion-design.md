@@ -108,7 +108,6 @@ mp_defaults:
   kubevirt:
     namespace: molecule
     memory: 1Gi
-    disk_size: 5Gi
     ssh_user: cloud-user
 ```
 
@@ -143,10 +142,9 @@ The 3-level layering means only `image` is required per-host. Anything else can 
 | `namespace` | no | `molecule` | |
 | `ssh_user` | no | `cloud-user` | Override for non-Fedora images |
 | `memory` | no | `1Gi` | |
-| `disk_size` | no | `5Gi` | |
 | `ssh_service.type` | no | `NodePort` | NodePort is the only supported value in v1 |
 
-This is more permissive than the v1 design spec, where `namespace`, `ssh_user`, `memory`, and `disk_size` were required per platform. The 3-level merge satisfies all of them automatically.
+This is more permissive than the v1 design spec, where `namespace`, `ssh_user`, and `memory` were required per platform. The 3-level merge satisfies all of them automatically.
 
 ## Internals
 

@@ -102,7 +102,6 @@ mp_kubevirt_role_defaults:
   namespace: molecule
   ssh_user: cloud-user
   memory: 1Gi
-  disk_size: 5Gi
   ssh_service:
     type: NodePort
 ```
@@ -865,7 +864,7 @@ argument_specs:
       mp_kubevirt_role_defaults:
         type: dict
         description: >-
-          Per-host field defaults (namespace, ssh_user, memory, disk_size, ssh_service.type).
+          Per-host field defaults (namespace, ssh_user, memory, ssh_service.type).
           Layered as: this dict <- mp_defaults.kubevirt <- hostvars[item].mp.kubevirt.
       mp_kubevirt_ssh_key_path:
         type: path
@@ -1045,7 +1044,6 @@ mp_defaults:
   kubevirt:
     namespace: "{{ lookup('env', 'MOLECULE_NAMESPACE') | default('molecule', true) }}"
     memory: 1Gi
-    disk_size: 5Gi
     ssh_user: cloud-user
 ```
 
@@ -1316,7 +1314,6 @@ mp_defaults:
   kubevirt:
     namespace: molecule
     memory: 1Gi
-    disk_size: 5Gi
     ssh_user: cloud-user
 ```
 
@@ -1424,7 +1421,6 @@ mp_defaults:
   kubevirt:
     namespace: molecule
     memory: 1Gi
-    disk_size: 5Gi
     ssh_user: cloud-user
 ```
 
@@ -1590,7 +1586,6 @@ all:
               namespace: molecule                          # optional, role default 'molecule'
               ssh_user: cloud-user                         # optional, role default 'cloud-user'
               memory: 1Gi                                  # optional, role default '1Gi'
-              disk_size: 5Gi                               # optional, role default '5Gi'
               ssh_service:
                 type: NodePort                             # optional, only NodePort supported in v1
 ```
@@ -1709,7 +1704,6 @@ all:
               namespace: <str>          # optional, role default 'molecule'
               ssh_user: <str>           # optional, role default 'cloud-user'
               memory: <str>             # optional, role default '1Gi'
-              disk_size: <str>          # optional, role default '5Gi'
               ssh_service:
                 type: NodePort          # optional, only NodePort in v1
 ```

@@ -24,7 +24,6 @@ platforms:
       namespace: molecule                          # required
       ansible_user: cloud-user                     # required (cloud-init creates this user)
       memory: 4Gi                                  # required
-      disk_size: 30Gi                              # required
       ssh_service:
         type: NodePort                             # only NodePort supported in v1
 ```
