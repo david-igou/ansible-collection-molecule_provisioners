@@ -1,3 +1,7 @@
+> **⚠️ SUPERSEDED 2026-05-21.** The libvirt driver path was removed from v1.1 after local verification surfaced multiple interacting bugs. The plan below stays as a historical trail of the original two-driver design. The actual v1.1 implementation follows `docs/superpowers/plans/2026-05-21-qemu-simplify-process-only.md` (process-driver only, SLIRP-only).
+
+---
+
 # qemu Backend (v1.1) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
