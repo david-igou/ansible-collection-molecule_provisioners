@@ -21,11 +21,11 @@
 - name: Build seed ISOs
   ansible.builtin.include_tasks: _seed_iso.yml
 
-# Phase 5: per-host qcow2 overlay (process driver only — libvirt branch added later).
+# Phase 5: per-host qcow2 overlay (process driver only).
 - name: Create per-VM overlays
   ansible.builtin.include_tasks: _overlay.yml
 
-# Phase 6: detect KVM availability once (used by both libvirt and process drivers).
+# Phase 6: detect KVM availability once (consumed by _create_process.yml).
 - name: Stat /dev/kvm
   ansible.builtin.stat:
     path: /dev/kvm
@@ -37,13 +37,9 @@
          and __mp_qemu_kvm_stat.stat.readable
          and __mp_qemu_kvm_stat.stat.writeable }}
 
-# Phase 7: driver-specific create (process branch — libvirt branch added later).
+# Phase 7: launch the VM process per host.
 - name: Launch process-driver VMs
   ansible.builtin.include_tasks: _create_process.yml
-
-# Phase 7b: launch libvirt-driver VMs (NAT pre-reservation handled inside).
-- name: Launch libvirt-driver VMs
-  ansible.builtin.include_tasks: _create_libvirt.yml
 
 # Phase 8: write runtime connection inventory for the molecule prepare phase.
 - name: Write runtime inventory
