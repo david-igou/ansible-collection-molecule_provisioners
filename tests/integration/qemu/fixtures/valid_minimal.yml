@@ -12,8 +12,6 @@ all:
             qemu:
               image: https://example.invalid/other.qcow2
               cpus: 4
-              network:
-                mode: nat
   vars:
     mp_backend: qemu
     mp_defaults:
