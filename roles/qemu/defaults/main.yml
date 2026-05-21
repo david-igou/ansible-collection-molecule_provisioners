@@ -1,5 +1,5 @@
 ---
-# Defaults for david_igou.molecule_provisioners.qemu.
+# Defaults for david_igou.molecule_provisioners.qemu (process driver, slirp networking).
 
 # SSH keypair lives in the molecule ephemeral dir so destroy can find it.
 mp_qemu_ssh_key_path: "{{ molecule_ephemeral_directory }}/identity_file"
@@ -16,21 +16,9 @@ mp_qemu_image_cache_dir: >-
   {{ (lookup('env', 'XDG_CACHE_HOME') | default(lookup('env', 'HOME') ~ '/.cache', true))
      ~ '/molecule-qemu' }}
 
-# Allowed enum values. Validation refuses anything else.
-mp_qemu_allowed_drivers:
-  - libvirt
-  - process
-mp_qemu_allowed_network_modes:
-  - slirp
-  - nat
-
 # Per-host field defaults. Layered as: this dict <- mp_defaults.qemu <- hostvars[item].mp.qemu.
 # Only `image` is required and is therefore absent from this dict.
 mp_qemu_role_defaults:
-  driver: libvirt
-  uri: qemu:///session
   cpus: 2
   memory: 1024
   ssh_user: cloud-user
-  network:
-    mode: slirp
