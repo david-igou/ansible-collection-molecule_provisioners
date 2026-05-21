@@ -1,0 +1,19 @@
+---
+# Build _mp_specs[host] from three layers:
+#   role defaults <- mp_defaults.qemu <- hostvars[item].mp.qemu
+# Defensive on every layer so destroy can still merge for half-failed creates.
+- name: Initialize qemu spec map
+  ansible.builtin.set_fact:
+    _mp_specs: {}
+
+- name: Merge per-host specs with mp_defaults and role defaults
+  ansible.builtin.set_fact:
+    _mp_specs: >-
+      {{ _mp_specs | combine({
+           item: mp_qemu_role_defaults
+                 | combine(mp_defaults['qemu'] | default({}), recursive=True)
+                 | combine((hostvars[item].mp | default({}))['qemu'] | default({}), recursive=True)
+         }, recursive=True) }}
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
