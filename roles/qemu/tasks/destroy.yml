@@ -9,7 +9,47 @@
   loop_control:
     label: "{{ item }}"
 
-# Libvirt destroy dispatch is appended in Task 14.
+- name: Destroy libvirt-driver VMs
+  ansible.builtin.include_tasks: _destroy_libvirt.yml
+  when: _mp_specs[item].driver | default('libvirt') == 'libvirt'
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+# NAT-mode static reservations: remove from libvirt default network if any host
+# was registered.
+- name: Remove NAT static reservations (libvirt + nat hosts)
+  community.libvirt.virt_net:
+    command: modify
+    name: default
+    xml: "<host mac='{{ _mp_specs[item].mac }}'/>"
+    uri: "{{ _mp_specs[item].uri | default('qemu:///session') }}"
+    # community.libvirt.virt_net 'modify' with a <host mac=.../> XML removes the
+    # entry matched by MAC.
+  when:
+    - _mp_specs[item].driver | default('libvirt') == 'libvirt'
+    - _mp_specs[item].network.mode | default('slirp') == 'nat'
+    - _mp_specs[item].mac is defined
+  failed_when: false
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+# Tear down the transient pool — only if no other molecule scenario is using it
+# (we name the pool after the ephemeral dir, so it's scoped per-scenario).
+- name: Stop transient storage pool
+  community.libvirt.virt_pool:
+    state: inactive
+    name: "molecule-{{ molecule_ephemeral_directory | basename }}"
+    uri: "{{ _mp_specs[groups['molecule'][0]].uri | default('qemu:///session') }}"
+  failed_when: false
+
+- name: Undefine transient storage pool
+  community.libvirt.virt_pool:
+    command: undefine
+    name: "molecule-{{ molecule_ephemeral_directory | basename }}"
+    uri: "{{ _mp_specs[groups['molecule'][0]].uri | default('qemu:///session') }}"
+  failed_when: false
 
 - name: Remove cidata directories
   ansible.builtin.file:
