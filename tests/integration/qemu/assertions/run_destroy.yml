@@ -1,0 +1,26 @@
+---
+# Verify destroy.yml is idempotent on a fresh (never-created) state.
+- name: Exercise destroy on never-created hosts
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    molecule_ephemeral_directory: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
+                                       | default('/tmp/molecule-fake-ephemeral', true) }}"
+  tasks:
+    - name: Include role defaults
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../../../roles/qemu/defaults/main.yml"
+    - name: Surface mp_defaults
+      ansible.builtin.set_fact:
+        mp_defaults: "{{ hostvars[groups['molecule'][0]].mp_defaults | default({}) }}"
+    - name: Run destroy entrypoint
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/destroy.yml"
+    - name: Assert cidata dir was cleaned (absent = idempotent pass)
+      ansible.builtin.stat:
+        path: "{{ molecule_ephemeral_directory }}/{{ groups['molecule'][0] }}-cidata"
+      register: __cidata
+    - name: Assert cidata dir does not exist (never created)
+      ansible.builtin.assert:
+        that: not __cidata.stat.exists
+        success_msg: "Destroy is idempotent — cidata dir was never created and is absent."

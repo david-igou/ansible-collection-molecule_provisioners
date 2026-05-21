@@ -1,0 +1,61 @@
+---
+- name: "Slurp pidfile for {{ item }}"
+  ansible.builtin.slurp:
+    src: "{{ molecule_ephemeral_directory }}/{{ item }}.pid"
+  register: __mp_qemu_pidfile
+  failed_when: false
+
+- name: "Compute pid for {{ item }}"
+  ansible.builtin.set_fact:
+    _mp_qemu_pid: >-
+      {{ (__mp_qemu_pidfile.content | default('') | b64decode | trim)
+         if (__mp_qemu_pidfile is mapping
+             and ('content' in __mp_qemu_pidfile))
+         else '' }}
+
+- name: "Stat proc exe to confirm qemu-system pid for {{ item }}"
+  ansible.builtin.stat:
+    path: "/proc/{{ _mp_qemu_pid }}/exe"
+    follow: true
+  register: __mp_qemu_proc_exe
+  when: _mp_qemu_pid | length > 0
+  failed_when: false
+
+- name: "Send SIGTERM to qemu-system process for {{ item }}"
+  ansible.builtin.command:
+    cmd: "kill -TERM {{ _mp_qemu_pid }}"
+  when:
+    - _mp_qemu_pid | length > 0
+    - __mp_qemu_proc_exe.stat.exists | default(false)
+    - "'qemu-system' in (__mp_qemu_proc_exe.stat.lnk_source | default(''))"
+  changed_when: true
+  failed_when: false
+
+- name: "Wait for pidfile removal for {{ item }}"
+  ansible.builtin.wait_for:
+    path: "{{ molecule_ephemeral_directory }}/{{ item }}.pid"
+    state: absent
+    timeout: 30
+  when: _mp_qemu_pid | length > 0
+  failed_when: false
+
+- name: "Force-kill process if still alive after SIGTERM for {{ item }}"
+  ansible.builtin.command:
+    cmd: "kill -KILL {{ _mp_qemu_pid }}"
+  when:
+    - _mp_qemu_pid | length > 0
+    - __mp_qemu_proc_exe.stat.exists | default(false)
+  changed_when: true
+  failed_when: false
+
+- name: "Remove process-driver artifacts for {{ item }}"
+  ansible.builtin.file:
+    path: "{{ molecule_ephemeral_directory }}/{{ item }}{{ ext }}"
+    state: absent
+  loop:
+    - ".qcow2"
+    - ".pid"
+    - ".qmp"
+    - "-seed.iso"
+  loop_control:
+    loop_var: ext
