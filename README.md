@@ -4,12 +4,13 @@ Reusable [Molecule](https://ansible.readthedocs.io/projects/molecule/) provision
 
 Stop redefining `create.yml`/`destroy.yml`/`prepare.yml` per repo. Install this collection, write three one-line files in your scenario, and switch backends with one env var.
 
-## Supported backends (v1.0)
+## Supported backends (v1.1)
 
 | Backend | When to use |
 | --- | --- |
 | `podman` (default) | Containers, fastest CI loop |
 | `kubevirt` | Real VMs in a Kubernetes cluster (requires KubeVirt) |
+| `qemu` | Real VMs via local libvirtd or direct `qemu-system` process |
 
 ## Installing
 
@@ -77,6 +78,10 @@ all:
             kubevirt:
               image: quay.io/containerdisks/ubuntu:24.04
               ssh_user: ubuntu
+            qemu:
+              image: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+              driver: libvirt
+              ssh_user: ubuntu
 ```
 
 **`inventory/group_vars/molecule.yml`** (backend selector + DRY defaults):
@@ -92,11 +97,25 @@ mp_defaults:
     namespace: molecule
     memory: 1Gi
     ssh_user: cloud-user
+  qemu:
+    cpus: 2
+    memory: 1024
+    ssh_user: cloud-user
+    network:
+      mode: slirp
 ```
 
 Switch backends at runtime: `PROVISIONER=podman molecule test` or `PROVISIONER=kubevirt molecule test`.
 
 See [`docs/examples/`](docs/examples/) for the canonical starter and [`docs/MIGRATION.md`](docs/MIGRATION.md) if you're translating from a `platforms:`-based scenario.
+
+## Controller-host prerequisites by backend
+
+| Backend | Required on the molecule controller |
+| --- | --- |
+| `podman` | `podman` |
+| `kubevirt` | `kubectl` + a kubeconfig pointing at a KubeVirt-enabled cluster |
+| `qemu` | `qemu-system-x86_64`, `qemu-img`, `cloud-localds` (or `genisoimage`); plus `libvirtd` reachable at the configured URI for `driver: libvirt` |
 
 ## What's in the box
 
@@ -108,7 +127,8 @@ Both roles produce a host group named `molecule` containing all platform hosts.
 
 ## Out of scope for v1.0
 
-- docker, qemu/libvirt, AWS, Azure, GCP backends
+- docker, AWS, Azure, GCP backends
+- qemu/libvirt remote URIs and `network.mode: bridge` (planned for a later minor)
 - LoadBalancer / ClusterIP+port-forward kubevirt service types
 - Windows/macOS guests
 - Per-platform networks beyond `podman.podman_network`
