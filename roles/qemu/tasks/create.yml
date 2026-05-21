@@ -40,3 +40,7 @@
 # Phase 7: driver-specific create (process branch — libvirt branch added later).
 - name: Launch process-driver VMs
   ansible.builtin.include_tasks: _create_process.yml
+
+# Phase 8: write runtime connection inventory for the molecule prepare phase.
+- name: Write runtime inventory
+  ansible.builtin.include_tasks: _runtime_inventory.yml

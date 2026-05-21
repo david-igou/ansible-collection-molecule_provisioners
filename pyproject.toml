@@ -5,3 +5,4 @@ line-length = 100
 addopts = ["-vvv", "-n", "2", "--log-level", "WARNING", "--color", "yes"]
 filterwarnings = ["ignore:AnsibleCollectionFinder has already been configured"]
 testpaths = ["tests"]
+markers = ["slow: marks tests as slow (e.g. full VM boot; deselect with -m 'not slow')"]

@@ -61,3 +61,31 @@ def test_seed_iso_is_built_and_contains_user(tmp_path) -> None:
         cwd=COLLECTION_ROOT, env=env, capture_output=True, text=True, check=False,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_destroy_is_idempotent_on_fresh_state(tmp_path) -> None:
+    import os
+    env = os.environ.copy()
+    env["MOLECULE_EPHEMERAL_DIRECTORY"] = str(tmp_path)
+    proc = subprocess.run(
+        ["ansible-playbook", "-i", str(FIXTURES / "valid_local_image.yml"),
+         str(ASSERTIONS / "run_destroy.yml")],
+        cwd=COLLECTION_ROOT, env=env, capture_output=True, text=True, check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+@pytest.mark.slow
+def test_process_driver_e2e(tmp_path) -> None:
+    import os
+    import shutil
+    if not shutil.which("qemu-system-x86_64"):
+        pytest.skip("qemu-system-x86_64 not installed")
+    env = os.environ.copy()
+    env["MOLECULE_EPHEMERAL_DIRECTORY"] = str(tmp_path)
+    proc = subprocess.run(
+        ["ansible-playbook", "-i", str(FIXTURES / "process_slirp.yml"),
+         str(ASSERTIONS / "run_process_e2e.yml")],
+        cwd=COLLECTION_ROOT, env=env, capture_output=True, text=True, check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr

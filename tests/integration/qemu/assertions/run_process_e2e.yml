@@ -1,0 +1,45 @@
+---
+- name: Process-driver E2E (boot a tiny VM under TCG, SSH in, destroy)
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    molecule_ephemeral_directory: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
+                                       | mandatory }}"
+    mp_qemu_template_dir_override: "{{ playbook_dir }}/../../../../roles/qemu/templates"
+  tasks:
+    - name: Include role defaults
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../../../roles/qemu/defaults/main.yml"
+    - name: Surface mp_defaults from the molecule group
+      ansible.builtin.set_fact:
+        mp_defaults: "{{ hostvars[groups['molecule'][0]].mp_defaults | default({}) }}"
+    - name: Run create
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/create.yml"
+
+    - name: Assert pidfile exists for the process host
+      ansible.builtin.stat:
+        path: "{{ molecule_ephemeral_directory }}/{{ groups['molecule'][0] }}.pid"
+      register: __pid
+    - name: Pidfile must exist
+      ansible.builtin.assert:
+        that: __pid.stat.exists
+
+    - name: Assert runtime inventory file exists
+      ansible.builtin.stat:
+        path: "{{ molecule_ephemeral_directory }}/inventory/molecule_runtime.yml"
+      register: __inv
+    - name: Runtime inventory must exist
+      ansible.builtin.assert:
+        that: __inv.stat.exists
+
+    - name: Run destroy
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/destroy.yml"
+
+    - name: Pidfile must be gone after destroy
+      ansible.builtin.stat:
+        path: "{{ molecule_ephemeral_directory }}/{{ groups['molecule'][0] }}.pid"
+      register: __pid_after
+    - name: Assert cleanup
+      ansible.builtin.assert:
+        that: not __pid_after.stat.exists
