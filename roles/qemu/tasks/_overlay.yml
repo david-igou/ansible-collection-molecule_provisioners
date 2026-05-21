@@ -1,7 +1,5 @@
 ---
-# Per-host overlay creation.
-# Process driver: shell out to qemu-img (no daemon, no virt_volume).
-# Libvirt driver: deferred to Task 12.
+# Process-driver branch: qemu-img create.
 - name: "Create qcow2 overlay (process driver) for {{ item }}"
   ansible.builtin.command:
     cmd: >-
@@ -26,12 +24,85 @@
   loop_control:
     label: "{{ item }}"
 
+# Libvirt-driver branch: transient pool + virt_volume.
+- name: "Define transient storage pool (libvirt driver)"
+  community.libvirt.virt_pool:
+    command: define
+    name: "molecule-{{ molecule_ephemeral_directory | basename }}"
+    uri: "{{ _mp_specs[groups['molecule'][0]].uri }}"
+    xml: |
+      <pool type='dir'>
+        <name>molecule-{{ molecule_ephemeral_directory | basename }}</name>
+        <target>
+          <path>{{ molecule_ephemeral_directory }}</path>
+        </target>
+      </pool>
+  when: groups['molecule']
+       | map('extract', _mp_specs)
+       | selectattr('driver', '==', 'libvirt')
+       | list | length > 0
+  register: __mp_qemu_pool_define
+
+- name: "Build transient storage pool (libvirt driver)"
+  community.libvirt.virt_pool:
+    command: build
+    name: "molecule-{{ molecule_ephemeral_directory | basename }}"
+    uri: "{{ _mp_specs[groups['molecule'][0]].uri }}"
+  when: __mp_qemu_pool_define is changed
+  failed_when: false
+
+- name: "Activate transient storage pool (libvirt driver)"
+  community.libvirt.virt_pool:
+    state: active
+    name: "molecule-{{ molecule_ephemeral_directory | basename }}"
+    uri: "{{ _mp_specs[groups['molecule'][0]].uri }}"
+  when: groups['molecule']
+       | map('extract', _mp_specs)
+       | selectattr('driver', '==', 'libvirt')
+       | list | length > 0
+
+- name: "Create qcow2 volume (libvirt driver) for {{ item }}"
+  community.libvirt.virt_volume:
+    command: create
+    pool: "molecule-{{ molecule_ephemeral_directory | basename }}"
+    name: "{{ item }}.qcow2"
+    uri: "{{ _mp_specs[item].uri }}"
+    xml: |
+      <volume type='file'>
+        <name>{{ item }}.qcow2</name>
+        <capacity unit='bytes'>{{ _mp_specs[item].base_image_capacity | default(2147483648) }}</capacity>
+        <target>
+          <format type='qcow2'/>
+        </target>
+        <backingStore>
+          <path>{{ _mp_specs[item].base_image_path }}</path>
+          <format type='qcow2'/>
+        </backingStore>
+      </volume>
+  when: _mp_specs[item].driver == 'libvirt'
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: "Resize overlay (libvirt driver) for {{ item }}"
+  ansible.builtin.command:
+    cmd: "qemu-img resize {{ molecule_ephemeral_directory }}/{{ item }}.qcow2 {{ _mp_specs[item].disk_size }}"
+  when:
+    - _mp_specs[item].driver == 'libvirt'
+    - _mp_specs[item].disk_size is defined
+    - _mp_specs[item].disk_size
+  changed_when: true
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
 - name: Record overlay path per host
   ansible.builtin.set_fact:
     _mp_specs: >-
       {{ _mp_specs | combine({
            item: _mp_specs[item] | combine({
-             'overlay_path': molecule_ephemeral_directory ~ '/' ~ item ~ '.qcow2'
+             'overlay_path': molecule_ephemeral_directory ~ '/' ~ item ~ '.qcow2',
+             'pool_name': 'molecule-' ~ (molecule_ephemeral_directory | basename)
            })
          }, recursive=True) }}
   loop: "{{ groups['molecule'] }}"

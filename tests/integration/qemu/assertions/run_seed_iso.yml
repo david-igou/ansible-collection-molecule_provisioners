@@ -28,8 +28,14 @@
     - name: Set template dir override for include_tasks context
       ansible.builtin.set_fact:
         mp_qemu_template_dir_override: "{{ playbook_dir }}/../../../../roles/qemu/templates"
-    - name: Run create entrypoint
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/create.yml"
+    - name: Run spec merge
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_spec_merge.yml"
+    - name: Run validation
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_validate.yml"
+    # _seed_iso.yml only needs the merged spec (not base_image_path); skip image cache
+    # to avoid the shared-/tmp race condition with test_image_cache.
+    - name: Run seed ISO phase only
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_seed_iso.yml"
 
     - name: Stat the seed ISO for the first host
       ansible.builtin.stat:

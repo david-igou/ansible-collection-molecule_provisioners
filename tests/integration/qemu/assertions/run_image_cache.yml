@@ -30,8 +30,17 @@
     - name: Set template dir override for include_tasks context
       ansible.builtin.set_fact:
         mp_qemu_template_dir_override: "{{ playbook_dir }}/../../../../roles/qemu/templates"
-    - name: Run create entrypoint
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/create.yml"
+    - name: Run spec merge
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_spec_merge.yml"
+    - name: Run validation
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_validate.yml"
+    - name: Ensure image cache dir exists and is writable
+      ansible.builtin.file:
+        path: "{{ mp_qemu_image_cache_dir }}"
+        state: directory
+        mode: "0755"
+    - name: Run image cache phase only
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_image_cache.yml"
 
     - name: Compute expected cached path
       ansible.builtin.set_fact:
