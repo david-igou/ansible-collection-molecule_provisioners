@@ -1,0 +1,9 @@
+---
+mp_backend: "{{ lookup('env', 'PROVISIONER') | default('qemu', true) }}"
+mp_qemu_wait_timeout: 300   # TCG boot is slow
+
+mp_defaults:
+  qemu:
+    cpus: 2
+    memory: 1024
+    ssh_user: ubuntu
