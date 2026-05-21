@@ -1,0 +1,51 @@
+---
+# For each unique image URL, ensure a cached base qcow2 exists.
+# Cache layout: {{ mp_qemu_image_cache_dir }}/<sha256-of-url>/disk.qcow2
+- name: Determine unique image specs
+  ansible.builtin.set_fact:
+    _mp_qemu_unique_images: >-
+      {{ dict(groups['molecule']
+         | map('extract', _mp_specs, 'image')
+         | zip(groups['molecule']
+               | map('extract', _mp_specs)
+               | map(attribute='image_checksum') | map('default', None))
+         | list) }}
+  # Build a dict {url: checksum_or_none} without requiring image_checksum key.
+  # map(attribute='image_checksum') returns Undefined for hosts without it;
+  # piping through map('default', None) converts Undefined to None.
+  # dict() collapses duplicate URLs keeping the last value seen — fine since
+  # the same URL carries the same checksum.
+
+- name: Ensure per-image cache subdir exists
+  ansible.builtin.file:
+    path: "{{ mp_qemu_image_cache_dir }}/{{ item.key | ansible.builtin.hash('sha256') }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ _mp_qemu_unique_images | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Download base qcow2 (idempotent, cached)
+  ansible.builtin.get_url:
+    url: "{{ item.key }}"
+    dest: "{{ mp_qemu_image_cache_dir }}/{{ item.key | ansible.builtin.hash('sha256') }}/disk.qcow2"
+    checksum: "{{ item.value | default(omit, true) }}"
+    mode: "0644"
+  loop: "{{ _mp_qemu_unique_images | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Record cached base path per host in _mp_specs
+  ansible.builtin.set_fact:
+    _mp_specs: >-
+      {{ _mp_specs | combine({
+           item: _mp_specs[item] | combine({
+             'base_image_path':
+               mp_qemu_image_cache_dir ~ '/'
+               ~ (_mp_specs[item].image | ansible.builtin.hash('sha256'))
+               ~ '/disk.qcow2'
+           })
+         }, recursive=True) }}
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"

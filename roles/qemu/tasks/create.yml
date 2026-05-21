@@ -4,52 +4,8 @@
   ansible.builtin.include_tasks: _spec_merge.yml
 
 # Phase 2: validate. Fail fast before any side effects.
-- name: Validate driver value per host
-  ansible.builtin.assert:
-    that: _mp_specs[item].driver in mp_qemu_allowed_drivers
-    fail_msg: >-
-      Host '{{ item }}' has unsupported qemu.driver
-      '{{ _mp_specs[item].driver | default('(missing)') }}'.
-      Allowed: {{ mp_qemu_allowed_drivers | join(', ') }}.
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
-
-- name: Validate network.mode value per host
-  ansible.builtin.assert:
-    that: _mp_specs[item].network.mode in mp_qemu_allowed_network_modes
-    fail_msg: >-
-      Host '{{ item }}' has unsupported qemu.network.mode
-      '{{ _mp_specs[item].network.mode | default('(missing)') }}'.
-      Allowed: {{ mp_qemu_allowed_network_modes | join(', ') }}.
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
-
-- name: Validate driver + network.mode compatibility
-  ansible.builtin.assert:
-    that: >-
-      _mp_specs[item].driver == 'libvirt'
-      or _mp_specs[item].network.mode == 'slirp'
-    fail_msg: >-
-      Host '{{ item }}' uses driver=process with network.mode=nat,
-      which is not supported in v1.1. Either switch driver to libvirt
-      or network.mode to slirp.
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
-
-- name: Validate image is set per host
-  ansible.builtin.assert:
-    that:
-      - _mp_specs[item].image is defined
-      - (_mp_specs[item].image | string | length) > 0
-    fail_msg: >-
-      Host '{{ item }}' is missing qemu.image. Set
-      hostvars.{{ item }}.mp.qemu.image to a qcow2 URL or local path.
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
+- name: Validate per-host specs
+  ansible.builtin.include_tasks: _validate.yml
 
 - name: Ensure image cache dir exists and is writable
   ansible.builtin.file:
@@ -57,5 +13,6 @@
     state: directory
     mode: "0755"
 
-# Subsequent phases (image cache, seed ISO, driver dispatch, runtime inventory)
-# land in later tasks. For now create.yml ends at validation.
+# Phase 3: download and cache base qcow2 images (idempotent).
+- name: Cache base images
+  ansible.builtin.include_tasks: _image_cache.yml

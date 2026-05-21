@@ -44,3 +44,8 @@ def test_missing_image_fails_with_message() -> None:
     proc = _run("run_validate.yml", "missing_image.yml")
     assert proc.returncode != 0
     assert "is missing qemu.image" in proc.stdout
+
+
+def test_image_cache_creates_cached_file() -> None:
+    proc = _run("run_image_cache.yml", "valid_local_image.yml")
+    assert proc.returncode == 0, proc.stdout + proc.stderr

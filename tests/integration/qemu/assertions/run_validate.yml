@@ -10,8 +10,15 @@
     - name: Surface mp_defaults from the molecule group
       ansible.builtin.set_fact:
         mp_defaults: "{{ hostvars[groups['molecule'][0]].mp_defaults | default({}) }}"
-    - name: Run create entrypoint (which merges + validates + creates cache dir)
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/create.yml"
+    - name: Run spec merge
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_spec_merge.yml"
+    - name: Run validation (without triggering image downloads)
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_validate.yml"
+    - name: Ensure image cache dir exists and is writable
+      ansible.builtin.file:
+        path: "{{ mp_qemu_image_cache_dir }}"
+        state: directory
+        mode: "0755"
     - name: Assert image cache dir was created
       ansible.builtin.stat:
         path: "{{ mp_qemu_image_cache_dir }}"
