@@ -11,7 +11,7 @@
   loop_control:
     label: "{{ item }}"
 
-- name: "Resize overlay for {{ item }} (if disk_size set)"
+- name: "Resize overlay (if disk_size set) for {{ item }}"
   ansible.builtin.command:
     cmd: "qemu-img resize {{ molecule_ephemeral_directory }}/{{ item }}.qcow2 {{ _mp_specs[item].disk_size }}"
   when:
