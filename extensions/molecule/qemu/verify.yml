@@ -1,7 +1,0 @@
----
-- name: Verify — every molecule host responds to ping
-  hosts: molecule
-  gather_facts: false
-  tasks:
-    - name: Ping each host
-      ansible.builtin.ping:
