@@ -16,3 +16,7 @@
 # Phase 3: download and cache base qcow2 images (idempotent).
 - name: Cache base images
   ansible.builtin.include_tasks: _image_cache.yml
+
+# Phase 4: build per-host NoCloud seed ISOs.
+- name: Build seed ISOs
+  ansible.builtin.include_tasks: _seed_iso.yml

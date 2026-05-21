@@ -1,25 +1,23 @@
 ---
-- name: Exercise image cache against a local file:// URL
+- name: Exercise seed ISO build
   hosts: localhost
   connection: local
   gather_facts: true
   vars:
-    _fake_image_src: /tmp/qemu-fake-image.qcow2
-    _fake_image_url: "file:///tmp/qemu-fake-image.qcow2"
     molecule_ephemeral_directory: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
-                                       | default('/tmp/molecule-fake-ephemeral-imgcache', true) }}"
+                                       | default('/tmp/molecule-fake-ephemeral', true) }}"
+    _fake_image_src: /tmp/qemu-fake-image.qcow2
   tasks:
     - name: Ensure ephemeral dir
       ansible.builtin.file:
         path: "{{ molecule_ephemeral_directory }}"
         state: directory
         mode: "0755"
-    - name: Create a tiny fake qcow2 (just any bytes)
+    - name: Create a tiny fake qcow2
       ansible.builtin.copy:
-        content: "QFI\xfb fake qcow2 for cache test"
+        content: "QFI\xfb fake qcow2"
         dest: "{{ _fake_image_src }}"
         mode: "0644"
-
     - name: Include role defaults
       ansible.builtin.include_vars:
         file: "{{ playbook_dir }}/../../../../roles/qemu/defaults/main.yml"
@@ -33,23 +31,31 @@
     - name: Run create entrypoint
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/create.yml"
 
-    - name: Compute expected cached path
-      ansible.builtin.set_fact:
-        _expected_path: >-
-          {{ mp_qemu_image_cache_dir }}/{{ _fake_image_url | ansible.builtin.hash('sha256') }}/disk.qcow2
-    - name: Stat the cached file
+    - name: Stat the seed ISO for the first host
       ansible.builtin.stat:
-        path: "{{ _expected_path }}"
-      register: __cached
-    - name: Assert cached image exists
+        path: "{{ _mp_specs[groups['molecule'][0]].seed_iso_path }}"
+      register: __iso
+    - name: Assert seed ISO exists and is non-empty
       ansible.builtin.assert:
         that:
-          - __cached.stat.exists
-          - __cached.stat.size > 0
-    - name: Assert _mp_specs records base_image_path
+          - __iso.stat.exists
+          - __iso.stat.size > 0
+    - name: Stat user-data
+      ansible.builtin.stat:
+        path: "{{ molecule_ephemeral_directory }}/{{ groups['molecule'][0] }}-cidata/user-data"
+      register: __ud
+    - name: Assert user-data exists
+      ansible.builtin.assert:
+        that: __ud.stat.exists
+    - name: Read user-data
+      ansible.builtin.slurp:
+        src: "{{ molecule_ephemeral_directory }}/{{ groups['molecule'][0] }}-cidata/user-data"
+      register: __ud_content
+    - name: Assert user-data has the expected user and SSH key
       ansible.builtin.assert:
         that:
-          - _mp_specs[groups['molecule'][0]].base_image_path == _expected_path
+          - "'name: ubuntu' in (__ud_content.content | b64decode)"
+          - "'ssh-ed25519' in (__ud_content.content | b64decode)"
 
     - name: Cleanup fake source
       ansible.builtin.file:

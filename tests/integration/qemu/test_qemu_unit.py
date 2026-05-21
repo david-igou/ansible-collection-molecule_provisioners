@@ -49,3 +49,15 @@ def test_missing_image_fails_with_message() -> None:
 def test_image_cache_creates_cached_file() -> None:
     proc = _run("run_image_cache.yml", "valid_local_image.yml")
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_seed_iso_is_built_and_contains_user(tmp_path) -> None:
+    import os
+    env = os.environ.copy()
+    env["MOLECULE_EPHEMERAL_DIRECTORY"] = str(tmp_path)
+    proc = subprocess.run(
+        ["ansible-playbook", "-i", str(FIXTURES / "valid_local_image.yml"),
+         str(ASSERTIONS / "run_seed_iso.yml")],
+        cwd=COLLECTION_ROOT, env=env, capture_output=True, text=True, check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
