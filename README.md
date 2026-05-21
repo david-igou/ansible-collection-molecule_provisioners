@@ -10,7 +10,7 @@ Stop redefining `create.yml`/`destroy.yml`/`prepare.yml` per repo. Install this 
 | --- | --- |
 | `podman` (default) | Containers, fastest CI loop |
 | `kubevirt` | Real VMs in a Kubernetes cluster (requires KubeVirt) |
-| `qemu` | Real VMs via local libvirtd or direct `qemu-system` process |
+| `qemu` | Real VMs via direct `qemu-system` process (no libvirtd) |
 
 ## Installing
 
@@ -80,7 +80,6 @@ all:
               ssh_user: ubuntu
             qemu:
               image: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
-              driver: libvirt
               ssh_user: ubuntu
 ```
 
@@ -101,8 +100,6 @@ mp_defaults:
     cpus: 2
     memory: 1024
     ssh_user: cloud-user
-    network:
-      mode: slirp
 ```
 
 Switch backends at runtime: `PROVISIONER=podman molecule test` or `PROVISIONER=kubevirt molecule test`.
@@ -115,7 +112,7 @@ See [`docs/examples/`](docs/examples/) for the canonical starter and [`docs/MIGR
 | --- | --- |
 | `podman` | `podman` |
 | `kubevirt` | `kubectl` + a kubeconfig pointing at a KubeVirt-enabled cluster |
-| `qemu` | `qemu-system-x86_64`, `qemu-img`, `cloud-localds` (or `genisoimage`); plus `libvirtd` reachable at the configured URI for `driver: libvirt` |
+| `qemu` | `qemu-system-x86_64`, `qemu-img`, `cloud-localds` (or `genisoimage`) |
 
 ## What's in the box
 
@@ -128,7 +125,9 @@ Both roles produce a host group named `molecule` containing all platform hosts.
 ## Out of scope
 
 - docker, AWS, Azure, GCP backends
-- qemu/libvirt remote URIs and `network.mode: bridge` (planned for a later minor)
+- qemu via libvirtd (use the `process` path that ships, or a future minor)
+- qemu remote / non-controller-local hosts
+- qemu NAT or bridge networking (SLIRP only in v1.1)
 - LoadBalancer / ClusterIP+port-forward kubevirt service types
 - Windows/macOS guests
 - Per-platform networks beyond `podman.podman_network`
