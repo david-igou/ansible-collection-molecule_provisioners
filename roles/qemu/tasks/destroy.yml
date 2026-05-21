@@ -1,0 +1,4 @@
+---
+- name: "Qemu role: destroy entry point not yet implemented"
+  ansible.builtin.fail:
+    msg: "destroy.yml is a placeholder — implementation lands in subsequent tasks."

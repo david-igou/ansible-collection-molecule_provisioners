@@ -1,0 +1,4 @@
+---
+- name: "Qemu role: create entry point not yet implemented"
+  ansible.builtin.fail:
+    msg: "create.yml is a placeholder — implementation lands in subsequent tasks."
