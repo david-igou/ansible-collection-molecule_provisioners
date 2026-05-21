@@ -24,3 +24,19 @@
 # Phase 5: per-host qcow2 overlay (process driver only — libvirt branch added later).
 - name: Create per-VM overlays
   ansible.builtin.include_tasks: _overlay.yml
+
+# Phase 6: detect KVM availability once (used by both libvirt and process drivers).
+- name: Stat /dev/kvm
+  ansible.builtin.stat:
+    path: /dev/kvm
+  register: __mp_qemu_kvm_stat
+- name: Decide whether KVM is usable
+  ansible.builtin.set_fact:
+    _mp_qemu_kvm_ok: >-
+      {{ __mp_qemu_kvm_stat.stat.exists
+         and __mp_qemu_kvm_stat.stat.readable
+         and __mp_qemu_kvm_stat.stat.writeable }}
+
+# Phase 7: driver-specific create (process branch — libvirt branch added later).
+- name: Launch process-driver VMs
+  ansible.builtin.include_tasks: _create_process.yml

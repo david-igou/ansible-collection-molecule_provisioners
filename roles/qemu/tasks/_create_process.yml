@@ -1,0 +1,51 @@
+---
+# Per-host process-driver launch. KVM detection runs once at the top of create
+# and stashes a fact; here we just consume it.
+- name: "Launch qemu-system for {{ item }}"
+  vars:
+    _ssh_port: "{{ mp_qemu_slirp_port_base | int + (groups['molecule'].index(item) | int) }}"
+    _accel: "{{ 'kvm:tcg' if _mp_qemu_kvm_ok | default(false) else 'tcg' }}"
+    _cpu_flag: "{{ '-cpu host' if _mp_qemu_kvm_ok | default(false) else '' }}"
+  ansible.builtin.command:
+    argv:
+      - qemu-system-x86_64
+      - -machine
+      - "accel={{ _accel }}"
+      - -m
+      - "{{ _mp_specs[item].memory | int }}"
+      - -smp
+      - "{{ _mp_specs[item].cpus | int }}"
+      - -drive
+      - "file={{ _mp_specs[item].overlay_path }},if=virtio,format=qcow2"
+      - -cdrom
+      - "{{ _mp_specs[item].seed_iso_path }}"
+      - -netdev
+      - "user,id=net0,hostfwd=tcp::{{ _ssh_port }}-:22"
+      - -device
+      - virtio-net-pci,netdev=net0
+      - -daemonize
+      - -pidfile
+      - "{{ molecule_ephemeral_directory }}/{{ item }}.pid"
+      - -qmp
+      - "unix:{{ molecule_ephemeral_directory }}/{{ item }}.qmp,server,nowait"
+      - -display
+      - "none"
+    creates: "{{ molecule_ephemeral_directory }}/{{ item }}.pid"
+  when: _mp_specs[item].driver == 'process'
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Record slirp ssh_port per host (process driver)
+  ansible.builtin.set_fact:
+    _mp_specs: >-
+      {{ _mp_specs | combine({
+           item: _mp_specs[item] | combine({
+             'ssh_host': '127.0.0.1',
+             'ssh_port': (mp_qemu_slirp_port_base | int + (groups['molecule'].index(item) | int))
+           })
+         }, recursive=True) }}
+  when: _mp_specs[item].driver == 'process'
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
