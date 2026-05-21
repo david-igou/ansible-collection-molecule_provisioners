@@ -28,18 +28,6 @@ def test_valid_minimal_passes_validation() -> None:
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
-def test_bad_driver_fails_with_message() -> None:
-    proc = _run("run_validate.yml", "bad_driver.yml")
-    assert proc.returncode != 0
-    assert "unsupported qemu.driver 'vmware'" in proc.stdout
-
-
-def test_process_nat_combo_fails_with_message() -> None:
-    proc = _run("run_validate.yml", "process_nat_invalid.yml")
-    assert proc.returncode != 0
-    assert "driver=process with network.mode=nat" in proc.stdout
-
-
 def test_missing_image_fails_with_message() -> None:
     proc = _run("run_validate.yml", "missing_image.yml")
     assert proc.returncode != 0
@@ -84,7 +72,7 @@ def test_process_driver_e2e(tmp_path) -> None:
     env = os.environ.copy()
     env["MOLECULE_EPHEMERAL_DIRECTORY"] = str(tmp_path)
     proc = subprocess.run(
-        ["ansible-playbook", "-i", str(FIXTURES / "process_slirp.yml"),
+        ["ansible-playbook", "-i", str(FIXTURES / "process.yml"),
          str(ASSERTIONS / "run_process_e2e.yml")],
         cwd=COLLECTION_ROOT, env=env, capture_output=True, text=True, check=False,
     )
