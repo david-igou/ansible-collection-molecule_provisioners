@@ -125,7 +125,7 @@ See [`docs/examples/`](docs/examples/) for the canonical starter and [`docs/MIGR
 
 Both roles produce a host group named `molecule` containing all platform hosts.
 
-## Out of scope for v1.0
+## Out of scope
 
 - docker, AWS, Azure, GCP backends
 - qemu/libvirt remote URIs and `network.mode: bridge` (planned for a later minor)

@@ -5,7 +5,8 @@
   vars:
     _ssh_port: "{{ mp_qemu_slirp_port_base | int + (groups['molecule'].index(item) | int) }}"
     _accel: "{{ 'kvm:tcg' if _mp_qemu_kvm_ok | default(false) else 'tcg' }}"
-    _cpu_flag: "{{ '-cpu host' if _mp_qemu_kvm_ok | default(false) else '' }}"
+    # NOTE: -cpu host passthrough is deferred — inserting conditionally into a
+    # static argv list is awkward. Tracked as a future enhancement for KVM users.
   ansible.builtin.command:
     argv:
       - qemu-system-x86_64

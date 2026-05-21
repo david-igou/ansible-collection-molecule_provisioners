@@ -39,12 +39,21 @@
   when: _mp_qemu_pid | length > 0
   failed_when: false
 
+- name: "Re-stat proc exe after SIGTERM wait for {{ item }}"
+  ansible.builtin.stat:
+    path: "/proc/{{ _mp_qemu_pid }}/exe"
+    follow: true
+  register: __mp_qemu_proc_exe_after
+  when: _mp_qemu_pid | length > 0
+  failed_when: false
+
 - name: "Force-kill process if still alive after SIGTERM for {{ item }}"
   ansible.builtin.command:
     cmd: "kill -KILL {{ _mp_qemu_pid }}"
   when:
     - _mp_qemu_pid | length > 0
-    - __mp_qemu_proc_exe.stat.exists | default(false)
+    - __mp_qemu_proc_exe_after.stat.exists | default(false)
+    - "'qemu-system' in (__mp_qemu_proc_exe_after.stat.lnk_source | default(''))"
   changed_when: true
   failed_when: false
 

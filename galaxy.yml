@@ -7,7 +7,7 @@ authors:
   - David Igou <igou.david@gmail.com>
 
 description: >-
-  Reusable Molecule provisioner playbooks and roles (podman, kubevirt) for
+  Reusable Molecule provisioner playbooks and roles (podman, kubevirt, qemu) for
   testing other Ansible collections without copy-pasting create/destroy/prepare
   automation per repo.
 
@@ -17,6 +17,8 @@ tags:
   - testing
   - podman
   - kubevirt
+  - qemu
+  - libvirt
 
 dependencies:
   containers.podman: ">=1.10.0"
