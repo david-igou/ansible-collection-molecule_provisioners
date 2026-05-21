@@ -2104,7 +2104,7 @@ mp_defaults:
 - [ ] **Step 5: Smoke the scenario locally (only if qemu+libvirtd available on dev host)**
 
 Run: `cd extensions/molecule/qemu && PROVISIONER=qemu molecule test --scenario-name qemu`
-Expected: full lifecycle passes. Skip if local libvirtd not running — CI covers it.
+Expected: the two SLIRP hosts (`ubuntu-libvirt-slirp`, `ubuntu-process-slirp`) complete the full lifecycle. The `ubuntu-libvirt-nat` host is expected to fail in any environment that cannot bring up libvirt's `default` network (most container-based dev envs — `virbr0`/`dnsmasq` either isn't permitted or collides with `192.168.122.1`). **NAT is a CI-only merge gate**: GitHub Actions runs the NAT host on `ubuntu-latest` where the default network starts cleanly; local NAT failure is not a merge blocker. Skip the local smoke entirely if libvirtd is unreachable — CI covers all three hosts.
 
 - [ ] **Step 6: Commit**
 

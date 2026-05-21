@@ -226,6 +226,8 @@ all:
 
 (`process + nat` is rejected by validation, so 3 of 4 combos cover all valid ones.)
 
+**NAT is a CI-only merge gate.** Many local dev environments (including the maintainer's CentOS-based devcontainer) can't bring up libvirt's `default` network — the `virbr0` bridge either isn't permitted by the host namespace or `dnsmasq` collides with `192.168.122.1` already held by a sibling network. The self-test scenario keeps the `ubuntu-libvirt-nat` host so CI exercises the NAT pre-reservation + `<host>` injection path end-to-end, but local merge sign-off only requires the two SLIRP hosts (`ubuntu-libvirt-slirp`, `ubuntu-process-slirp`) to pass. Running `molecule test` locally on an environment without a healthy `default` network is expected to fail on the NAT host; this is not a blocker for merge.
+
 **`converge.yml`**: `command: uname -a`, `assert: ansible_distribution == 'Ubuntu'`.
 **`verify.yml`**: assert each host's `ansible_host`/`ansible_port` matches the expected mode — `127.0.0.1` + assigned port for SLIRP, libvirt-default-subnet IP + 22 for NAT.
 
