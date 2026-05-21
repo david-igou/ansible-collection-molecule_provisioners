@@ -32,12 +32,11 @@
       - -display
       - "none"
     creates: "{{ molecule_ephemeral_directory }}/{{ item }}.pid"
-  when: _mp_specs[item].driver == 'process'
   loop: "{{ groups['molecule'] }}"
   loop_control:
     label: "{{ item }}"
 
-- name: Record slirp ssh_port per host (process driver)
+- name: Record slirp ssh_port per host
   ansible.builtin.set_fact:
     _mp_specs: >-
       {{ _mp_specs | combine({
@@ -46,7 +45,6 @@
              'ssh_port': (mp_qemu_slirp_port_base | int + (groups['molecule'].index(item) | int))
            })
          }, recursive=True) }}
-  when: _mp_specs[item].driver == 'process'
   loop: "{{ groups['molecule'] }}"
   loop_control:
     label: "{{ item }}"

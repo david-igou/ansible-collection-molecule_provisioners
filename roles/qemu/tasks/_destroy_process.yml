@@ -57,7 +57,7 @@
   changed_when: true
   failed_when: false
 
-- name: "Remove process-driver artifacts for {{ item }}"
+- name: "Remove qemu artifacts for {{ item }}"
   ansible.builtin.file:
     path: "{{ molecule_ephemeral_directory }}/{{ item }}{{ ext }}"
     state: absent
