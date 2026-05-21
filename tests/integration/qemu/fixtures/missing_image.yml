@@ -1,0 +1,13 @@
+---
+all:
+  children:
+    molecule:
+      hosts:
+        h1:
+          mp:
+            qemu:
+              driver: libvirt
+              # image deliberately absent
+  vars:
+    mp_backend: qemu
+    mp_defaults: {}

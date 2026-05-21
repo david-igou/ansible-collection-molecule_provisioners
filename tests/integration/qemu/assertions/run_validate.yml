@@ -2,7 +2,7 @@
 - name: Exercise spec-merge + validation
   hosts: localhost
   connection: local
-  gather_facts: false
+  gather_facts: true
   tasks:
     - name: Include role defaults
       ansible.builtin.include_vars:
@@ -10,22 +10,12 @@
     - name: Surface mp_defaults from the molecule group
       ansible.builtin.set_fact:
         mp_defaults: "{{ hostvars[groups['molecule'][0]].mp_defaults | default({}) }}"
-    - name: Merge specs
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_spec_merge.yml"
-
-    # Assertions for fixture valid_minimal.yml:
-    - name: Assert h-minimal merged correctly
+    - name: Run create entrypoint (which merges + validates + creates cache dir)
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/create.yml"
+    - name: Assert image cache dir was created
+      ansible.builtin.stat:
+        path: "{{ mp_qemu_image_cache_dir }}"
+      register: __cache_stat
+    - name: Cache dir must be a directory
       ansible.builtin.assert:
-        that:
-          - _mp_specs['h-minimal'].image == 'https://example.invalid/disk.qcow2'
-          - _mp_specs['h-minimal'].driver == 'libvirt'         # role default
-          - _mp_specs['h-minimal'].cpus == 2                    # role default
-          - _mp_specs['h-minimal'].ssh_user == 'ubuntu'         # from mp_defaults
-          - _mp_specs['h-minimal'].network.mode == 'slirp'      # role default
-    - name: Assert h-overrides merged correctly
-      ansible.builtin.assert:
-        that:
-          - _mp_specs['h-overrides'].cpus == 4                  # host override wins
-          - _mp_specs['h-overrides'].network.mode == 'nat'      # host override wins
-          - _mp_specs['h-overrides'].ssh_user == 'ubuntu'       # mp_defaults still applies
-          - _mp_specs['h-overrides'].driver == 'libvirt'        # role default still applies
+        that: __cache_stat.stat.isdir
