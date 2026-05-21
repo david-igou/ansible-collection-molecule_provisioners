@@ -169,17 +169,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install qemu, libvirt, cloud-image-utils, and basic networking
+      - name: Install qemu + cloud-image-utils
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            qemu-system-x86 qemu-utils \
-            libvirt-daemon-system libvirt-clients \
-            cloud-image-utils bridge-utils
-          sudo systemctl enable --now libvirtd
-          sudo virsh net-start default || true
-          sudo virsh net-autostart default
-          sudo usermod -a -G libvirt,kvm "$USER"
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils
 
       - name: Install ansible + molecule + pytest plumbing
         working-directory: ansible_collections/david_igou/molecule_provisioners
@@ -192,8 +185,7 @@ jobs:
         working-directory: ansible_collections/david_igou/molecule_provisioners
         run: |
           ansible-galaxy collection install \
-            containers.podman kubernetes.core community.crypto \
-            'community.libvirt:>=1.3.0'
+            containers.podman kubernetes.core community.crypto
 
       - name: Cache base qcow2 images
         uses: actions/cache@v4
@@ -202,23 +194,13 @@ jobs:
           # NOTE: bump the suffix when the pinned image URL or checksum changes.
           key: molecule-qemu-images-ubuntu-noble-v1
 
-      - name: Run qemu scenario (TCG; /dev/kvm is unavailable on hosted runners)
+      - name: Run default scenario under PROVISIONER=qemu (TCG; /dev/kvm is unavailable on hosted runners)
         working-directory: ansible_collections/david_igou/molecule_provisioners
         env:
           PROVISIONER: qemu
           ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
-        # `sg libvirt -c` re-execs the shell with the libvirt group active without
-        # requiring a logout/login.
         run: |
-          sg libvirt -c 'pytest tests/integration -v -k qemu -s -o addopts=""'
-
-      - name: Collect libvirt diagnostics on failure
-        if: failure()
-        run: |
-          sudo virsh list --all || true
-          sudo virsh net-list --all || true
-          sudo virsh net-dumpxml default || true
-          sudo journalctl -u libvirtd --no-pager | tail -200 || true
+          pytest tests/integration -v -k default -s -o addopts=""
   all_green:
     if: ${{ always() }}
     needs:
