@@ -1,0 +1,71 @@
+---
+# Generate deterministic MAC per VM. `52:54:00` is libvirt/qemu's OUI prefix.
+- name: Compute deterministic MAC per host
+  ansible.builtin.set_fact:
+    _mp_specs: >-
+      {{ _mp_specs | combine({
+           item: _mp_specs[item] | combine({
+             'mac':
+               '52:54:00:'
+               ~ (((molecule_ephemeral_directory ~ '-' ~ item)
+                   | ansible.builtin.hash('sha256'))[0:2]) ~ ':'
+               ~ (((molecule_ephemeral_directory ~ '-' ~ item)
+                   | ansible.builtin.hash('sha256'))[2:4]) ~ ':'
+               ~ (((molecule_ephemeral_directory ~ '-' ~ item)
+                   | ansible.builtin.hash('sha256'))[4:6])
+           })
+         }, recursive=True) }}
+  when: _mp_specs[item].driver == 'libvirt'
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+# For slirp hosts, set ssh_host/ssh_port (mirrors process driver).
+- name: Set ssh connection facts (libvirt + slirp)
+  ansible.builtin.set_fact:
+    _mp_specs: >-
+      {{ _mp_specs | combine({
+           item: _mp_specs[item] | combine({
+             'ssh_host': '127.0.0.1',
+             'ssh_port': (mp_qemu_slirp_port_base | int + (groups['molecule'].index(item) | int))
+           })
+         }, recursive=True) }}
+  when:
+    - _mp_specs[item].driver == 'libvirt'
+    - _mp_specs[item].network.mode == 'slirp'
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+# Render and define the domain, then start it.
+- name: "Render domain XML for {{ item }}"
+  vars:
+    _host: "{{ item }}"
+  ansible.builtin.template:
+    src: "{{ _mp_qemu_template_dir }}/domain.xml.j2"
+    dest: "{{ molecule_ephemeral_directory }}/{{ item }}.domain.xml"
+    mode: "0644"
+  when: _mp_specs[item].driver == 'libvirt'
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: "Define domain for {{ item }}"
+  community.libvirt.virt:
+    command: define
+    xml: "{{ lookup('file', molecule_ephemeral_directory ~ '/' ~ item ~ '.domain.xml') }}"
+    uri: "{{ _mp_specs[item].uri }}"
+  when: _mp_specs[item].driver == 'libvirt'
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: "Start domain for {{ item }}"
+  community.libvirt.virt:
+    name: "{{ item }}"
+    state: running
+    uri: "{{ _mp_specs[item].uri }}"
+  when: _mp_specs[item].driver == 'libvirt'
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
