@@ -138,9 +138,26 @@ PROVISIONER=kubevirt molecule test -s <scenario>   # if you have a cluster with 
 
 Both should pass. If a host fails with "missing mp.<backend> in inventory", you forgot to add the backend block to that host. If validation fails with "mp_backend must be one of ...", set `mp_backend` in `inventory/group_vars/molecule.yml`.
 
+## Migrating from `molecule-plugins[libvirt]`
+
+The `molecule-plugins[libvirt]` driver expressed VMs as `platforms:` entries. This collection moves those fields into `mp.qemu.<field>` per host.
+
+| `molecule-plugins[libvirt]` field | `mp.qemu.<field>` equivalent |
+| --- | --- |
+| `platforms[].box` / `image` | `mp.qemu.image` (URL to qcow2) |
+| `platforms[].vcpus` | `mp.qemu.cpus` (integer) |
+| `platforms[].memory` | `mp.qemu.memory` (integer MiB) |
+| `platforms[].libvirt_user` / `connection` | `mp.qemu.ssh_user` |
+| `platforms[].libvirt_host` | not supported in v1.1 (controller-local only) |
+| `platforms[].networks[].name` | `mp.qemu.network.mode` (`slirp` or `nat`) |
+| `driver.options.connection_uri` | `mp.qemu.uri` (per host) |
+
+Mode-`bridge` networking is not in v1.1. If you used a bridge previously, either switch to `nat` (libvirt's `default` network) or wait for the bridge add-on.
+
 ## What this collection does NOT support
 
-- Backends other than podman and kubevirt (no docker, qemu/libvirt, cloud).
+- Backends other than podman, kubevirt, and qemu (no docker, cloud providers).
+- Remote libvirt URIs (`qemu+ssh://...`); `network.mode: bridge` for the qemu backend.
 - KubeVirt service types other than NodePort.
 - Mixing backends within a single scenario run.
 - Molecule's `shared_state` pattern.
