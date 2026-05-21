@@ -20,3 +20,7 @@
 # Phase 4: build per-host NoCloud seed ISOs.
 - name: Build seed ISOs
   ansible.builtin.include_tasks: _seed_iso.yml
+
+# Phase 5: per-host qcow2 overlay (process driver only — libvirt branch added later).
+- name: Create per-VM overlays
+  ansible.builtin.include_tasks: _overlay.yml
