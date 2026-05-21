@@ -13,7 +13,7 @@ mp_qemu_slirp_port_base: 2222
 
 # Image cache root. Honours XDG_CACHE_HOME, falls back to ~/.cache/molecule-qemu.
 mp_qemu_image_cache_dir: >-
-  {{ (lookup('env', 'XDG_CACHE_HOME') | default(ansible_env.HOME ~ '/.cache', true))
+  {{ (lookup('env', 'XDG_CACHE_HOME') | default(lookup('env', 'HOME') ~ '/.cache', true))
      ~ '/molecule-qemu' }}
 
 # Allowed enum values. Validation refuses anything else.

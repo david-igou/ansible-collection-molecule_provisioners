@@ -1,2 +1,2 @@
-instance-id: {{ _host }}-{{ ansible_date_time.epoch }}
+instance-id: {{ _host }}-{{ now(fmt='%s') }}
 local-hostname: {{ _host }}
