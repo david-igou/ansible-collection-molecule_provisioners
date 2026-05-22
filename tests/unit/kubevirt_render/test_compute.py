@@ -43,3 +43,11 @@ def test_memory_explicit_and_limit(render_vm) -> None:
     res = vm["spec"]["template"]["spec"]["domain"]["resources"]
     assert res["requests"]["memory"] == "2Gi"
     assert res["limits"]["memory"] == "4Gi"
+
+
+def test_memory_explicit_no_limit(render_vm) -> None:
+    """Explicit memory without memory_limit sets request but no limit."""
+    vm = render_vm(_base({"memory": "2Gi"}))
+    res = vm["spec"]["template"]["spec"]["domain"]["resources"]
+    assert res["requests"]["memory"] == "2Gi"
+    assert "limits" not in res

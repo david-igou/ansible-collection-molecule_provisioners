@@ -75,6 +75,12 @@ all:
               memory: <str>             # optional, role default '1Gi'
               ssh_service:
                 type: NodePort          # optional, only NodePort in v1
+              cpu:                          # optional, default {cores: 2}
+                cores: <int>                # optional
+                sockets: <int>              # optional
+                threads: <int>              # optional
+                model: <str>                # optional (e.g., host-passthrough)
+              memory_limit: <str>           # optional → resources.limits.memory
             docker:                      # required when mp_backend == docker
               image: <str>               # required
               # optional: command, command_handling, override_command, hostname,
