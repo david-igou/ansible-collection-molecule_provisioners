@@ -1,0 +1,26 @@
+---
+# Pure renderer: assemble __mp_kubevirt_vm for the current host (`item`) from
+# _mp_specs[item]. Called per-host from _create_vm.yml, and from the unit-test
+# harness at tests/unit/kubevirt_render/render_harness.yml.
+#
+# Three layers:
+#   __mp_base     — minimum viable VM skeleton (metadata, cloudinit, default net).
+#   __mp_curated  — first-class fields layered onto the base.
+#   __mp_kubevirt_vm = __mp_curated | combine(vm_overrides, recursive, list_merge=append).
+
+- name: "Build base VM skeleton: {{ item }}"
+  ansible.builtin.set_fact:
+    __mp_base:
+      apiVersion: kubevirt.io/v1
+      kind: VirtualMachine
+      metadata:
+        name: "{{ item }}"
+        namespace: "{{ _mp_specs[item].namespace | default('molecule') }}"
+        labels:
+          kubevirt.io/domain: "{{ item }}"
+      spec:
+        running: true
+
+- name: "Set __mp_kubevirt_vm (stub): {{ item }}"
+  ansible.builtin.set_fact:
+    __mp_kubevirt_vm: "{{ __mp_base }}"
