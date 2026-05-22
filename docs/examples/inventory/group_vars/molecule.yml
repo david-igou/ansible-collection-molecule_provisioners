@@ -12,3 +12,6 @@ mp_defaults:
     namespace: molecule
     memory: 1Gi
     ssh_user: cloud-user
+  docker:
+    command: /sbin/init
+    privileged: true
