@@ -26,7 +26,7 @@
 # UEFI images need a writable per-VM copy of OVMF_VARS.fd for UEFI variable
 # persistence across reboots and initial boot. OVMF_CODE.fd is read-only and
 # shared. Copy only when firmware: uefi is requested for this host.
-- name: "Copy writable OVMF_VARS for {{ item }} (uefi firmware)"
+- name: "Copy writable UEFI OVMF_VARS for {{ item }}"
   ansible.builtin.copy:
     src: "{{ mp_qemu_ovmf_vars }}"
     dest: "{{ molecule_ephemeral_directory }}/{{ item }}-ovmf-vars.fd"
