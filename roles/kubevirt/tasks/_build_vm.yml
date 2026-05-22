@@ -73,6 +73,39 @@
     __mp_data_volume_templates: []
   when: _mp_specs[item].boot_source.type == 'container_disk'
 
+- name: "Dispatch boot_source data_volume_url: {{ item }}"
+  vars:
+    _bs: "{{ _mp_specs[item].boot_source }}"
+    _dv_name: "{{ item }}-boot"
+    _http_source:
+      url: "{{ _bs.url }}"
+    _storage_block: >-
+      {{
+        {
+          'resources': {'requests': {'storage': _bs.size}}
+        }
+        | combine(
+            {'storageClassName': _bs.storage_class} if _bs.storage_class is defined else {}
+          )
+      }}
+  ansible.builtin.set_fact:
+    __mp_boot_disk:
+      name: containerdisk
+      disk:
+        bus: virtio
+    __mp_boot_volume:
+      name: containerdisk
+      dataVolume:
+        name: "{{ _dv_name }}"
+    __mp_data_volume_templates:
+      - metadata:
+          name: "{{ _dv_name }}"
+        spec:
+          source:
+            http: "{{ _http_source }}"
+          storage: "{{ _storage_block }}"
+  when: _mp_specs[item].boot_source.type == 'data_volume_url'
+
 - name: "Apply boot source to base: {{ item }}"
   vars:
     _spec_patch:

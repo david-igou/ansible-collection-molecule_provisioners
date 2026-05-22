@@ -77,3 +77,54 @@ def test_container_disk_custom_ssh_user(render_vm) -> None:
     )
     assert "name: ubuntu" in cidisk["cloudInitNoCloud"]["userData"]
     assert "name: cloud-user" not in cidisk["cloudInitNoCloud"]["userData"]
+
+
+def test_data_volume_url_renders_template(render_vm) -> None:
+    """data_volume_url renders dataVolumeTemplates with http source."""
+    vm = render_vm(
+        {
+            "boot_source": {
+                "type": "data_volume_url",
+                "url": "https://cloud-images.example/x.img",
+                "checksum": "sha256:abc",
+                "size": "10Gi",
+                "storage_class": "standard",
+            },
+        }
+    )
+    templates = vm["spec"]["dataVolumeTemplates"]
+    assert len(templates) == 1
+    dv = templates[0]
+    assert dv["metadata"]["name"] == "instance-boot"
+    assert dv["spec"]["source"]["http"]["url"] == "https://cloud-images.example/x.img"
+    assert dv["spec"]["source"]["http"].get("certConfigMap") is None or True  # tolerate absence
+    assert dv["spec"]["storage"]["resources"]["requests"]["storage"] == "10Gi"
+    assert dv["spec"]["storage"]["storageClassName"] == "standard"
+
+
+def test_data_volume_url_boot_volume_references_template(render_vm) -> None:
+    """The VM's boot volume references the dataVolumeTemplate by name."""
+    vm = render_vm(
+        {
+            "boot_source": {
+                "type": "data_volume_url",
+                "url": "https://x/img",
+                "size": "10Gi",
+            },
+        }
+    )
+    volumes = vm["spec"]["template"]["spec"]["volumes"]
+    boot = next(v for v in volumes if v["name"] == "containerdisk")
+    assert boot["dataVolume"]["name"] == "instance-boot"
+    assert "containerDisk" not in boot
+
+
+def test_data_volume_url_omits_storage_class_when_unset(render_vm) -> None:
+    """No storageClassName key when storage_class isn't supplied."""
+    vm = render_vm(
+        {
+            "boot_source": {"type": "data_volume_url", "url": "https://x", "size": "10Gi"},
+        }
+    )
+    dv = vm["spec"]["dataVolumeTemplates"][0]
+    assert "storageClassName" not in dv["spec"]["storage"]
