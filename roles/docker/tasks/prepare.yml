@@ -1,0 +1,5 @@
+---
+- name: Ensure sudo is installed
+  ansible.builtin.package:
+    name: sudo
+    state: present
