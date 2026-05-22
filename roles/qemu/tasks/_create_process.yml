@@ -37,15 +37,13 @@
   loop_control:
     label: "{{ item }}"
 
-- name: "Launch qemu-system for {{ item }}"
+# Launch BIOS-firmware VMs (default). Skipped when firmware: uefi is set.
+- name: "Launch qemu-system (bios) for {{ item }}"
   vars:
     _ssh_port: "{{ mp_qemu_slirp_port_base | int + (groups['molecule'].index(item) | int) }}"
     _accel: "{{ 'kvm:tcg' if _mp_qemu_kvm_ok | default(false) else 'tcg' }}"
-    _firmware: "{{ _mp_specs[item].firmware | default('bios') }}"
-    _ovmf_vars_path: "{{ molecule_ephemeral_directory }}/{{ item }}-ovmf-vars.fd"
-    # NOTE: -cpu host passthrough is deferred — inserting conditionally into a
-    # static argv list is awkward. Tracked as a future enhancement for KVM users.
-    _argv_common:
+  ansible.builtin.command:
+    argv:
       - qemu-system-x86_64
       - -machine
       - "accel={{ _accel }}"
@@ -68,21 +66,50 @@
       - "unix:{{ molecule_ephemeral_directory }}/{{ item }}.qmp,server,nowait"
       - -display
       - "none"
-    # UEFI pflash drives must appear before the disk drive in the argument list.
-    _argv_uefi_prefix:
+    creates: "{{ molecule_ephemeral_directory }}/{{ item }}.pid"
+  when: _mp_specs[item].firmware | default('bios') != 'uefi'
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+# Launch UEFI-firmware VMs. pflash drives must appear before -machine to ensure
+# OVMF is loaded before the main disk; OVMF_CODE.fd is read-only (shared
+# across VMs), OVMF_VARS.fd is the per-VM writable copy created above.
+- name: "Launch qemu-system (uefi) for {{ item }}"
+  vars:
+    _ssh_port: "{{ mp_qemu_slirp_port_base | int + (groups['molecule'].index(item) | int) }}"
+    _accel: "{{ 'kvm:tcg' if _mp_qemu_kvm_ok | default(false) else 'tcg' }}"
+    _ovmf_vars_path: "{{ molecule_ephemeral_directory }}/{{ item }}-ovmf-vars.fd"
+  ansible.builtin.command:
+    argv:
+      - qemu-system-x86_64
       - -drive
       - "if=pflash,format=raw,readonly=on,file={{ mp_qemu_ovmf_code }}"
       - -drive
       - "if=pflash,format=raw,file={{ _ovmf_vars_path }}"
-    _argv_final: >-
-      {{
-        (_argv_uefi_prefix + _argv_common)
-        if _firmware == 'uefi'
-        else _argv_common
-      }}
-  ansible.builtin.command:
-    argv: "{{ _argv_final }}"
+      - -machine
+      - "accel={{ _accel }}"
+      - -m
+      - "{{ _mp_specs[item].memory | int }}"
+      - -smp
+      - "{{ _mp_specs[item].cpus | int }}"
+      - -drive
+      - "file={{ _mp_specs[item].overlay_path }},if=virtio,format=qcow2"
+      - -cdrom
+      - "{{ _mp_specs[item].seed_iso_path }}"
+      - -netdev
+      - "user,id=net0,hostfwd=tcp::{{ _ssh_port }}-:22"
+      - -device
+      - virtio-net-pci,netdev=net0
+      - -daemonize
+      - -pidfile
+      - "{{ molecule_ephemeral_directory }}/{{ item }}.pid"
+      - -qmp
+      - "unix:{{ molecule_ephemeral_directory }}/{{ item }}.qmp,server,nowait"
+      - -display
+      - "none"
     creates: "{{ molecule_ephemeral_directory }}/{{ item }}.pid"
+  when: _mp_specs[item].firmware | default('bios') == 'uefi'
   loop: "{{ groups['molecule'] }}"
   loop_control:
     label: "{{ item }}"
