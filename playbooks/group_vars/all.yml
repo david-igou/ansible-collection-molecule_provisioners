@@ -4,3 +4,4 @@ mp_supported_backends:
   - podman
   - kubevirt
   - qemu
+  - docker

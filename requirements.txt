@@ -1,1 +1,4 @@
 # TO-DO: add python packages that are required for this collection
+# Note: community.docker (declared in galaxy.yml) requires the `docker` python
+# package on the controller. Consumers running the docker backend must install:
+#   pip install docker

@@ -1,0 +1,121 @@
+---
+- name: Merge per-host specs
+  ansible.builtin.include_tasks: _spec_merge.yml
+
+- name: Validate per-host specs
+  ansible.builtin.include_tasks: _validate.yml
+
+- name: Build docker network list
+  ansible.builtin.include_tasks: _networks.yml
+
+- name: Create docker network(s)
+  community.docker.docker_network:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ __mp_docker_networks | default([]) }}"
+
+# Match molecule-plugins behavior: when override_command is true and no command is
+# set, run a long-lived keepalive so the container stays up for connection tests.
+- name: Determine the command directives
+  ansible.builtin.set_fact:
+    _mp_docker_command_directives: >-
+      {{ _mp_docker_command_directives | default({})
+         | combine({
+             item: (_mp_specs[item].command
+                    | default('bash -c "while true; do sleep 10000; done"'))
+           }) }}
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+  when:
+    - _mp_specs[item].override_command | default(true)
+
+# Launch all containers simultaneously (poll: 0), then wait for each below.
+# A failure during the wait leaves still-running async jobs in flight; run
+# destroy to clean up partially-created instances.
+- name: Create molecule instance(s)
+  community.docker.docker_container:
+    name: "{{ item }}"
+    image: "{{ _mp_specs[item].image }}"
+    state: started
+    recreate: false
+    hostname: "{{ _mp_specs[item].hostname | default(item) }}"
+    command: "{{ (_mp_docker_command_directives | default({}))[item] | default(omit) }}"
+    command_handling: "{{ _mp_specs[item].command_handling | default('compatibility') }}"
+    privileged: "{{ _mp_specs[item].privileged | default(false) }}"
+    user: "{{ _mp_specs[item].user | default(omit) }}"
+    tty: "{{ _mp_specs[item].tty | default(omit) }}"
+    pid_mode: "{{ _mp_specs[item].pid_mode | default(omit) }}"
+    cgroupns_mode: "{{ _mp_specs[item].cgroupns_mode | default(omit) }}"
+    runtime: "{{ _mp_specs[item].runtime | default(omit) }}"
+    platform: "{{ _mp_specs[item].platform | default(omit) }}"
+    capabilities: "{{ _mp_specs[item].capabilities | default(omit) }}"
+    security_opts: "{{ _mp_specs[item].security_opts | default(omit) }}"
+    sysctls: "{{ _mp_specs[item].sysctls | default(omit) }}"
+    ulimits: "{{ _mp_specs[item].ulimits | default(omit) }}"
+    devices: "{{ _mp_specs[item].devices | default(omit) }}"
+    volumes: "{{ _mp_specs[item].volumes | default(omit) }}"
+    mounts: "{{ _mp_specs[item].mounts | default(omit) }}"
+    tmpfs: "{{ _mp_specs[item].tmpfs | default(omit) }}"
+    shm_size: "{{ _mp_specs[item].shm_size | default(omit) }}"
+    networks: "{{ _mp_specs[item].networks | default(omit) }}"
+    network_mode: "{{ _mp_specs[item].network_mode | default(omit) }}"
+    networks_cli_compatible: "{{ _mp_specs[item].networks_cli_compatible | default(true) }}"
+    purge_networks: "{{ _mp_specs[item].purge_networks | default(omit) }}"
+    dns_servers: "{{ _mp_specs[item].dns_servers | default(omit) }}"
+    etc_hosts: "{{ _mp_specs[item].etc_hosts | default(omit) }}"
+    exposed_ports: "{{ _mp_specs[item].exposed_ports | default(omit) }}"
+    published_ports: "{{ _mp_specs[item].published_ports | default(omit) }}"
+    links: "{{ _mp_specs[item].links | default(omit) }}"
+    env: "{{ _mp_specs[item].env | default({}) }}"
+    labels: "{{ _mp_specs[item].labels | default({}) }}"
+    restart_policy: "{{ _mp_specs[item].restart_policy | default(omit) }}"
+    restart_retries: "{{ _mp_specs[item].restart_retries | default(omit) }}"
+    stop_signal: "{{ _mp_specs[item].stop_signal | default(omit) }}"
+    kill_signal: "{{ _mp_specs[item].kill_signal | default(omit) }}"
+    memory: "{{ _mp_specs[item].memory | default(omit) }}"
+    memory_swap: "{{ _mp_specs[item].memory_swap | default(omit) }}"
+  register: __mp_docker_create
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+  async: "{{ mp_docker_async_timeout }}"
+  poll: 0
+
+- name: Wait for instance(s) creation to complete
+  ansible.builtin.async_status:
+    jid: "{{ item.ansible_job_id }}"
+  register: __mp_docker_jobs
+  until: __mp_docker_jobs.finished
+  retries: "{{ mp_docker_async_retries }}"
+  delay: "{{ mp_docker_async_delay }}"
+  loop: "{{ __mp_docker_create.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+# Augment the static inventory with ansible_connection so subsequent molecule
+# phases (prepare/converge/verify) talk to the containers via the docker
+# connection plugin. Each phase is a separate ansible-playbook invocation, so
+# the augmentation has to be written to disk in molecule_ephemeral_directory/
+# inventory/ (which is in molecule's inventory chain).
+- name: Build runtime connection dict
+  ansible.builtin.set_fact:
+    __mp_docker_runtime_hosts: >-
+      {{ __mp_docker_runtime_hosts | default({})
+         | combine({item: {'ansible_connection': 'community.docker.docker'}}) }}
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Write runtime connection inventory file
+  vars:
+    runtime_inventory:
+      all:
+        hosts: "{{ __mp_docker_runtime_hosts }}"
+  ansible.builtin.copy:
+    content: "{{ runtime_inventory | to_nice_yaml }}"
+    dest: "{{ molecule_ephemeral_directory }}/inventory/molecule_runtime.yml"
+    mode: "0600"
+
+- name: Refresh inventory
+  ansible.builtin.meta: refresh_inventory

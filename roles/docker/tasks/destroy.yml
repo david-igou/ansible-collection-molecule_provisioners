@@ -1,0 +1,40 @@
+---
+# Defensive merge — a host may not have an mp.docker block on destroy if the
+# consumer added it after a partial create, and destroy must remain idempotent.
+- name: Merge per-host specs (defensive)
+  ansible.builtin.include_tasks: _spec_merge.yml
+
+- name: Destroy molecule instance(s)
+  community.docker.docker_container:
+    name: "{{ item }}"
+    state: absent
+    force_kill: "{{ _mp_specs[item].force_kill | default(true) }}"
+    keep_volumes: "{{ _mp_specs[item].keep_volumes | default(true) }}"
+  register: __mp_docker_destroy
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+  async: "{{ mp_docker_async_timeout }}"
+  poll: 0
+
+- name: Wait for instance(s) deletion to complete
+  ansible.builtin.async_status:
+    jid: "{{ item.ansible_job_id }}"
+  register: __mp_docker_jobs
+  until: __mp_docker_jobs.finished
+  retries: "{{ mp_docker_async_retries }}"
+  delay: "{{ mp_docker_async_delay }}"
+  loop: "{{ __mp_docker_destroy.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Build docker network list
+  ansible.builtin.include_tasks: _networks.yml
+
+- name: Delete docker network(s)
+  community.docker.docker_network:
+    name: "{{ item }}"
+    state: absent
+    force: true
+  loop: "{{ __mp_docker_networks | default([]) }}"
+  failed_when: false

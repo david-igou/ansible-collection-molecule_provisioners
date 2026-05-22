@@ -194,7 +194,7 @@ jobs:
         with:
           path: ~/.cache/molecule-qemu
           # NOTE: bump the suffix when the pinned image URL or checksum changes.
-          key: molecule-qemu-images-ubuntu-noble-v1
+          key: molecule-qemu-images-ubuntu-noble-release-20260518
 
       - name: Run default scenario under PROVISIONER=qemu (TCG; /dev/kvm is unavailable on hosted runners)
         working-directory: ansible_collections/david_igou/molecule_provisioners
@@ -203,6 +203,39 @@ jobs:
           ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
         run: |
           pytest tests/integration -v -k default -s -o addopts=""
+  integration-docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout into the canonical collection path
+        uses: actions/checkout@v4
+        with:
+          path: ansible_collections/david_igou/molecule_provisioners
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ansible + molecule + pytest plumbing
+        working-directory: ansible_collections/david_igou/molecule_provisioners
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-core molecule \
+                      pytest pytest-ansible pytest-xdist docker
+
+      - name: Install collection dependencies
+        working-directory: ansible_collections/david_igou/molecule_provisioners
+        run: |
+          ansible-galaxy collection install \
+            containers.podman kubernetes.core community.crypto community.docker
+
+      - name: Run docker integration tests
+        working-directory: ansible_collections/david_igou/molecule_provisioners
+        env:
+          PROVISIONER: docker
+          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
+        run: pytest tests/integration -v -k default
   all_green:
     if: ${{ always() }}
     needs:
@@ -215,6 +248,7 @@ jobs:
       - integration-podman
       - integration-kubevirt
       - integration-qemu
+      - integration-docker
     runs-on: ubuntu-latest
     steps:
       - run: >-
@@ -227,5 +261,6 @@ jobs:
           '${{ needs.unit-source.result }}',
           '${{ needs.integration-podman.result }}',
           '${{ needs.integration-kubevirt.result }}',
-          '${{ needs.integration-qemu.result }}'
+          '${{ needs.integration-qemu.result }}',
+          '${{ needs.integration-docker.result }}'
           ])"

@@ -1,0 +1,18 @@
+---
+# Verify destroy.yml is idempotent on a fresh (never-created) state.
+- name: Exercise destroy on never-created hosts
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    molecule_ephemeral_directory: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
+                                       | default('/tmp/molecule-fake-ephemeral', true) }}"
+  tasks:
+    - name: Include role defaults
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../../../roles/docker/defaults/main.yml"
+    - name: Surface mp_defaults
+      ansible.builtin.set_fact:
+        mp_defaults: "{{ hostvars[groups['molecule'][0]].mp_defaults | default({}) }}"
+    - name: Run destroy entrypoint
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/docker/tasks/destroy.yml"

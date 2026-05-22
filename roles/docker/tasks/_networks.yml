@@ -1,0 +1,25 @@
+---
+# Build __mp_docker_networks: the deduped list of non-reserved network names
+# referenced by any host in groups['molecule']. Shared by create.yml + destroy.yml.
+- name: Initialize docker network list
+  ansible.builtin.set_fact:
+    __mp_docker_networks: []
+
+- name: Collect network names from per-host specs
+  ansible.builtin.set_fact:
+    __mp_docker_networks: >-
+      {{ __mp_docker_networks +
+         (_mp_specs[item].networks | map(attribute='name') | list) }}
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+  when:
+    - _mp_specs[item].networks is defined
+    - _mp_specs[item].networks is sequence
+
+- name: Deduplicate and drop reserved names
+  ansible.builtin.set_fact:
+    __mp_docker_networks: >-
+      {{ __mp_docker_networks
+         | unique
+         | difference(mp_docker_reserved_networks) }}

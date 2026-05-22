@@ -1,0 +1,18 @@
+---
+- name: Exercise the network collector
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Include role defaults
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../../../roles/docker/defaults/main.yml"
+    - name: Run spec merge
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/docker/tasks/_spec_merge.yml"
+    - name: Run network collector
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/docker/tasks/_networks.yml"
+    - name: Assert distinct non-reserved networks are collected
+      ansible.builtin.assert:
+        that:
+          - (__mp_docker_networks | unique | sort) == ['mp-net-a', 'mp-net-b']
+        fail_msg: "Collector returned {{ __mp_docker_networks | default('UNDEFINED') }}"
