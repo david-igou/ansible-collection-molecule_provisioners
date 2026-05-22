@@ -89,3 +89,13 @@ def test_no_instancetype_no_spec_instancetype_key(render_vm) -> None:
     vm = render_vm(_base())
     assert "instancetype" not in vm["spec"]
     assert "preference" not in vm["spec"]
+
+
+def test_preference_alone_without_instancetype(render_vm) -> None:
+    """preference without instancetype: spec.preference renders; cpu/resources still present."""
+    vm = render_vm(_base({"preference": "fedora"}))
+    assert vm["spec"]["preference"] == {"name": "fedora"}
+    assert "instancetype" not in vm["spec"]
+    domain = vm["spec"]["template"]["spec"]["domain"]
+    assert "cpu" in domain
+    assert "resources" in domain
