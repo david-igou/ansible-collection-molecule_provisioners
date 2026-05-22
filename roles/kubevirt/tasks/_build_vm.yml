@@ -9,18 +9,85 @@
 #   __mp_kubevirt_vm = __mp_curated | combine(vm_overrides, recursive, list_merge=append).
 
 - name: "Build base VM skeleton: {{ item }}"
+  vars:
+    _ns: "{{ _mp_specs[item].namespace | default('molecule') }}"
+    _ssh_user: "{{ _mp_specs[item].ssh_user | default('cloud-user') }}"
   ansible.builtin.set_fact:
     __mp_base:
       apiVersion: kubevirt.io/v1
       kind: VirtualMachine
       metadata:
         name: "{{ item }}"
-        namespace: "{{ _mp_specs[item].namespace | default('molecule') }}"
+        namespace: "{{ _ns }}"
         labels:
           kubevirt.io/domain: "{{ item }}"
       spec:
         running: true
+        template:
+          metadata:
+            labels:
+              kubevirt.io/domain: "{{ item }}"
+          spec:
+            domain:
+              devices:
+                disks:
+                  - name: cloudinitdisk
+                    disk:
+                      bus: virtio
+                interfaces:
+                  - name: default
+                    masquerade: {}
+            networks:
+              - name: default
+                pod: {}
+            volumes:
+              - name: cloudinitdisk
+                cloudInitNoCloud:
+                  userData: |
+                    #cloud-config
+                    users:
+                      - name: {{ _ssh_user }}
+                        ssh_authorized_keys:
+                          - {{ temporary_ssh_public_key }}
+                        sudo: ALL=(ALL) NOPASSWD:ALL
+                        shell: /bin/bash
+                    chpasswd:
+                      expire: false
 
-- name: "Set __mp_kubevirt_vm (stub): {{ item }}"
+- name: "Dispatch boot_source: {{ item }}"
   ansible.builtin.set_fact:
-    __mp_kubevirt_vm: "{{ __mp_base }}"
+    __mp_boot_disk:
+      name: containerdisk
+      disk:
+        bus: virtio
+    __mp_boot_volume:
+      name: containerdisk
+      containerDisk:
+        image: "{{ _mp_specs[item].boot_source.image }}"
+    __mp_data_volume_templates: []
+  when: _mp_specs[item].boot_source.type == 'container_disk'
+
+- name: "Apply boot source to base: {{ item }}"
+  vars:
+    _spec_patch:
+      spec:
+        template:
+          spec:
+            domain:
+              devices:
+                disks: "{{ [__mp_boot_disk] }}"
+            volumes: "{{ [__mp_boot_volume] }}"
+  ansible.builtin.set_fact:
+    __mp_curated: >-
+      {{ __mp_base | combine(_spec_patch, recursive=True, list_merge='prepend') }}
+
+- name: "Attach dataVolumeTemplates (if any): {{ item }}"
+  ansible.builtin.set_fact:
+    __mp_curated: >-
+      {{ __mp_curated | combine({'spec': {'dataVolumeTemplates': __mp_data_volume_templates}},
+                                recursive=True, list_merge='append') }}
+  when: __mp_data_volume_templates | length > 0
+
+- name: "Set __mp_kubevirt_vm: {{ item }}"
+  ansible.builtin.set_fact:
+    __mp_kubevirt_vm: "{{ __mp_curated }}"
