@@ -59,6 +59,9 @@
     fail_msg: "Host '{{ item }}' boot_source.type=pvc requires `name` (the PVC name)."
   when: _mp_specs[item].boot_source.type == 'pvc'
 
+# An unset ssh_service.type defaults to NodePort here AND in create.yml's
+# "Create SSH NodePort Kubernetes service" when-guard. Keep both expressions
+# in sync — if you change the default here, change it there too.
 - name: "Assert ssh_service.type is supported: {{ item }}"
   ansible.builtin.assert:
     that:
