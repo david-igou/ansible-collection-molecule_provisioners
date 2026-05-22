@@ -149,3 +149,20 @@ def test_data_volume_pvc_renders_clone_template(render_vm) -> None:
         v for v in vm["spec"]["template"]["spec"]["volumes"] if v["name"] == "containerdisk"
     )
     assert boot["dataVolume"]["name"] == "instance-boot"
+    assert "containerDisk" not in boot
+
+
+def test_data_volume_pvc_omits_storage_class_when_unset(render_vm) -> None:
+    """No storageClassName key on data_volume_pvc when storage_class isn't supplied."""
+    vm = render_vm(
+        {
+            "boot_source": {
+                "type": "data_volume_pvc",
+                "source": {"name": "golden", "namespace": "images"},
+                "size": "20Gi",
+            },
+        }
+    )
+    dv = vm["spec"]["dataVolumeTemplates"][0]
+    assert "storageClassName" not in dv["spec"]["storage"]
+    assert dv["spec"]["storage"]["resources"]["requests"]["storage"] == "20Gi"
