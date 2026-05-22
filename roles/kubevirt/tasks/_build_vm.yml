@@ -259,7 +259,10 @@
                                 recursive=True, list_merge='append') }}
   when: __mp_data_volume_templates | length > 0
 
-- name: "Set __mp_kubevirt_vm: {{ item }}"
+- name: "Apply vm_overrides escape hatch: {{ item }}"
   ansible.builtin.set_fact:
-    __mp_kubevirt_vm: "{{ __mp_curated }}"
+    __mp_kubevirt_vm: >-
+      {{ __mp_curated
+         | combine(_mp_specs[item].vm_overrides | default({}),
+                   recursive=True, list_merge='append') }}
   when: __mp_boot_disk is not none
