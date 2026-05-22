@@ -16,7 +16,7 @@
     cmd: "qemu-img resize {{ molecule_ephemeral_directory }}/{{ item }}.qcow2 {{ _mp_specs[item].disk_size }}"
   when:
     - _mp_specs[item].disk_size is defined
-    - _mp_specs[item].disk_size
+    - _mp_specs[item].disk_size | string | length > 0
   changed_when: true
   loop: "{{ groups['molecule'] }}"
   loop_control:
