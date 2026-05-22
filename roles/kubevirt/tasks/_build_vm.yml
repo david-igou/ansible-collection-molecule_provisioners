@@ -217,6 +217,21 @@
         template:
           spec: "{{ _scheduling }}"
 
+- name: "Build extras patch: {{ item }}"
+  vars:
+    _spec: "{{ _mp_specs[item] }}"
+  ansible.builtin.set_fact:
+    __mp_extras_patch:
+      spec:
+        template:
+          spec:
+            domain:
+              devices:
+                disks: "{{ _spec.extra_disks | default([]) }}"
+                interfaces: "{{ _spec.extra_interfaces | default([]) }}"
+            volumes: "{{ _spec.extra_volumes | default([]) }}"
+            networks: "{{ _spec.extra_networks | default([]) }}"
+
 - name: "Apply boot source + compute + instancetype to base: {{ item }}"
   vars:
     _boot_patch:
@@ -233,7 +248,8 @@
          | combine(_boot_patch, recursive=True, list_merge='prepend')
          | combine(__mp_compute_patch, recursive=True, list_merge='append')
          | combine(__mp_instancetype_patch, recursive=True, list_merge='append')
-         | combine(__mp_scheduling_patch, recursive=True, list_merge='append') }}
+         | combine(__mp_scheduling_patch, recursive=True, list_merge='append')
+         | combine(__mp_extras_patch, recursive=True, list_merge='append') }}
   when: __mp_boot_disk is not none
 
 - name: "Attach dataVolumeTemplates (if any): {{ item }}"
