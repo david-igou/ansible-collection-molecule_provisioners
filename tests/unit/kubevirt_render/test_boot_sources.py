@@ -29,6 +29,9 @@ def test_container_disk_volume_and_disk(render_vm) -> None:
     assert "cloudinitdisk" in volumes
     assert "users:" in volumes["cloudinitdisk"]["cloudInitNoCloud"]["userData"]
 
+    assert spec["domain"]["devices"]["disks"][0]["name"] == "containerdisk"
+    assert spec["volumes"][0]["name"] == "containerdisk"
+
     disks = {d["name"]: d for d in spec["domain"]["devices"]["disks"]}
     assert disks["containerdisk"]["disk"]["bus"] == "virtio"
     assert disks["cloudinitdisk"]["disk"]["bus"] == "virtio"
@@ -59,3 +62,18 @@ def test_container_disk_default_ssh_user_baked_into_cloudinit(render_vm) -> None
     user_data = vm["spec"]["template"]["spec"]["volumes"]
     cidisk = next(v for v in user_data if v["name"] == "cloudinitdisk")
     assert "name: cloud-user" in cidisk["cloudInitNoCloud"]["userData"]
+
+
+def test_container_disk_custom_ssh_user(render_vm) -> None:
+    """ssh_user from the host spec replaces the default in cloud-init userData."""
+    vm = render_vm(
+        {
+            "boot_source": {"type": "container_disk", "image": "quay.io/x"},
+            "ssh_user": "ubuntu",
+        }
+    )
+    cidisk = next(
+        v for v in vm["spec"]["template"]["spec"]["volumes"] if v["name"] == "cloudinitdisk"
+    )
+    assert "name: ubuntu" in cidisk["cloudInitNoCloud"]["userData"]
+    assert "name: cloud-user" not in cidisk["cloudInitNoCloud"]["userData"]

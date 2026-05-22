@@ -54,6 +54,12 @@
                     chpasswd:
                       expire: false
 
+- name: "Reset boot-source facts: {{ item }}"
+  ansible.builtin.set_fact:
+    __mp_boot_disk: null
+    __mp_boot_volume: null
+    __mp_data_volume_templates: []
+
 - name: "Dispatch boot_source: {{ item }}"
   ansible.builtin.set_fact:
     __mp_boot_disk:
@@ -80,6 +86,7 @@
   ansible.builtin.set_fact:
     __mp_curated: >-
       {{ __mp_base | combine(_spec_patch, recursive=True, list_merge='prepend') }}
+  when: __mp_boot_disk is not none
 
 - name: "Attach dataVolumeTemplates (if any): {{ item }}"
   ansible.builtin.set_fact:
@@ -91,3 +98,4 @@
 - name: "Set __mp_kubevirt_vm: {{ item }}"
   ansible.builtin.set_fact:
     __mp_kubevirt_vm: "{{ __mp_curated }}"
+  when: __mp_boot_disk is not none
