@@ -17,7 +17,7 @@ ln -snf "$PWD" "$HOME/.ansible/collections/ansible_collections/david_igou/molecu
 
 ## Architecture (one-paragraph version)
 
-Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) read `mp_backend` from the molecule group's hostvars (`hostvars[groups['molecule'][0]].mp_backend`), validate the inventory shape, and `include_role` into one of two roles (`roles/podman`, `roles/kubevirt`). Each role uses `tasks_from` for lifecycle dispatch and starts with a 3-level merge (role defaults <- `mp_defaults.<backend>` <- `hostvars[item].mp.<backend>`) before looping `groups['molecule']`. Consumers' scenario `create.yml`/`destroy.yml`/`prepare.yml` are one-liners that `import_playbook: david_igou.molecule_provisioners.<phase>`. The molecule.yml itself uses molecule's ansible-native shape (`ansible:` block — no `driver:`, no `platforms:`, no `provisioner:`).
+Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) read `mp_backend` from the molecule group's hostvars (`hostvars[groups['molecule'][0]].mp_backend`), validate the inventory shape, and `include_role` into one of the backend roles (`roles/podman`, `roles/kubevirt`, `roles/qemu`, `roles/docker`). Each role uses `tasks_from` for lifecycle dispatch and starts with a 3-level merge (role defaults <- `mp_defaults.<backend>` <- `hostvars[item].mp.<backend>`) before looping `groups['molecule']`. Consumers' scenario `create.yml`/`destroy.yml`/`prepare.yml` are one-liners that `import_playbook: david_igou.molecule_provisioners.<phase>`. The molecule.yml itself uses molecule's ansible-native shape (`ansible:` block — no `driver:`, no `platforms:`, no `provisioner:`).
 
 ### Key files
 
@@ -25,6 +25,7 @@ Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) 
 - `playbooks/group_vars/all.yml` — declares `mp_supported_backends`.
 - `roles/podman/tasks/{create,destroy,prepare,_networks}.yml` — podman lifecycle. `_networks.yml` is shared between create and destroy.
 - `roles/kubevirt/tasks/{create,destroy,prepare,_create_vm,_create_vm_dictionary}.yml` — kubevirt lifecycle. `_create_vm*.yml` are per-host helpers included in a loop over `groups['molecule']`.
+- `roles/docker/tasks/{create,destroy,prepare,_spec_merge,_validate,_networks}.yml` — docker lifecycle. `_networks.yml` is shared between create and destroy.
 - `roles/<backend>/defaults/main.yml` — role-level defaults including the `mp_<backend>_role_defaults` dict that feeds the merge.
 - `extensions/molecule/default/` — single self-test scenario carrying both backends' specs per host. Discovered by `pytest_ansible.molecule_scenario` fixture in `tests/integration/test_integration.py`. The kubevirt-backend run is cluster-agnostic — it talks to whatever `KUBECONFIG` points at, as long as KubeVirt is installed there. CI provisions kind + KubeVirt with `useEmulation` before running it.
 - `docs/examples/` — copy-paste starter for consumers (`molecule.yml` boilerplate + `inventory/` shape).
@@ -42,6 +43,7 @@ This collection must never list `molecule-plugins` (or any of its extras like `m
 | Lint everything | `ansible-lint && yamllint .` |
 | Run podman self-test | `PROVISIONER=podman pytest tests/integration -v -k default` |
 | Run kubevirt self-test (requires `$KUBECONFIG` pointing at a cluster with KubeVirt) | `PROVISIONER=kubevirt pytest tests/integration -v -k default` |
+| Run docker self-test | `PROVISIONER=docker pytest tests/integration -v -k default` |
 | Run a single scenario directly | `cd extensions/molecule/default && PROVISIONER=<backend> molecule test` |
 | Ansible sanity | `ansible-test sanity --docker` (run from the symlink path) |
 | Build collection artifact | `ansible-galaxy collection build` |
@@ -71,6 +73,16 @@ all:
               memory: <str>             # optional, role default '1Gi'
               ssh_service:
                 type: NodePort          # optional, only NodePort in v1
+            docker:                      # required when mp_backend == docker
+              image: <str>               # required
+              # optional: command, command_handling, override_command, hostname,
+              #   privileged, user, tty, pid_mode, cgroupns_mode, runtime, platform,
+              #   capabilities, security_opts, sysctls, ulimits, devices,
+              #   volumes, mounts, tmpfs, shm_size,
+              #   networks, network_mode, networks_cli_compatible, purge_networks,
+              #   dns_servers, etc_hosts, exposed_ports, published_ports, links,
+              #   env, labels, restart_policy, restart_retries, stop_signal, kill_signal,
+              #   memory, memory_swap, force_kill, keep_volumes
 ```
 
 Plus:
