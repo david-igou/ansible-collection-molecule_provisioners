@@ -16,9 +16,15 @@ mp_qemu_image_cache_dir: >-
   {{ (lookup('env', 'XDG_CACHE_HOME') | default(lookup('env', 'HOME') ~ '/.cache', true))
      ~ '/molecule-qemu' }}
 
+# OVMF firmware image paths (used when firmware: uefi is set per host).
+# Override in group_vars if your distro ships OVMF at a different path.
+mp_qemu_ovmf_code: /usr/share/edk2/ovmf/OVMF_CODE.fd
+mp_qemu_ovmf_vars: /usr/share/edk2/ovmf/OVMF_VARS.fd
+
 # Per-host field defaults. Layered as: this dict <- mp_defaults.qemu <- hostvars[item].mp.qemu.
 # Only `image` is required and is therefore absent from this dict.
 mp_qemu_role_defaults:
   cpus: 2
   memory: 1024
   ssh_user: cloud-user
+  firmware: bios

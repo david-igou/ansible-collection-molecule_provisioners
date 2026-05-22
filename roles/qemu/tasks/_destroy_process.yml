@@ -66,5 +66,6 @@
     - ".pid"
     - ".qmp"
     - "-seed.iso"
+    - "-ovmf-vars.fd"
   loop_control:
     loop_var: ext
