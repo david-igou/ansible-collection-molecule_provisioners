@@ -40,8 +40,13 @@ See `defaults/main.yml`:
 - `mp_qemu_image_cache_dir` — base image cache root (default honours `XDG_CACHE_HOME`, else `~/.cache/molecule-qemu`).
 - `mp_qemu_role_defaults` — the per-host field defaults (cpus/memory/ssh_user). Only `image` is required and is therefore absent from this dict.
 
+## XZ-compressed images
+
+URLs that resolve to xz-compressed qcow2 (e.g. Armbian cloud images served behind a redirect) are automatically decompressed after download. Detection is by content sniffing (`file --brief --mime-type`) rather than URL extension, so images served via redirects to `.img.qcow2.xz` paths are handled correctly. The cached file at `<cache>/<sha>/disk.qcow2` is always a bare qcow2 regardless of upstream format.
+
 ## Host requirements
 
 - `qemu-system-x86_64`, `qemu-img`
+- `xz` (for decompressing xz-compressed upstream images)
 - A NoCloud seed-ISO builder: `cloud-localds` (preferred) or `genisoimage`
 - `/dev/kvm` accessible to the running user (KVM acceleration); falls back to TCG otherwise

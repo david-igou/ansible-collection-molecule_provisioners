@@ -1,6 +1,12 @@
 ---
 # For each unique image URL, ensure a cached base qcow2 exists.
 # Cache layout: {{ mp_qemu_image_cache_dir }}/<sha256-of-url>/disk.qcow2
+#
+# Compressed-image support: URLs that resolve to xz-compressed content
+# (e.g. Armbian cloud images served behind a redirect) are automatically
+# decompressed. Detection is by content sniffing (file --brief --mime-type),
+# not by URL extension, so redirect-served xz content is handled correctly.
+# The final cached file is always a bare qcow2 regardless of upstream format.
 - name: Determine unique image specs
   ansible.builtin.set_fact:
     _mp_qemu_unique_images: >-
@@ -25,15 +31,80 @@
   loop_control:
     label: "{{ item.key }}"
 
-- name: Download base qcow2 (idempotent, cached)
+- name: Download base image to neutral staging name (idempotent, cached)
   ansible.builtin.get_url:
     url: "{{ item.key }}"
-    dest: "{{ mp_qemu_image_cache_dir }}/{{ item.key | ansible.builtin.hash('sha256') }}/disk.qcow2"
+    dest: "{{ mp_qemu_image_cache_dir }}/{{ item.key | ansible.builtin.hash('sha256') }}/disk.download"
     checksum: "{{ item.value | default(omit, true) }}"
     mode: "0644"
   loop: "{{ _mp_qemu_unique_images | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
+  # Skip download if the final disk.qcow2 already exists (a previous run
+  # completed decompression and removed the staging file).
+  when: >-
+    not (mp_qemu_image_cache_dir ~ '/'
+         ~ (item.key | ansible.builtin.hash('sha256'))
+         ~ '/disk.qcow2') is file
+
+- name: Detect MIME type of downloaded image
+  ansible.builtin.command:
+    cmd: >-
+      file --brief --mime-type
+      {{ mp_qemu_image_cache_dir }}/{{ item.key | ansible.builtin.hash('sha256') }}/disk.download
+  loop: "{{ _mp_qemu_unique_images | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: _mp_qemu_mime_results
+  changed_when: false
+  # Only probe staging file if it exists (may have been cleaned up in a prior run).
+  when: >-
+    (mp_qemu_image_cache_dir ~ '/'
+     ~ (item.key | ansible.builtin.hash('sha256'))
+     ~ '/disk.download') is file
+
+- name: Decompress xz image to disk.qcow2
+  ansible.builtin.shell:
+    cmd: >-
+      xz --decompress --keep --stdout --
+      {{ mp_qemu_image_cache_dir }}/{{ item.item.key | ansible.builtin.hash('sha256') }}/disk.download
+      > {{ mp_qemu_image_cache_dir }}/{{ item.item.key | ansible.builtin.hash('sha256') }}/disk.qcow2
+    creates: "{{ mp_qemu_image_cache_dir }}/{{ item.item.key | ansible.builtin.hash('sha256') }}/disk.qcow2"
+  loop: "{{ _mp_qemu_mime_results.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  when:
+    - not (item.skipped | default(false))
+    - item.stdout == 'application/x-xz'
+
+- name: Remove xz staging download after decompression
+  ansible.builtin.file:
+    path: "{{ mp_qemu_image_cache_dir }}/{{ item.item.key | ansible.builtin.hash('sha256') }}/disk.download"
+    state: absent
+  loop: "{{ _mp_qemu_mime_results.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  when:
+    - not (item.skipped | default(false))
+    - item.stdout == 'application/x-xz'
+    - (mp_qemu_image_cache_dir ~ '/'
+       ~ (item.item.key | ansible.builtin.hash('sha256'))
+       ~ '/disk.qcow2') is file
+
+- name: Rename non-xz download to disk.qcow2
+  ansible.builtin.command:
+    argv:
+      - mv
+      - "--"
+      - "{{ mp_qemu_image_cache_dir }}/{{ item.item.key | ansible.builtin.hash('sha256') }}/disk.download"
+      - "{{ mp_qemu_image_cache_dir }}/{{ item.item.key | ansible.builtin.hash('sha256') }}/disk.qcow2"
+    creates: "{{ mp_qemu_image_cache_dir }}/{{ item.item.key | ansible.builtin.hash('sha256') }}/disk.qcow2"
+  loop: "{{ _mp_qemu_mime_results.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  when:
+    - not (item.skipped | default(false))
+    - item.stdout != 'application/x-xz'
 
 - name: Record cached base path per host in _mp_specs
   ansible.builtin.set_fact:
