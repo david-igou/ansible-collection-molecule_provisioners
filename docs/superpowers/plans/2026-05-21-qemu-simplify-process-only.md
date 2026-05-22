@@ -676,7 +676,7 @@ Replace `extensions/molecule/default/inventory/group_vars/molecule.yml` with:
 ```yaml
 ---
 mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
-# Bump from the role default of 120s — TCG emulation in CI takes longer for VMs to boot.
+# Bump from the role default of 180s — TCG emulation in CI takes longer for VMs to boot.
 mp_kubevirt_wait_timeout: 300
 mp_qemu_wait_timeout: 300   # TCG boot under qemu is similarly slow on hosted runners.
 
@@ -1251,7 +1251,7 @@ git commit -m "docs(qemu): rewrite design spec for process+slirp-only v1.1"
 - [ ] **Step 1: Run ansible-lint on role + scenario**
 
 ```bash
-ansible-lint roles/qemu/ playbooks/ extensions/molecule/qemu/ 2>&1 | tail -20
+ansible-lint roles/qemu/ playbooks/ 2>&1 | tail -20
 ```
 
 Expected: no errors.
@@ -1259,7 +1259,7 @@ Expected: no errors.
 - [ ] **Step 2: Run yamllint**
 
 ```bash
-yamllint roles/qemu/ extensions/molecule/qemu/ tests/integration/qemu/ \
+yamllint roles/qemu/ tests/integration/qemu/ \
          .github/workflows/tests.yml galaxy.yml \
          changelogs/fragments/qemu-backend.yml
 ```
