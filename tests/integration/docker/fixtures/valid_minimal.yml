@@ -1,0 +1,21 @@
+---
+all:
+  children:
+    molecule:
+      hosts:
+        h-minimal:
+          mp:
+            docker:
+              image: quay.io/centos/centos:stream9
+        h-overrides:
+          mp:
+            docker:
+              image: docker.io/library/alpine:3.20
+              privileged: true
+              volumes:
+                - /tmp:/tmp:rw
+  vars:
+    mp_backend: docker
+    mp_defaults:
+      docker:
+        command: /sbin/init

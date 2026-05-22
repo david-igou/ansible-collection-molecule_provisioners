@@ -1,0 +1,24 @@
+---
+- name: Exercise spec-merge + validation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Include role defaults
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../../../roles/docker/defaults/main.yml"
+    - name: Surface mp_defaults from the molecule group
+      ansible.builtin.set_fact:
+        mp_defaults: "{{ hostvars[groups['molecule'][0]].mp_defaults | default({}) }}"
+    - name: Run spec merge
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/docker/tasks/_spec_merge.yml"
+    - name: Run validation
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/docker/tasks/_validate.yml"
+    - name: Assert merge picked up mp_defaults
+      ansible.builtin.assert:
+        that:
+          - _mp_specs['h-minimal'].image == 'quay.io/centos/centos:stream9'
+          - _mp_specs['h-minimal'].command == '/sbin/init'
+          - _mp_specs['h-minimal'].privileged == false
+        fail_msg: "Spec merge did not layer mp_defaults onto role_defaults correctly."
+      when: groups['molecule'] | length == 2  # only the valid_minimal fixture has h-minimal

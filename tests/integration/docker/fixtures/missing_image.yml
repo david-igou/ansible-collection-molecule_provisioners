@@ -1,0 +1,12 @@
+---
+all:
+  children:
+    molecule:
+      hosts:
+        h-broken:
+          mp:
+            docker:
+              # image intentionally omitted
+              privileged: true
+  vars:
+    mp_backend: docker
