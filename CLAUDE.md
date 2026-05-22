@@ -122,4 +122,4 @@ Runs `update-docs` (collection_prep), `prettier`, `isort`, `black`, `flake8`, pl
 
 ## Out of scope (per the v1.0 spec)
 
-docker / qemu / libvirt / cloud backends, LoadBalancer kubevirt service types, Windows guests, Molecule `shared_state` pattern. See `docs/superpowers/specs/2026-05-08-molecule-provisioners-design.md` for the design discussion.
+libvirt / cloud backends, LoadBalancer kubevirt service types, Windows guests, Molecule `shared_state` pattern. See `docs/superpowers/specs/2026-05-08-molecule-provisioners-design.md` for the design discussion.
