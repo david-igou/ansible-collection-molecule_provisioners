@@ -18,7 +18,6 @@ tags:
   - podman
   - kubevirt
   - qemu
-  - libvirt
 
 dependencies:
   containers.podman: ">=1.10.0"

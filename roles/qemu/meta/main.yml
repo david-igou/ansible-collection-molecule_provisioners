@@ -2,7 +2,7 @@
 galaxy_info:
   role_name: qemu
   author: David Igou
-  description: Molecule provisioner role using qemu (libvirt or direct process driver)
+  description: Molecule provisioner role using qemu (process driver only) — v1.1
   company: ""
   license: GPL-3.0-or-later
   min_ansible_version: "2.15"
