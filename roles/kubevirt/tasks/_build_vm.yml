@@ -154,7 +154,7 @@
     __mp_data_volume_templates: []
   when: _mp_specs[item].boot_source.type == 'pvc'
 
-- name: "Compute domain.cpu and resources: {{ item }}"
+- name: "Compute domain.cpu and resources (skip when instancetype is set): {{ item }}"
   vars:
     _spec: "{{ _mp_specs[item] }}"
     _cpu: "{{ _spec.cpu | default({'cores': 2}) }}"
@@ -174,8 +174,35 @@
             domain:
               cpu: "{{ _cpu }}"
               resources: "{{ _resources }}"
+  when: _mp_specs[item].instancetype is not defined
 
-- name: "Apply boot source + compute to base: {{ item }}"
+- name: "Skip compute patch when instancetype is set: {{ item }}"
+  ansible.builtin.set_fact:
+    __mp_compute_patch: {}
+  when: _mp_specs[item].instancetype is defined
+
+- name: "Build instancetype/preference patch: {{ item }}"
+  vars:
+    _spec: "{{ _mp_specs[item] }}"
+    _it_raw: "{{ _spec.instancetype | default(none) }}"
+    _pref_raw: "{{ _spec.preference | default(none) }}"
+    _it_block: >-
+      {{
+        ({'name': _it_raw} if _it_raw is string else (_it_raw | default({})))
+      }}
+    _pref_block: >-
+      {{
+        ({'name': _pref_raw} if _pref_raw is string else (_pref_raw | default({})))
+      }}
+  ansible.builtin.set_fact:
+    __mp_instancetype_patch: >-
+      {{
+        {'spec': {}}
+        | combine({'spec': {'instancetype': _it_block}} if _it_raw is not none else {}, recursive=True)
+        | combine({'spec': {'preference': _pref_block}} if _pref_raw is not none else {}, recursive=True)
+      }}
+
+- name: "Apply boot source + compute + instancetype to base: {{ item }}"
   vars:
     _boot_patch:
       spec:
@@ -189,7 +216,8 @@
     __mp_curated: >-
       {{ __mp_base
          | combine(_boot_patch, recursive=True, list_merge='prepend')
-         | combine(__mp_compute_patch, recursive=True, list_merge='append') }}
+         | combine(__mp_compute_patch, recursive=True, list_merge='append')
+         | combine(__mp_instancetype_patch, recursive=True, list_merge='append') }}
   when: __mp_boot_disk is not none
 
 - name: "Attach dataVolumeTemplates (if any): {{ item }}"

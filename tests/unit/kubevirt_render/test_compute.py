@@ -51,3 +51,41 @@ def test_memory_explicit_no_limit(render_vm) -> None:
     res = vm["spec"]["template"]["spec"]["domain"]["resources"]
     assert res["requests"]["memory"] == "2Gi"
     assert "limits" not in res
+
+
+def test_instancetype_string_shortcut(render_vm) -> None:
+    """instancetype as a string becomes {name: <str>} at spec.instancetype."""
+    vm = render_vm(_base({"instancetype": "u1.medium"}))
+    assert vm["spec"]["instancetype"] == {"name": "u1.medium"}
+
+
+def test_instancetype_full_form(render_vm) -> None:
+    """instancetype as {name, kind} passes through verbatim."""
+    vm = render_vm(
+        _base({"instancetype": {"name": "u1.medium", "kind": "VirtualMachineInstancetype"}})
+    )
+    assert vm["spec"]["instancetype"] == {
+        "name": "u1.medium",
+        "kind": "VirtualMachineInstancetype",
+    }
+
+
+def test_preference_string_shortcut(render_vm) -> None:
+    """preference as a string becomes {name: <str>}."""
+    vm = render_vm(_base({"instancetype": "u1.medium", "preference": "fedora"}))
+    assert vm["spec"]["preference"] == {"name": "fedora"}
+
+
+def test_instancetype_suppresses_cpu_and_resources(render_vm) -> None:
+    """When instancetype is set, domain.cpu and domain.resources are absent."""
+    vm = render_vm(_base({"instancetype": "u1.medium", "cpu": {"cores": 8}, "memory": "16Gi"}))
+    domain = vm["spec"]["template"]["spec"]["domain"]
+    assert "cpu" not in domain
+    assert "resources" not in domain
+
+
+def test_no_instancetype_no_spec_instancetype_key(render_vm) -> None:
+    """Without instancetype, spec.instancetype is not rendered."""
+    vm = render_vm(_base())
+    assert "instancetype" not in vm["spec"]
+    assert "preference" not in vm["spec"]
