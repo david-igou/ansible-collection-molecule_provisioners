@@ -1,0 +1,46 @@
+---
+# Phase 1: build spec map (shared between create and destroy).
+- name: Merge per-host specs
+  ansible.builtin.include_tasks: _spec_merge.yml
+
+# Phase 2: validate. Fail fast before any side effects.
+- name: Validate per-host specs
+  ansible.builtin.include_tasks: _validate.yml
+
+- name: Ensure image cache dir exists and is writable
+  ansible.builtin.file:
+    path: "{{ mp_qemu_image_cache_dir }}"
+    state: directory
+    mode: "0755"
+
+# Phase 3: download and cache base qcow2 images (idempotent).
+- name: Cache base images
+  ansible.builtin.include_tasks: _image_cache.yml
+
+# Phase 4: build per-host NoCloud seed ISOs.
+- name: Build seed ISOs
+  ansible.builtin.include_tasks: _seed_iso.yml
+
+# Phase 5: per-host qcow2 overlay (process driver only).
+- name: Create per-VM overlays
+  ansible.builtin.include_tasks: _overlay.yml
+
+# Phase 6: detect KVM availability once (consumed by _create_process.yml).
+- name: Stat /dev/kvm
+  ansible.builtin.stat:
+    path: /dev/kvm
+  register: __mp_qemu_kvm_stat
+- name: Decide whether KVM is usable
+  ansible.builtin.set_fact:
+    _mp_qemu_kvm_ok: >-
+      {{ __mp_qemu_kvm_stat.stat.exists
+         and __mp_qemu_kvm_stat.stat.readable
+         and __mp_qemu_kvm_stat.stat.writeable }}
+
+# Phase 7: launch the VM process per host.
+- name: Launch process-driver VMs
+  ansible.builtin.include_tasks: _create_process.yml
+
+# Phase 8: write runtime connection inventory for the molecule prepare phase.
+- name: Write runtime inventory
+  ansible.builtin.include_tasks: _runtime_inventory.yml

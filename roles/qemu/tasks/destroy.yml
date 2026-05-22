@@ -1,0 +1,17 @@
+---
+- name: Merge per-host specs (defensive)
+  ansible.builtin.include_tasks: _spec_merge.yml
+
+- name: Destroy process-driver VMs
+  ansible.builtin.include_tasks: _destroy_process.yml
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Remove cidata directories
+  ansible.builtin.file:
+    path: "{{ molecule_ephemeral_directory }}/{{ item }}-cidata"
+    state: absent
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"

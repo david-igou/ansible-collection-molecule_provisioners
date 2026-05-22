@@ -1,0 +1,19 @@
+---
+all:
+  children:
+    molecule:
+      hosts:
+        h-minimal:
+          mp:
+            qemu:
+              image: https://example.invalid/disk.qcow2
+        h-overrides:
+          mp:
+            qemu:
+              image: https://example.invalid/other.qcow2
+              cpus: 4
+  vars:
+    mp_backend: qemu
+    mp_defaults:
+      qemu:
+        ssh_user: ubuntu

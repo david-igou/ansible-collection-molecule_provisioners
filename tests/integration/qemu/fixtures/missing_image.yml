@@ -1,0 +1,13 @@
+---
+all:
+  children:
+    molecule:
+      hosts:
+        h1:
+          mp:
+            qemu:
+              # image deliberately absent
+              cpus: 2
+  vars:
+    mp_backend: qemu
+    mp_defaults: {}

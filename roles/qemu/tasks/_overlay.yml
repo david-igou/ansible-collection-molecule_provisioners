@@ -1,0 +1,35 @@
+---
+# Process-driver overlay: qemu-img create the per-host qcow2 backed by the cached base.
+- name: "Create qcow2 overlay for {{ item }}"
+  ansible.builtin.command:
+    cmd: >-
+      qemu-img create -f qcow2
+      -F qcow2 -b {{ _mp_specs[item].base_image_path }}
+      {{ molecule_ephemeral_directory }}/{{ item }}.qcow2
+    creates: "{{ molecule_ephemeral_directory }}/{{ item }}.qcow2"
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: "Resize overlay (if disk_size set) for {{ item }}"
+  ansible.builtin.command:
+    cmd: "qemu-img resize {{ molecule_ephemeral_directory }}/{{ item }}.qcow2 {{ _mp_specs[item].disk_size }}"
+  when:
+    - _mp_specs[item].disk_size is defined
+    - _mp_specs[item].disk_size
+  changed_when: true
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Record overlay path per host
+  ansible.builtin.set_fact:
+    _mp_specs: >-
+      {{ _mp_specs | combine({
+           item: _mp_specs[item] | combine({
+             'overlay_path': molecule_ephemeral_directory ~ '/' ~ item ~ '.qcow2'
+           })
+         }, recursive=True) }}
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"

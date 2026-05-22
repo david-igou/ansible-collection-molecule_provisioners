@@ -1,0 +1,56 @@
+---
+# Per-host seed ISO build. Called from _seed_iso.yml with loop_var=_seed_iso_host.
+- name: "Ensure cidata dir for {{ _seed_iso_host }}"
+  ansible.builtin.file:
+    path: "{{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-cidata"
+    state: directory
+    mode: "0755"
+
+- name: "Render user-data for {{ _seed_iso_host }}"
+  vars:
+    _host: "{{ _seed_iso_host }}"
+  ansible.builtin.template:
+    src: "{{ _mp_qemu_template_dir }}/user-data.j2"
+    dest: "{{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-cidata/user-data"
+    mode: "0644"
+
+- name: "Render meta-data for {{ _seed_iso_host }}"
+  vars:
+    _host: "{{ _seed_iso_host }}"
+  ansible.builtin.template:
+    src: "{{ _mp_qemu_template_dir }}/meta-data.j2"
+    dest: "{{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-cidata/meta-data"
+    mode: "0644"
+
+- name: "Build seed ISO via cloud-localds for {{ _seed_iso_host }}"
+  ansible.builtin.command:
+    cmd: >-
+      cloud-localds
+      {{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-seed.iso
+      {{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-cidata/user-data
+      {{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-cidata/meta-data
+    creates: "{{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-seed.iso"
+  when: __mp_qemu_cloudlocalds.rc == 0
+
+- name: "Build seed ISO via genisoimage for {{ _seed_iso_host }}"
+  ansible.builtin.command:
+    cmd: >-
+      genisoimage
+      -output {{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-seed.iso
+      -volid cidata
+      -joliet
+      -rock
+      {{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-cidata/user-data
+      {{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-cidata/meta-data
+    creates: "{{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-seed.iso"
+  when: __mp_qemu_cloudlocalds.rc != 0
+
+- name: "Record seed_iso path for {{ _seed_iso_host }}"
+  ansible.builtin.set_fact:
+    _mp_specs: >-
+      {{ _mp_specs | combine({
+           _seed_iso_host: _mp_specs[_seed_iso_host] | combine({
+             'seed_iso_path':
+               molecule_ephemeral_directory ~ '/' ~ _seed_iso_host ~ '-seed.iso'
+           })
+         }, recursive=True) }}

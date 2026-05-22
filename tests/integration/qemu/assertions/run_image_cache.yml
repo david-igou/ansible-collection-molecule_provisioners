@@ -1,0 +1,66 @@
+---
+- name: Exercise image cache against a local file:// URL
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    _fake_image_src: /tmp/qemu-fake-image.qcow2
+    _fake_image_url: "file:///tmp/qemu-fake-image.qcow2"
+    molecule_ephemeral_directory: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
+                                       | default('/tmp/molecule-fake-ephemeral-imgcache', true) }}"
+  tasks:
+    - name: Ensure ephemeral dir
+      ansible.builtin.file:
+        path: "{{ molecule_ephemeral_directory }}"
+        state: directory
+        mode: "0755"
+    - name: Create a tiny fake qcow2 (just any bytes)
+      ansible.builtin.copy:
+        content: "QFI\xfb fake qcow2 for cache test"
+        dest: "{{ _fake_image_src }}"
+        mode: "0644"
+
+    - name: Include role defaults
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../../../roles/qemu/defaults/main.yml"
+    - name: Surface mp_defaults
+      ansible.builtin.set_fact:
+        mp_defaults: "{{ hostvars[groups['molecule'][0]].mp_defaults | default({}) }}"
+    # Override template dir so include_tasks-based tests find templates without role_path.
+    - name: Set template dir override for include_tasks context
+      ansible.builtin.set_fact:
+        mp_qemu_template_dir_override: "{{ playbook_dir }}/../../../../roles/qemu/templates"
+    - name: Run spec merge
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_spec_merge.yml"
+    - name: Run validation
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_validate.yml"
+    - name: Ensure image cache dir exists and is writable
+      ansible.builtin.file:
+        path: "{{ mp_qemu_image_cache_dir }}"
+        state: directory
+        mode: "0755"
+    - name: Run image cache phase only
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_image_cache.yml"
+
+    - name: Compute expected cached path
+      ansible.builtin.set_fact:
+        _expected_path: >-
+          {{ mp_qemu_image_cache_dir }}/{{ _fake_image_url | ansible.builtin.hash('sha256') }}/disk.qcow2
+    - name: Stat the cached file
+      ansible.builtin.stat:
+        path: "{{ _expected_path }}"
+      register: __cached
+    - name: Assert cached image exists
+      ansible.builtin.assert:
+        that:
+          - __cached.stat.exists
+          - __cached.stat.size > 0
+    - name: Assert _mp_specs records base_image_path
+      ansible.builtin.assert:
+        that:
+          - _mp_specs[groups['molecule'][0]].base_image_path == _expected_path
+
+    - name: Cleanup fake source
+      ansible.builtin.file:
+        path: "{{ _fake_image_src }}"
+        state: absent

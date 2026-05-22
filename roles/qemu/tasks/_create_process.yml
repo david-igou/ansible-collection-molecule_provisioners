@@ -1,0 +1,72 @@
+---
+# Per-host process-driver launch. KVM detection runs once at the top of create
+# and stashes a fact; here we just consume it.
+
+# Reap stale qemu pidfile before launch. qemu -daemonize won't overwrite an
+# existing pidfile, and the launch task's `creates:` would skip starting qemu
+# if a pidfile from a previous run remained on disk while the qemu process is
+# gone. Drops the pidfile if it's empty, malformed, or its PID isn't live;
+# leaves it alone if a live process still owns it (so `creates:` still skips).
+- name: "Reap stale qemu pidfile for {{ item }}"
+  ansible.builtin.shell: |
+    set -eu
+    pidfile="{{ molecule_ephemeral_directory }}/{{ item }}.pid"
+    [ -f "$pidfile" ] || exit 0
+    pid=$(tr -d '[:space:]' < "$pidfile" || true)
+    if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+      rm -f "$pidfile"
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: false
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: "Launch qemu-system for {{ item }}"
+  vars:
+    _ssh_port: "{{ mp_qemu_slirp_port_base | int + (groups['molecule'].index(item) | int) }}"
+    _accel: "{{ 'kvm:tcg' if _mp_qemu_kvm_ok | default(false) else 'tcg' }}"
+    # NOTE: -cpu host passthrough is deferred — inserting conditionally into a
+    # static argv list is awkward. Tracked as a future enhancement for KVM users.
+  ansible.builtin.command:
+    argv:
+      - qemu-system-x86_64
+      - -machine
+      - "accel={{ _accel }}"
+      - -m
+      - "{{ _mp_specs[item].memory | int }}"
+      - -smp
+      - "{{ _mp_specs[item].cpus | int }}"
+      - -drive
+      - "file={{ _mp_specs[item].overlay_path }},if=virtio,format=qcow2"
+      - -cdrom
+      - "{{ _mp_specs[item].seed_iso_path }}"
+      - -netdev
+      - "user,id=net0,hostfwd=tcp::{{ _ssh_port }}-:22"
+      - -device
+      - virtio-net-pci,netdev=net0
+      - -daemonize
+      - -pidfile
+      - "{{ molecule_ephemeral_directory }}/{{ item }}.pid"
+      - -qmp
+      - "unix:{{ molecule_ephemeral_directory }}/{{ item }}.qmp,server,nowait"
+      - -display
+      - "none"
+    creates: "{{ molecule_ephemeral_directory }}/{{ item }}.pid"
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Record slirp ssh_port per host
+  ansible.builtin.set_fact:
+    _mp_specs: >-
+      {{ _mp_specs | combine({
+           item: _mp_specs[item] | combine({
+             'ssh_host': '127.0.0.1',
+             'ssh_port': (mp_qemu_slirp_port_base | int + (groups['molecule'].index(item) | int))
+           })
+         }, recursive=True) }}
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"

@@ -1,0 +1,28 @@
+---
+- name: Exercise spec-merge + validation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Include role defaults
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../../../roles/qemu/defaults/main.yml"
+    - name: Surface mp_defaults from the molecule group
+      ansible.builtin.set_fact:
+        mp_defaults: "{{ hostvars[groups['molecule'][0]].mp_defaults | default({}) }}"
+    - name: Run spec merge
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_spec_merge.yml"
+    - name: Run validation
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_validate.yml"
+    - name: Ensure image cache dir exists and is writable
+      ansible.builtin.file:
+        path: "{{ mp_qemu_image_cache_dir }}"
+        state: directory
+        mode: "0755"
+    - name: Assert image cache dir was created
+      ansible.builtin.stat:
+        path: "{{ mp_qemu_image_cache_dir }}"
+      register: __cache_stat
+    - name: Cache dir must be a directory
+      ansible.builtin.assert:
+        that: __cache_stat.stat.isdir

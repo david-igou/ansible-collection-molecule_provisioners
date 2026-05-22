@@ -3,12 +3,16 @@ all:
   children:
     molecule:
       hosts:
-        instance:
+        ubuntu-qemu:
           mp:
-            podman:
-              image: docker.io/geerlingguy/docker-fedora41-ansible:latest
-            kubevirt:
-              image: quay.io/kubevirt/fedora-cloud-container-disk-demo:latest
             qemu:
               image: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
               image_checksum: "sha256:6e7016f2c9f4d3c00f48789eb6b9043ba2172ccc1b6b1eaf3ed1e29dd3e52bb3"
+              memory: 1024
+              cpus: 2
+              ssh_user: ubuntu
+  vars:
+    mp_backend: qemu
+    mp_defaults:
+      qemu:
+        ssh_user: ubuntu

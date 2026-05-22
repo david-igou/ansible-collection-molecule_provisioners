@@ -1,0 +1,44 @@
+---
+- name: Initialize runtime hosts dict
+  ansible.builtin.set_fact:
+    __mp_qemu_runtime_hosts: {}
+
+- name: Build per-host runtime entries
+  ansible.builtin.set_fact:
+    __mp_qemu_runtime_hosts: >-
+      {{ __mp_qemu_runtime_hosts | combine({
+           item: {
+             'ansible_host': _mp_specs[item].ssh_host,
+             'ansible_port': _mp_specs[item].ssh_port,
+             'ansible_user': _mp_specs[item].ssh_user,
+             'ansible_ssh_private_key_file': mp_qemu_ssh_key_path,
+             'ansible_connection': 'ssh',
+             'ansible_ssh_common_args': '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+           }
+         }) }}
+  when: _mp_specs[item].ssh_host is defined
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Ensure ephemeral inventory dir exists
+  ansible.builtin.file:
+    path: "{{ molecule_ephemeral_directory }}/inventory"
+    state: directory
+    mode: "0755"
+  when: __mp_qemu_runtime_hosts | length > 0
+
+- name: Write runtime inventory file
+  vars:
+    runtime_inventory:
+      all:
+        hosts: "{{ __mp_qemu_runtime_hosts }}"
+  ansible.builtin.copy:
+    content: "{{ runtime_inventory | to_nice_yaml }}"
+    dest: "{{ molecule_ephemeral_directory }}/inventory/molecule_runtime.yml"
+    mode: "0600"
+  when: __mp_qemu_runtime_hosts | length > 0
+
+- name: Refresh inventory
+  ansible.builtin.meta: refresh_inventory
+  when: __mp_qemu_runtime_hosts | length > 0

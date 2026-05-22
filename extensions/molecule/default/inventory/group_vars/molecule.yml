@@ -2,6 +2,7 @@
 mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
 # Bump from the role default of 120s — TCG emulation in CI takes longer for VMs to boot.
 mp_kubevirt_wait_timeout: 300
+mp_qemu_wait_timeout: 300   # TCG boot under qemu is similarly slow on hosted runners.
 
 mp_defaults:
   podman:
@@ -11,3 +12,7 @@ mp_defaults:
     namespace: "{{ lookup('env', 'MOLECULE_NAMESPACE') | default('molecule', true) }}"
     memory: 1Gi
     ssh_user: cloud-user
+  qemu:
+    cpus: 2
+    memory: 1024
+    ssh_user: ubuntu

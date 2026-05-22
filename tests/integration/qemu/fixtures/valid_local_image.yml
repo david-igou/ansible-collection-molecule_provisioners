@@ -1,0 +1,16 @@
+---
+# Single-host fixture using a local file:// URL so image cache tests
+# can exercise get_url without any network access.
+all:
+  children:
+    molecule:
+      hosts:
+        h-local:
+          mp:
+            qemu:
+              image: "file:///tmp/qemu-fake-image.qcow2"
+  vars:
+    mp_backend: qemu
+    mp_defaults:
+      qemu:
+        ssh_user: ubuntu

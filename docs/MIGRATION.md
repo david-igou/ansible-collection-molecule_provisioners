@@ -140,7 +140,8 @@ Both should pass. If a host fails with "missing mp.<backend> in inventory", you 
 
 ## What this collection does NOT support
 
-- Backends other than podman and kubevirt (no docker, qemu/libvirt, cloud).
+- Backends other than podman, kubevirt, and qemu (no docker, cloud providers).
+- qemu via libvirtd, qemu+ssh remote URIs, NAT/bridge networking — v1.1 only ships the direct-process driver with SLIRP networking.
 - KubeVirt service types other than NodePort.
 - Mixing backends within a single scenario run.
 - Molecule's `shared_state` pattern.

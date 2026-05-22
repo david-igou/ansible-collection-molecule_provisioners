@@ -1,0 +1,24 @@
+---
+# Defaults for david_igou.molecule_provisioners.qemu (process driver, slirp networking).
+
+# SSH keypair lives in the molecule ephemeral dir so destroy can find it.
+mp_qemu_ssh_key_path: "{{ molecule_ephemeral_directory }}/identity_file"
+
+# wait_for_connection timeout (seconds) for prepare phase.
+# Boot under TCG is much slower than KVM — keep generous.
+mp_qemu_wait_timeout: 180
+
+# Base port for SLIRP host-forwards. ansible_port = base + host index.
+mp_qemu_slirp_port_base: 2222
+
+# Image cache root. Honours XDG_CACHE_HOME, falls back to ~/.cache/molecule-qemu.
+mp_qemu_image_cache_dir: >-
+  {{ (lookup('env', 'XDG_CACHE_HOME') | default(lookup('env', 'HOME') ~ '/.cache', true))
+     ~ '/molecule-qemu' }}
+
+# Per-host field defaults. Layered as: this dict <- mp_defaults.qemu <- hostvars[item].mp.qemu.
+# Only `image` is required and is therefore absent from this dict.
+mp_qemu_role_defaults:
+  cpus: 2
+  memory: 1024
+  ssh_user: cloud-user

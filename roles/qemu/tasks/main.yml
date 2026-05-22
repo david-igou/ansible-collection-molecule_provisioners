@@ -1,0 +1,6 @@
+---
+- name: "Qemu role: no default entry point"
+  ansible.builtin.fail:
+    msg: >-
+      david_igou.molecule_provisioners.qemu has no main entry point.
+      Use tasks_from=create|destroy|prepare via include_role.
