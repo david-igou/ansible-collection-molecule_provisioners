@@ -194,7 +194,7 @@ jobs:
         with:
           path: ~/.cache/molecule-qemu
           # NOTE: bump the suffix when the pinned image URL or checksum changes.
-          key: molecule-qemu-images-ubuntu-noble-v2
+          key: molecule-qemu-images-ubuntu-noble-release-20260518
 
       - name: Run default scenario under PROVISIONER=qemu (TCG; /dev/kvm is unavailable on hosted runners)
         working-directory: ansible_collections/david_igou/molecule_provisioners
