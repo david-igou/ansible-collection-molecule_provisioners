@@ -154,9 +154,30 @@
     __mp_data_volume_templates: []
   when: _mp_specs[item].boot_source.type == 'pvc'
 
-- name: "Apply boot source to base: {{ item }}"
+- name: "Compute domain.cpu and resources: {{ item }}"
   vars:
-    _spec_patch:
+    _spec: "{{ _mp_specs[item] }}"
+    _cpu: "{{ _spec.cpu | default({'cores': 2}) }}"
+    _mem_req: "{{ _spec.memory | default('1Gi') }}"
+    _resources: >-
+      {{
+        {'requests': {'memory': _mem_req}}
+        | combine(
+            {'limits': {'memory': _spec.memory_limit}} if _spec.memory_limit is defined else {}
+          )
+      }}
+  ansible.builtin.set_fact:
+    __mp_compute_patch:
+      spec:
+        template:
+          spec:
+            domain:
+              cpu: "{{ _cpu }}"
+              resources: "{{ _resources }}"
+
+- name: "Apply boot source + compute to base: {{ item }}"
+  vars:
+    _boot_patch:
       spec:
         template:
           spec:
@@ -166,7 +187,9 @@
             volumes: "{{ [__mp_boot_volume] }}"
   ansible.builtin.set_fact:
     __mp_curated: >-
-      {{ __mp_base | combine(_spec_patch, recursive=True, list_merge='prepend') }}
+      {{ __mp_base
+         | combine(_boot_patch, recursive=True, list_merge='prepend')
+         | combine(__mp_compute_patch, recursive=True, list_merge='append') }}
   when: __mp_boot_disk is not none
 
 - name: "Attach dataVolumeTemplates (if any): {{ item }}"
