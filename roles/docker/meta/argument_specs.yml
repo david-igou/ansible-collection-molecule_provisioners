@@ -1,0 +1,54 @@
+---
+argument_specs:
+  main:
+    short_description: >-
+      Default entry point — does nothing on its own; use tasks_from=create|destroy|prepare.
+    options: {}
+  create:
+    short_description: Create docker containers and networks for hosts in groups['molecule'].
+    options:
+      mp_docker_role_defaults:
+        type: dict
+        description: >-
+          Per-host field defaults (command_handling, privileged, capabilities, etc.).
+          Layered as: this dict <- mp_defaults.docker <- hostvars[item].mp.docker.
+      mp_docker_async_timeout:
+        type: int
+        default: 7200
+        description: Async timeout (seconds) for bulk container create.
+      mp_docker_async_retries:
+        type: int
+        default: 300
+        description: Number of times to poll for async completion.
+      mp_docker_async_delay:
+        type: int
+        default: 24
+        description: >-
+          Seconds between async_status polls. retries * delay should
+          equal async_timeout (default 300 * 24 = 7200).
+      mp_docker_reserved_networks:
+        type: list
+        elements: str
+        default: [bridge, host, none]
+        description: Network names that are never created or deleted by the role.
+  destroy:
+    short_description: Destroy docker containers and (non-reserved) networks.
+    options:
+      mp_docker_role_defaults:
+        type: dict
+      mp_docker_async_timeout:
+        type: int
+        default: 7200
+      mp_docker_async_retries:
+        type: int
+        default: 300
+      mp_docker_async_delay:
+        type: int
+        default: 24
+      mp_docker_reserved_networks:
+        type: list
+        elements: str
+        default: [bridge, host, none]
+  prepare:
+    short_description: Run docker-side preparation tasks against created containers.
+    options: {}
