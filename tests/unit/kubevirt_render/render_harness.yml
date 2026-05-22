@@ -7,9 +7,10 @@
 #   output_path  — where to dump the rendered VM dict as YAML.
 #
 # Replicates the slice of role state _build_vm.yml expects: item, _mp_specs,
-# temporary_ssh_public_key, and a frozen copy of mp_kubevirt_role_defaults so
-# the test doesn't drift if the defaults file changes (changes must be
-# intentional, asserted by the defaults test).
+# temporary_ssh_public_key. The renderer uses `default()` filters internally
+# for unset fields (e.g., `memory | default('1Gi')`), so this harness does
+# not need to mirror mp_kubevirt_role_defaults — the renderer is self-
+# contained.
 
 - name: Render VirtualMachine via _build_vm.yml
   hosts: localhost

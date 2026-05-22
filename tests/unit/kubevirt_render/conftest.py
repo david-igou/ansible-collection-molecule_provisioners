@@ -12,6 +12,8 @@ import pytest
 import yaml
 
 HARNESS = Path(__file__).parent / "render_harness.yml"
+# Note: validate_harness.yml is created in Task 11; the run_validate fixture
+# fails clearly if invoked before then.
 VALIDATE_HARNESS = Path(__file__).parent / "validate_harness.yml"
 
 
@@ -31,7 +33,6 @@ def _run_harness(harness: Path, host_spec: dict[str, Any]) -> subprocess.Complet
             text=True,
             check=False,
         )
-        proc.output_path = output_path  # type: ignore[attr-defined]
         proc.output_contents = output_path.read_text() if output_path.exists() else ""  # type: ignore[attr-defined]
         return proc
 
@@ -42,9 +43,9 @@ def render_vm() -> Callable[[dict[str, Any]], dict[str, Any]]:
 
     def _render(host_spec: dict[str, Any]) -> dict[str, Any]:
         proc = _run_harness(HARNESS, host_spec)
-        assert proc.returncode == 0, (
-            f"render harness failed:\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
-        )
+        assert (
+            proc.returncode == 0
+        ), f"render harness failed:\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
         return yaml.safe_load(proc.output_contents)
 
     return _render
