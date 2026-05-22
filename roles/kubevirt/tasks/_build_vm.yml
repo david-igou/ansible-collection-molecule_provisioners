@@ -202,6 +202,21 @@
         | combine({'spec': {'preference': _pref_block}} if _pref_raw is not none else {}, recursive=True)
       }}
 
+- name: "Build scheduling patch: {{ item }}"
+  vars:
+    _spec: "{{ _mp_specs[item] }}"
+    _scheduling: >-
+      {{
+        ({'nodeSelector': _spec.node_selector} if _spec.node_selector is defined else {})
+        | combine({'tolerations': _spec.tolerations} if _spec.tolerations is defined else {})
+        | combine({'affinity': _spec.affinity} if _spec.affinity is defined else {})
+      }}
+  ansible.builtin.set_fact:
+    __mp_scheduling_patch:
+      spec:
+        template:
+          spec: "{{ _scheduling }}"
+
 - name: "Apply boot source + compute + instancetype to base: {{ item }}"
   vars:
     _boot_patch:
@@ -217,7 +232,8 @@
       {{ __mp_base
          | combine(_boot_patch, recursive=True, list_merge='prepend')
          | combine(__mp_compute_patch, recursive=True, list_merge='append')
-         | combine(__mp_instancetype_patch, recursive=True, list_merge='append') }}
+         | combine(__mp_instancetype_patch, recursive=True, list_merge='append')
+         | combine(__mp_scheduling_patch, recursive=True, list_merge='append') }}
   when: __mp_boot_disk is not none
 
 - name: "Attach dataVolumeTemplates (if any): {{ item }}"
