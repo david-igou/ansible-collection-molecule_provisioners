@@ -74,3 +74,14 @@ def test_overrides_firmware(render_vm) -> None:
     )
     fw = vm["spec"]["template"]["spec"]["domain"]["firmware"]
     assert fw["bootloader"]["efi"]["secureBoot"] is False
+
+
+def test_overrides_scalar_replaces_base_value(render_vm) -> None:
+    """vm_overrides scalar (e.g., spec.running) replaces the base value.
+
+    The renderer's base sets spec.running: true so the prepare phase can SSH in.
+    Per the no-guardrails design, users CAN override this — the README documents
+    it as a foot-gun, but the renderer doesn't try to protect them.
+    """
+    vm = render_vm(_base({"vm_overrides": {"spec": {"running": False}}}))
+    assert vm["spec"]["running"] is False
