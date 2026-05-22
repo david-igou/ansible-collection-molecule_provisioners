@@ -11,11 +11,18 @@ argument_specs:
       mp_kubevirt_role_defaults:
         type: dict
         description: >-
-          Per-host field defaults (namespace, ssh_user, memory, ssh_service.type).
-          Layered as: this dict <- mp_defaults.kubevirt <- hostvars[item].mp.kubevirt.
+          Per-host field defaults. Currently includes namespace, ssh_user, memory,
+          and ssh_service.type. Layered as: this dict <- mp_defaults.kubevirt
+          <- hostvars[item].mp.kubevirt. Per-host hostvars accepts a much wider
+          schema (boot_source, cpu, memory_limit, scheduling, extras, vm_overrides);
+          see roles/kubevirt/README.md.
       mp_kubevirt_ssh_key_path:
         type: path
         description: Where the SSH keypair is generated (defaults to molecule_ephemeral_directory/identity_file).
+      mp_kubevirt_allowed_ssh_service_types:
+        type: list
+        elements: str
+        description: Allowlist for ssh_service.type. v1 supports NodePort only.
   destroy:
     short_description: Delete KubeVirt VirtualMachines and NodePort services.
     options:

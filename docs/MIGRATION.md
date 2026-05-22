@@ -46,7 +46,8 @@ ansible:
 
 scenario:
   name: default
-  test_sequence: [dependency, syntax, create, prepare, converge, verify, destroy]
+  test_sequence:
+    [dependency, syntax, create, prepare, converge, verify, destroy]
 
 verifier:
   name: ansible
@@ -89,16 +90,16 @@ mp_defaults:
 
 ## Field-by-field translation
 
-| Pre-ansible-native                                                              | Ansible-native (this collection)                                                                                                         |
-| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `driver: name: default` + `options.ansible_connection_options.connection`       | gone — the role writes `ansible_connection` per host into the runtime inventory                                                          |
-| `platforms[].name`                                                              | inventory host name under `groups.molecule.hosts.<name>`                                                                                 |
-| `platforms[].image` (podman)                                                    | `hostvars[<name>].mp.podman.image`                                                                                                       |
-| `platforms[].image` (kubevirt containerdisk)                                    | `hostvars[<name>].mp.kubevirt.image`                                                                                                     |
-| `platforms[].command`, `.privileged`, `.volumes`, etc.                          | `hostvars[<name>].mp.podman.<field>` (or hoisted to `mp_defaults.podman` if shared)                                                     |
-| `platforms[].kubevirt.namespace`, `.memory`, etc.                               | `hostvars[<name>].mp.kubevirt.<field>` (or hoisted to `mp_defaults.kubevirt`)                                                            |
-| `provisioner.name: ansible` + `provisioner.playbooks.*`                         | `ansible.playbooks.*`                                                                                                                    |
-| `provisioner.env.PROVISIONER`                                                   | `mp_backend` group var (this collection populates from `lookup('env', 'PROVISIONER')` in the example boilerplate, but the contract is `mp_backend`, not the env var name) |
+| Pre-ansible-native                                                        | Ansible-native (this collection)                                                                                                                                          |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `driver: name: default` + `options.ansible_connection_options.connection` | gone — the role writes `ansible_connection` per host into the runtime inventory                                                                                           |
+| `platforms[].name`                                                        | inventory host name under `groups.molecule.hosts.<name>`                                                                                                                  |
+| `platforms[].image` (podman)                                              | `hostvars[<name>].mp.podman.image`                                                                                                                                        |
+| `platforms[].image` (kubevirt containerdisk)                              | `hostvars[<name>].mp.kubevirt.image`                                                                                                                                      |
+| `platforms[].command`, `.privileged`, `.volumes`, etc.                    | `hostvars[<name>].mp.podman.<field>` (or hoisted to `mp_defaults.podman` if shared)                                                                                       |
+| `platforms[].kubevirt.namespace`, `.memory`, etc.                         | `hostvars[<name>].mp.kubevirt.<field>` (or hoisted to `mp_defaults.kubevirt`)                                                                                             |
+| `provisioner.name: ansible` + `provisioner.playbooks.*`                   | `ansible.playbooks.*`                                                                                                                                                     |
+| `provisioner.env.PROVISIONER`                                             | `mp_backend` group var (this collection populates from `lookup('env', 'PROVISIONER')` in the example boilerplate, but the contract is `mp_backend`, not the env var name) |
 
 ## Steps
 
@@ -145,3 +146,28 @@ Both should pass. If a host fails with "missing mp.<backend> in inventory", you 
 - KubeVirt service types other than NodePort.
 - Mixing backends within a single scenario run.
 - Molecule's `shared_state` pattern.
+
+## KubeVirt schema: `image:` → `boot_source:`
+
+The bare `image:` shortcut was removed. Rewrite per-host blocks:
+
+### Before
+
+```yaml
+mp:
+  kubevirt:
+    image: quay.io/containerdisks/ubuntu:24.04
+```
+
+### After
+
+```yaml
+mp:
+  kubevirt:
+    boot_source:
+      type: container_disk
+      image: quay.io/containerdisks/ubuntu:24.04
+```
+
+Three additional boot-source modes are now available: `data_volume_url`,
+`data_volume_pvc`, `pvc`. See `roles/kubevirt/README.md#boot-sources`.

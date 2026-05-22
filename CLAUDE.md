@@ -39,17 +39,17 @@ This collection must never list `molecule-plugins` (or any of its extras like `m
 
 ## Common commands
 
-| Task | Command |
-| --- | --- |
-| Install runtime/test deps | `pip install -r requirements.txt -r test-requirements.txt` |
-| Lint everything | `ansible-lint && yamllint .` |
-| Run podman self-test | `PROVISIONER=podman pytest tests/integration -v -k default` |
-| Run kubevirt self-test (requires `$KUBECONFIG` pointing at a cluster with KubeVirt) | `PROVISIONER=kubevirt pytest tests/integration -v -k default` |
-| Run docker self-test | `PROVISIONER=docker pytest tests/integration -v -k default` |
-| Run a single scenario directly | `cd extensions/molecule/default && PROVISIONER=<backend> molecule test` |
-| Ansible sanity | `ansible-test sanity --docker` (run from the symlink path) |
-| Build collection artifact | `ansible-galaxy collection build` |
-| Pre-commit | `pre-commit run --all-files` |
+| Task                                                                                | Command                                                                 |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Install runtime/test deps                                                           | `pip install -r requirements.txt -r test-requirements.txt`              |
+| Lint everything                                                                     | `ansible-lint && yamllint .`                                            |
+| Run podman self-test                                                                | `PROVISIONER=podman pytest tests/integration -v -k default`             |
+| Run kubevirt self-test (requires `$KUBECONFIG` pointing at a cluster with KubeVirt) | `PROVISIONER=kubevirt pytest tests/integration -v -k default`           |
+| Run docker self-test                                                                | `PROVISIONER=docker pytest tests/integration -v -k default`             |
+| Run a single scenario directly                                                      | `cd extensions/molecule/default && PROVISIONER=<backend> molecule test` |
+| Ansible sanity                                                                      | `ansible-test sanity --docker` (run from the symlink path)              |
+| Build collection artifact                                                           | `ansible-galaxy collection build`                                       |
+| Pre-commit                                                                          | `pre-commit run --all-files`                                            |
 
 `pyproject.toml` configures pytest with `-n 2` (xdist parallel). The `kubevirt` CI job overrides this with `-o addopts="" -s` so molecule's `PLAY RECAP` output is visible in the runner log — xdist captures stdout per-worker, which made it impossible to tell whether the scenario was actually exercising the lifecycle.
 
@@ -64,25 +64,34 @@ all:
       hosts:
         <name>:
           mp:
-            podman:                     # required when mp_backend == podman
-              image: <str>              # required
+            podman: # required when mp_backend == podman
+              image: <str> # required
               # optional: command, privileged, volumes, capabilities,
               # podman_network, env, tmpfs, exposed_ports, published_ports
-            kubevirt:                   # required when mp_backend == kubevirt
-              image: <str>              # required (containerdisk)
-              namespace: <str>          # optional, role default 'molecule'
-              ssh_user: <str>           # optional, role default 'cloud-user'
-              memory: <str>             # optional, role default '1Gi'
+            kubevirt: # required when mp_backend == kubevirt
+              boot_source: # required: discriminated union
+                type: container_disk #   container_disk | data_volume_url | data_volume_pvc | pvc
+                image: <str> #   per-type fields; see roles/kubevirt/README.md
+              namespace: <str> # optional, role default 'molecule'
+              ssh_user: <str> # optional, role default 'cloud-user'
               ssh_service:
-                type: NodePort          # optional, only NodePort in v1
-              cpu:                          # optional, default {cores: 2}
-                cores: <int>                # optional
-                sockets: <int>              # optional
-                threads: <int>              # optional
-                model: <str>                # optional (e.g., host-passthrough)
-              memory_limit: <str>           # optional → resources.limits.memory
-            docker:                      # required when mp_backend == docker
-              image: <str>               # required
+                type: NodePort # optional, only NodePort in v1
+              # Optional curated knobs:
+              cpu: { cores, sockets, threads, model }
+              memory: <str> # role default '1Gi' → requests.memory
+              memory_limit: <str> # → limits.memory
+              instancetype: <str-or-dict> # str OR {name, kind}; suppresses cpu/resources
+              preference: <str-or-dict>
+              node_selector: <dict>
+              tolerations: <list>
+              affinity: <dict>
+              extra_disks: <list> # appended to [containerdisk, cloudinitdisk]
+              extra_volumes: <list> # appended to [containerdisk, cloudinitdisk]
+              extra_interfaces: <list> # appended after default masquerade
+              extra_networks: <list> # appended after default pod
+              vm_overrides: <dict> # escape hatch: deep-merge into whole VM, lists append
+            docker: # required when mp_backend == docker
+              image: <str> # required
               # optional: command, command_handling, override_command, hostname,
               #   privileged, user, tty, pid_mode, cgroupns_mode, runtime, platform,
               #   capabilities, security_opts, sysctls, ulimits, devices,
@@ -94,6 +103,7 @@ all:
 ```
 
 Plus:
+
 - `inventory/group_vars/molecule.yml` must define `mp_backend` (one of `mp_supported_backends`).
 - `mp_defaults.<backend>.<field>` is an optional group-var layer between role defaults and per-host hostvars.
 - `molecule.yml` uses molecule's ansible-native shape (`ansible:` block).
