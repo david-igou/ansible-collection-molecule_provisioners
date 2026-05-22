@@ -421,7 +421,6 @@ def test_data_volume_url_renders_template(render_vm) -> None:
         "boot_source": {
             "type": "data_volume_url",
             "url": "https://cloud-images.example/x.img",
-            "checksum": "sha256:abc",
             "size": "10Gi",
             "storage_class": "standard",
         },
@@ -431,7 +430,7 @@ def test_data_volume_url_renders_template(render_vm) -> None:
     dv = templates[0]
     assert dv["metadata"]["name"] == "instance-boot"
     assert dv["spec"]["source"]["http"]["url"] == "https://cloud-images.example/x.img"
-    assert dv["spec"]["source"]["http"]["certConfigMap"] is None or True  # tolerate absence
+    assert "certConfigMap" not in dv["spec"]["source"]["http"]
     assert dv["spec"]["storage"]["resources"]["requests"]["storage"] == "10Gi"
     assert dv["spec"]["storage"]["storageClassName"] == "standard"
 
@@ -1659,7 +1658,6 @@ Requires CDI installed on the cluster.
 boot_source:
   type: data_volume_url
   url: https://cloud-images.ubuntu.com/.../noble.img
-  checksum: "sha256:..."     # optional
   size: 10Gi                  # required
   storage_class: standard     # optional
 ```

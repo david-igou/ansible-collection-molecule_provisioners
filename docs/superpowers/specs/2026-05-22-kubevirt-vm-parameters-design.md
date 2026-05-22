@@ -34,6 +34,7 @@ Consumers that need any of the above today have to fork the role or work around 
 - LoadBalancer `ssh_service.type` (still a v1 limitation per the original collection spec).
 - Multi-NIC connection: the runtime inventory still uses the pod-network NodePort. If a user adds an `extra_interfaces` Multus NIC, they own any cluster-side routing.
 - Integration-testing the non-containerDisk boot modes in CI. CDI is not installed in the kind cluster; adding it is a separate scope-cut.
+- HTTP-source checksum verification for `data_volume_url`. CDI does not natively support it; implementing via post-import jobs or out-of-band Secrets is out of scope for this widening.
 
 ## Public schema
 
@@ -51,7 +52,6 @@ mp:
     boot_source:
       type: data_volume_url
       url: https://cloud-images.ubuntu.com/.../noble.img
-      checksum: "sha256:..."        # optional
       size: 10Gi                    # required
       storage_class: standard       # optional
 
