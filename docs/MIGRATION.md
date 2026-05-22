@@ -64,7 +64,9 @@ all:
             podman:
               image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
             kubevirt:
-              image: quay.io/containerdisks/ubuntu:24.04
+              boot_source:
+                type: container_disk
+                image: quay.io/containerdisks/ubuntu:24.04
               ssh_user: ubuntu
 ```
 
@@ -95,7 +97,7 @@ mp_defaults:
 | `driver: name: default` + `options.ansible_connection_options.connection` | gone — the role writes `ansible_connection` per host into the runtime inventory                                                                                           |
 | `platforms[].name`                                                        | inventory host name under `groups.molecule.hosts.<name>`                                                                                                                  |
 | `platforms[].image` (podman)                                              | `hostvars[<name>].mp.podman.image`                                                                                                                                        |
-| `platforms[].image` (kubevirt containerdisk)                              | `hostvars[<name>].mp.kubevirt.image`                                                                                                                                      |
+| `platforms[].image` (kubevirt containerdisk)                              | `hostvars[<name>].mp.kubevirt.boot_source` — set `{type: container_disk, image: <containerdisk-url>}`                                                                     |
 | `platforms[].command`, `.privileged`, `.volumes`, etc.                    | `hostvars[<name>].mp.podman.<field>` (or hoisted to `mp_defaults.podman` if shared)                                                                                       |
 | `platforms[].kubevirt.namespace`, `.memory`, etc.                         | `hostvars[<name>].mp.kubevirt.<field>` (or hoisted to `mp_defaults.kubevirt`)                                                                                             |
 | `provisioner.name: ansible` + `provisioner.playbooks.*`                   | `ansible.playbooks.*`                                                                                                                                                     |

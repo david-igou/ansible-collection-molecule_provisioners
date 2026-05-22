@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
+
 from pathlib import Path
 from typing import Any, Callable
 
 import pytest
 import yaml
+
 
 HARNESS = Path(__file__).parent / "render_harness.yml"
 # Note: validate_harness.yml is created in Task 11; the run_validate fixture
@@ -33,7 +35,9 @@ def _run_harness(harness: Path, host_spec: dict[str, Any]) -> subprocess.Complet
             text=True,
             check=False,
         )
-        proc.output_contents = output_path.read_text() if output_path.exists() else ""  # type: ignore[attr-defined]
+        proc.output_contents = (  # type: ignore[attr-defined]
+            output_path.read_text() if output_path.exists() else ""
+        )
         return proc
 
 

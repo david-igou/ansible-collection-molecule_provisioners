@@ -36,7 +36,7 @@ def test_data_volume_pvc_missing_source_namespace_fails(run_validate) -> None:
     proc = run_validate(
         {
             "boot_source": {"type": "data_volume_pvc", "source": {"name": "g"}, "size": "10Gi"},
-        }
+        },
     )
     assert proc.returncode != 0
     assert "namespace" in (proc.stdout + proc.stderr)
@@ -53,9 +53,15 @@ def test_invalid_ssh_service_type_fails(run_validate) -> None:
         {
             "boot_source": {"type": "container_disk", "image": "quay.io/x"},
             "ssh_service": {"type": "LoadBalancer"},
-        }
+        },
     )
     assert proc.returncode != 0
     assert "LoadBalancer" in (proc.stdout + proc.stderr) or "NodePort" in (
         proc.stdout + proc.stderr
     )
+
+
+def test_data_volume_url_missing_url_fails(run_validate) -> None:
+    proc = run_validate({"boot_source": {"type": "data_volume_url", "size": "10Gi"}})
+    assert proc.returncode != 0
+    assert "url" in (proc.stdout + proc.stderr)
