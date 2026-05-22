@@ -6,7 +6,7 @@
   vars:
     molecule_ephemeral_directory: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
                                        | default('/tmp/molecule-fake-ephemeral', true) }}"
-    _fake_image_src: /tmp/qemu-fake-image.qcow2
+    _fake_image_src: "{{ molecule_ephemeral_directory }}/qemu-fake-image.qcow2"
   tasks:
     - name: Ensure ephemeral dir
       ansible.builtin.file:
@@ -60,7 +60,9 @@
     - name: Assert user-data has the expected user and SSH key
       ansible.builtin.assert:
         that:
-          - "'name: ubuntu' in (__ud_content.content | b64decode)"
+          # ssh_user is now rendered as a quoted YAML scalar to guard against
+          # names that YAML would coerce to bool/null (yes, no, null, ...).
+          - "'name: \"ubuntu\"' in (__ud_content.content | b64decode)"
           - "'ssh-ed25519' in (__ud_content.content | b64decode)"
 
     - name: Cleanup fake source

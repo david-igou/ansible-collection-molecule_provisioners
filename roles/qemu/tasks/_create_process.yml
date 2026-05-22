@@ -1,6 +1,28 @@
 ---
 # Per-host process-driver launch. KVM detection runs once at the top of create
 # and stashes a fact; here we just consume it.
+
+# Reap stale qemu pidfile before launch. qemu -daemonize won't overwrite an
+# existing pidfile, and the launch task's `creates:` would skip starting qemu
+# if a pidfile from a previous run remained on disk while the qemu process is
+# gone. Drops the pidfile if it's empty, malformed, or its PID isn't live;
+# leaves it alone if a live process still owns it (so `creates:` still skips).
+- name: "Reap stale qemu pidfile for {{ item }}"
+  ansible.builtin.shell: |
+    set -eu
+    pidfile="{{ molecule_ephemeral_directory }}/{{ item }}.pid"
+    [ -f "$pidfile" ] || exit 0
+    pid=$(tr -d '[:space:]' < "$pidfile" || true)
+    if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+      rm -f "$pidfile"
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: false
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
+
 - name: "Launch qemu-system for {{ item }}"
   vars:
     _ssh_port: "{{ mp_qemu_slirp_port_base | int + (groups['molecule'].index(item) | int) }}"
