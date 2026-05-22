@@ -166,3 +166,19 @@ def test_data_volume_pvc_omits_storage_class_when_unset(render_vm) -> None:
     dv = vm["spec"]["dataVolumeTemplates"][0]
     assert "storageClassName" not in dv["spec"]["storage"]
     assert dv["spec"]["storage"]["resources"]["requests"]["storage"] == "20Gi"
+
+
+def test_pvc_direct_mount(render_vm) -> None:
+    """boot_source=pvc directly mounts a PVC, no dataVolumeTemplates."""
+    vm = render_vm(
+        {
+            "boot_source": {"type": "pvc", "name": "existing-boot-pvc"},
+        }
+    )
+    assert "dataVolumeTemplates" not in vm["spec"]
+    boot = next(
+        v for v in vm["spec"]["template"]["spec"]["volumes"] if v["name"] == "containerdisk"
+    )
+    assert boot["persistentVolumeClaim"]["claimName"] == "existing-boot-pvc"
+    assert "dataVolume" not in boot
+    assert "containerDisk" not in boot

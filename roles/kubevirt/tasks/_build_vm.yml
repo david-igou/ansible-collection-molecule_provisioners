@@ -139,6 +139,21 @@
           storage: "{{ _storage_block }}"
   when: _mp_specs[item].boot_source.type == 'data_volume_pvc'
 
+- name: "Dispatch boot_source pvc: {{ item }}"
+  vars:
+    _bs: "{{ _mp_specs[item].boot_source }}"
+  ansible.builtin.set_fact:
+    __mp_boot_disk:
+      name: containerdisk
+      disk:
+        bus: virtio
+    __mp_boot_volume:
+      name: containerdisk
+      persistentVolumeClaim:
+        claimName: "{{ _bs.name }}"
+    __mp_data_volume_templates: []
+  when: _mp_specs[item].boot_source.type == 'pvc'
+
 - name: "Apply boot source to base: {{ item }}"
   vars:
     _spec_patch:
