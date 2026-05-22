@@ -1,0 +1,20 @@
+---
+minor_changes:
+  - >-
+    Add ``docker`` backend. Creates containers via
+    ``community.docker.docker_container`` against the local docker daemon
+    and exposes them to subsequent molecule phases through the
+    ``community.docker.docker`` connection plugin. Selected via
+    ``mp_backend: docker`` (or ``PROVISIONER=docker``); per-host shape under
+    ``mp.docker.{image, command, privileged, volumes, capabilities, networks,
+    network_mode, env, exposed_ports, published_ports, tmpfs, security_opts,
+    sysctls, ulimits, mounts, devices, etc_hosts, dns_servers, restart_policy,
+    memory, ...}`` (full schema in the role README). Reserved network names
+    (``bridge``, ``host``, ``none``) are filtered from the create/destroy
+    network lifecycle. See
+    ``docs/superpowers/specs/2026-05-22-docker-backend-design.md``.
+    Intentionally omits the upstream ``molecule-plugins/docker`` features that
+    don't fit a modern setup: wrapper-image build (``Dockerfile.j2``,
+    ``pre_build_image``, ``buildargs``), private registry login
+    (``docker_login``), and remote daemons / TLS. Consumers ship a fully
+    prepared image and a reachable local docker socket.
