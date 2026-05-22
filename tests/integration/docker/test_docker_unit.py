@@ -30,3 +30,12 @@ def test_missing_image_fails_with_message() -> None:
     proc = _run("run_validate.yml", "missing_image.yml")
     assert proc.returncode != 0
     assert "is missing docker.image" in proc.stdout
+
+
+def test_networks_collector_dedupes_and_skips_reserved() -> None:
+    proc = subprocess.run(
+        ["ansible-playbook", "-i", str(FIXTURES / "networks_and_reserved.yml"),
+         str(ASSERTIONS / "run_networks.yml")],
+        cwd=COLLECTION_ROOT, capture_output=True, text=True, check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
