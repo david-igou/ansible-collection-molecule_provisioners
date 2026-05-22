@@ -39,3 +39,15 @@ def test_networks_collector_dedupes_and_skips_reserved() -> None:
         cwd=COLLECTION_ROOT, capture_output=True, text=True, check=False,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_destroy_is_idempotent_on_fresh_state(tmp_path) -> None:
+    import os
+    env = os.environ.copy()
+    env["MOLECULE_EPHEMERAL_DIRECTORY"] = str(tmp_path)
+    proc = subprocess.run(
+        ["ansible-playbook", "-i", str(FIXTURES / "valid_minimal.yml"),
+         str(ASSERTIONS / "run_destroy.yml")],
+        cwd=COLLECTION_ROOT, env=env, capture_output=True, text=True, check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
