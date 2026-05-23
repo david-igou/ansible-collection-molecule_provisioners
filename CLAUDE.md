@@ -138,6 +138,36 @@ Runs `update-docs` (collection_prep), `prettier`, `isort`, `black`, `flake8`, pl
 
 `.github/workflows/tests.yml` runs the reusable workflows from `ansible/ansible-content-actions` (changelog, build-import, ansible-lint, sanity, unit-galaxy) plus `unit-source`, an `integration-podman` job that exercises the default scenario via pytest with `PROVISIONER=podman`, and an `integration-kubevirt` job that exercises the same scenario with `PROVISIONER=kubevirt` on an in-CI kind cluster with KubeVirt in `useEmulation` mode. `release.yml` publishes to Galaxy on GitHub release.
 
+## Running CI locally
+
+`act` (nektos/act) is pinned in the parent `igou-devenv` `mise.toml`. It re-plays the GitHub Actions workflow on the local container engine, which in this devcontainer is rootless podman — so a podman API socket has to be exposed first:
+
+```bash
+podman system service --time=0 unix:///tmp/podman.sock &
+export DOCKER_HOST=unix:///tmp/podman.sock
+
+act -l                                                                       # list jobs
+act pull_request -j ansible-lint -P ubuntu-latest=catthehacker/ubuntu:act-22.04   # run one
+```
+
+The `-P` flag points act at a real Ubuntu runner image; the default (`node:16-slim`) is too thin for ansible tooling. `catthehacker/ubuntu:act-22.04` (~1.5 GB) is the smallest image that boots `actions/setup-python`. `act` clones the reusable workflows (`ansible/ansible-content-actions/*`, `ansible-network/github_actions/*`) on first run.
+
+**Jobs known to work under act:** `ansible-lint`, `sanity`, `build-import`, `changelog`, `unit-galaxy` — they each run on a single runner with `actions/setup-python@v5` or no Python.
+
+**Known limitation — `unit-source` matrix:** the upstream `ansible-network/github_actions/.github/workflows/unit_source.yml` pins `actions/setup-python@v4`, which collides with the catthehacker image's pre-installed Python and fails before any test runs (`rm: cannot remove '.../python3.12/test': Directory not empty`). Until upstream bumps to `@v5`, reproduce a single matrix cell of `unit-source` by skipping act and running pytest in a clean Python container:
+
+```bash
+# reproduce one CI unit-source cell (py3.11 + ansible-core 2.17)
+podman run --rm -v "$PWD:/work" -w /work python:3.11-slim bash -c '
+  pip install -q "ansible-core>=2.17,<2.18" pytest pytest-ansible pytest-xdist pyyaml
+  pytest tests/unit/kubevirt_render/
+'
+```
+
+Swap the version pin for `>=2.16,<2.17` to cover the collection's stated floor.
+
+Why this matters for the kubevirt renderer: ansible-core 2.19+ preserves Python `None` through `{{ x | default(none) }}`-style templating, but 2.16/2.17 string-coerce it to `"None"`. A `_var is not none` gate that works on the devcontainer's bleeding-edge ansible-core will silently leak content into the rendered VM on the supported floor. Run at least one cell of the matrix in a clean container before pushing a renderer change.
+
 ## Out of scope (per the v1.0 spec)
 
 libvirt / cloud backends, LoadBalancer kubevirt service types, Windows guests, Molecule `shared_state` pattern. See `docs/superpowers/specs/2026-05-08-molecule-provisioners-design.md` for the design discussion.
