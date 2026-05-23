@@ -48,6 +48,8 @@
     network: "{{ _mp_specs[item].podman_network | default(omit) }}"
     env: "{{ _mp_specs[item].env | default({}) }}"
     tmpfs: "{{ _mp_specs[item].tmpfs | default(omit) }}"
+    cgroupns: "{{ _mp_specs[item].cgroupns | default(omit) }}"
+    systemd: "{{ _mp_specs[item].systemd | default(omit) }}"
   register: __mp_podman_create
   loop: "{{ groups['molecule'] }}"
   loop_control:

@@ -5,3 +5,40 @@
   tasks:
     - name: Ping each host
       ansible.builtin.ping:
+
+- name: Verify — podman container has the expected configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    _mp_backend: "{{ hostvars[groups['molecule'][0]].mp_backend | default('podman') }}"
+  tasks:
+    - name: Skip non-podman backends
+      ansible.builtin.meta: end_play
+      when: _mp_backend != 'podman'
+
+    - name: Inspect the instance container
+      containers.podman.podman_container_info:
+        name: instance
+      register: __mp_verify_ci
+
+    - name: Set the container fact for readability
+      ansible.builtin.set_fact:
+        _ctr: "{{ __mp_verify_ci.containers[0] }}"
+
+    - name: Assert systemd mode propagated (Config.SystemdMode true)
+      ansible.builtin.assert:
+        that:
+          - _ctr.Config.SystemdMode | default(false) | bool
+        fail_msg: >-
+          Expected Config.SystemdMode=true on the container
+          (mp.podman.systemd: always); got
+          {{ _ctr.Config.SystemdMode | default('<unset>') }}.
+
+    - name: Assert cgroup namespace mode propagated (HostConfig.CgroupMode 'host')
+      ansible.builtin.assert:
+        that:
+          - _ctr.HostConfig.CgroupMode == "host"
+        fail_msg: >-
+          Expected HostConfig.CgroupMode=host (mp.podman.cgroupns: host);
+          got '{{ _ctr.HostConfig.CgroupMode | default('<unset>') }}'.

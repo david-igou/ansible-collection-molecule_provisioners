@@ -30,6 +30,8 @@ all:
               tmpfs: []                        # optional
               exposed_ports: []                # optional
               published_ports: []              # optional
+              systemd: always               # optional — 'always' | 'true' | 'false' | leave unset
+              cgroupns: host                # optional — 'host' | 'private'
 ```
 
 Shared defaults can be hoisted into `mp_defaults.podman` in `inventory/group_vars/molecule.yml` (overrides role defaults; per-host fields override mp_defaults). Field resolution order in the role: role defaults <- `mp_defaults.podman` <- `hostvars[item].mp.podman`.

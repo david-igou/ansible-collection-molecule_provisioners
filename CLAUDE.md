@@ -67,7 +67,8 @@ all:
             podman: # required when mp_backend == podman
               image: <str> # required
               # optional: command, privileged, volumes, capabilities,
-              # podman_network, env, tmpfs, exposed_ports, published_ports
+              # podman_network, env, tmpfs, exposed_ports, published_ports,
+              # systemd, cgroupns
             kubevirt: # required when mp_backend == kubevirt
               boot_source: # required: discriminated union
                 type: container_disk #   container_disk | data_volume_url | data_volume_pvc | pvc

@@ -19,8 +19,9 @@ mp_podman_async_delay: 24
 
 # Per-host field defaults. Layered as: this dict <- mp_defaults.podman <- hostvars[item].mp.podman.
 # Only `image` is required. Fields whose role default is "omit" (podman_network,
-# tmpfs, exposed_ports, published_ports) are intentionally absent — the role's
-# module calls use `| default(omit)` to handle their absence correctly.
+# tmpfs, exposed_ports, published_ports, systemd, cgroupns) are intentionally absent
+# — the role's module calls use `| default(omit)` so the podman_container module's
+# own defaults apply.
 mp_podman_role_defaults:
   command: /sbin/init
   privileged: false
