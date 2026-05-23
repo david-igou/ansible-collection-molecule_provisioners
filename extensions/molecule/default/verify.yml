@@ -11,7 +11,10 @@
   connection: local
   gather_facts: false
   vars:
-    _mp_backend: "{{ hostvars[groups['molecule'][0]].mp_backend | default('podman') }}"
+    # Source the backend from PROVISIONER (matches inventory/group_vars/molecule.yml)
+    # rather than groups['molecule'][0] — `hosts: localhost` may not have the
+    # molecule group populated yet, and an undefined groups lookup would error.
+    _mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
   tasks:
     - name: Skip non-podman backends
       ansible.builtin.meta: end_play
