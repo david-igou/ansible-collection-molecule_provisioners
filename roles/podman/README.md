@@ -30,8 +30,20 @@ all:
               tmpfs: []                        # optional
               exposed_ports: []                # optional
               published_ports: []              # optional
-              systemd: always               # optional — 'always' | 'true' | 'false' | leave unset
-              cgroupns: host                # optional — 'host' | 'private'
+              systemd: always                  # optional — 'always' | 'true' | 'false'
+              cgroupns: host                   # optional — 'host' | 'private'
+              hostname: <str>                  # optional
+              tty: true                        # optional
+              detach: true                     # optional (default behavior)
+              etc_hosts: {}                    # optional — dict of host:ip
+              dns_servers: []                  # optional — list of DNS server IPs
+              pid_mode: <str>                  # optional — 'host', 'container:<id>', 'private'
+              security_opts: []                # optional — e.g. ['seccomp=unconfined']
+              devices: []                      # optional — list of '/host:/ctr[:rwm]' mappings
+              ulimits: []                      # optional — e.g. ['nofile=1024:2048']
+              ip: <str>                        # optional — only with a network that has a subnet
+              restart_policy: <str>            # optional — 'no', 'on-failure', 'always', 'unless-stopped'
+              restart_retries: <int>           # optional — paired with restart_policy=on-failure
 ```
 
 Shared defaults can be hoisted into `mp_defaults.podman` in `inventory/group_vars/molecule.yml` (overrides role defaults; per-host fields override mp_defaults). Field resolution order in the role: role defaults <- `mp_defaults.podman` <- `hostvars[item].mp.podman`.

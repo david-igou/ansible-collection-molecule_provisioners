@@ -45,3 +45,70 @@
         fail_msg: >-
           Expected HostConfig.CgroupMode=host (mp.podman.cgroupns: host);
           got '{{ _ctr.HostConfig.CgroupMode | default('<unset>') }}'.
+
+    - name: Assert hostname propagated
+      ansible.builtin.assert:
+        that:
+          - _ctr.Config.Hostname == "mp-instance"
+        fail_msg: "Expected Hostname=mp-instance; got '{{ _ctr.Config.Hostname }}'."
+
+    - name: Assert TTY propagated
+      ansible.builtin.assert:
+        that:
+          - _ctr.Config.Tty | bool
+        fail_msg: "Expected Tty=true; got {{ _ctr.Config.Tty }}."
+
+    - name: Assert etc_hosts entry present
+      ansible.builtin.assert:
+        that:
+          - "'mp-extra-host:10.0.0.42' in (_ctr.HostConfig.ExtraHosts | default([]))"
+        fail_msg: >-
+          Expected ExtraHosts to contain mp-extra-host:10.0.0.42;
+          got {{ _ctr.HostConfig.ExtraHosts | default('<unset>') }}.
+
+    - name: Assert DNS server propagated
+      ansible.builtin.assert:
+        that:
+          - "'1.1.1.1' in (_ctr.HostConfig.Dns | default([]))"
+        fail_msg: >-
+          Expected HostConfig.Dns to include 1.1.1.1;
+          got {{ _ctr.HostConfig.Dns | default('<unset>') }}.
+
+    - name: Assert security_opt propagated
+      ansible.builtin.assert:
+        that:
+          - "'seccomp=unconfined' in (_ctr.HostConfig.SecurityOpt | default([]))"
+        fail_msg: >-
+          Expected SecurityOpt to include seccomp=unconfined;
+          got {{ _ctr.HostConfig.SecurityOpt | default('<unset>') }}.
+
+    - name: Assert ulimits propagated (nofile soft cap)
+      vars:
+        # podman normalizes `nofile=1024:2048` → Name: RLIMIT_NOFILE
+        _nofile_entries: >-
+          {{ (_ctr.HostConfig.Ulimits | default([]))
+             | selectattr('Name', 'equalto', 'RLIMIT_NOFILE')
+             | list }}
+      ansible.builtin.assert:
+        that:
+          - _nofile_entries | length > 0
+          - (_nofile_entries | first).Soft | int == 1024
+        fail_msg: >-
+          Expected Ulimits to include RLIMIT_NOFILE with Soft=1024;
+          got {{ _ctr.HostConfig.Ulimits | default('<unset>') }}.
+
+    - name: Assert restart_policy propagated
+      ansible.builtin.assert:
+        that:
+          - _ctr.HostConfig.RestartPolicy.Name == "on-failure"
+          - (_ctr.HostConfig.RestartPolicy.MaximumRetryCount | int) == 3
+        fail_msg: >-
+          Expected RestartPolicy.Name=on-failure, MaximumRetryCount=3;
+          got name='{{ _ctr.HostConfig.RestartPolicy.Name }}',
+          retries={{ _ctr.HostConfig.RestartPolicy.MaximumRetryCount }}.
+
+    - name: Assert pid_mode propagated
+      ansible.builtin.assert:
+        that:
+          - (_ctr.HostConfig.PidMode | default('')) | length > 0
+        fail_msg: "Expected HostConfig.PidMode to be set; got '{{ _ctr.HostConfig.PidMode | default('<unset>') }}'."

@@ -38,6 +38,27 @@
     tmpfs: "{{ _mp_specs[item].tmpfs | default(omit) }}"
     cgroupns: "{{ _mp_specs[item].cgroupns | default(omit) }}"
     systemd: "{{ _mp_specs[item].systemd | default(omit) }}"
+    hostname: "{{ _mp_specs[item].hostname | default(omit) }}"
+    tty: "{{ _mp_specs[item].tty | default(omit) }}"
+    detach: "{{ _mp_specs[item].detach | default(omit) }}"
+    etc_hosts: "{{ _mp_specs[item].etc_hosts | default(omit) }}"
+    dns: "{{ _mp_specs[item].dns_servers | default(omit) }}"
+    pid: "{{ _mp_specs[item].pid_mode | default(omit) }}"
+    security_opt: "{{ _mp_specs[item].security_opts | default(omit) }}"
+    device: "{{ _mp_specs[item].devices | default(omit) }}"
+    ulimit: "{{ _mp_specs[item].ulimits | default(omit) }}"
+    ip: "{{ _mp_specs[item].ip | default(omit) }}"
+    # podman_container has no separate `restart_policy_attempts` (unlike docker_container);
+    # podman encodes the retry count into the policy string: `on-failure:N`. Compose here
+    # so consumers keep the docker-style restart_policy + restart_retries vocabulary.
+    restart_policy: >-
+      {{
+        omit if _mp_specs[item].restart_policy is not defined
+        else (_mp_specs[item].restart_policy ~ ':' ~ _mp_specs[item].restart_retries
+              if (_mp_specs[item].restart_policy == 'on-failure'
+                  and _mp_specs[item].restart_retries is defined)
+              else _mp_specs[item].restart_policy)
+      }}
   register: __mp_podman_create
   loop: "{{ groups['molecule'] }}"
   loop_control:

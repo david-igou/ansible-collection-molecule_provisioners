@@ -68,7 +68,9 @@ all:
               image: <str> # required
               # optional: command, privileged, volumes, capabilities,
               # podman_network, env, tmpfs, exposed_ports, published_ports,
-              # systemd, cgroupns
+              # systemd, cgroupns, hostname, tty, detach, etc_hosts, dns_servers,
+              # pid_mode, security_opts, devices, ulimits, ip, restart_policy,
+              # restart_retries
             kubevirt: # required when mp_backend == kubevirt
               boot_source: # required: discriminated union
                 type: container_disk #   container_disk | data_volume_url | data_volume_pvc | pvc
