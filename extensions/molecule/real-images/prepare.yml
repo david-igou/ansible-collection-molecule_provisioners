@@ -1,0 +1,27 @@
+---
+# Custom prepare for this scenario.
+#
+# These minimal distro images don't ship python (Ubuntu) or guarantee a
+# discoverable interpreter, so we cannot run module-based tasks until
+# python3 exists. We deliberately do NOT import the collection's prepare.yml
+# here: that playbook installs sudo via the ansible.builtin.package module,
+# which would fail before raw bootstrap on these images.
+- name: Bootstrap Python in fresh containers
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    # containers.podman.podman connection (1.20.x) does NOT shell-wrap raw
+    # commands — it passes them straight to `podman exec` so the first
+    # token becomes the binary. We have to invoke /bin/sh -c explicitly.
+    - name: Ensure python3 is installed (raw)
+      ansible.builtin.raw: >-
+        /bin/sh -c "test -x /usr/bin/python3 && exit 0;
+        if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -qq && apt-get install -y -q python3;
+        elif command -v dnf >/dev/null 2>&1; then
+        dnf install -y python3;
+        else echo no-known-package-manager >&2; exit 1; fi"
+      changed_when: false
+
+    - name: Re-gather facts now that python3 is available
+      ansible.builtin.setup:

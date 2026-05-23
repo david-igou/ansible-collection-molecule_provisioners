@@ -1,0 +1,25 @@
+---
+- name: Converge — touch each host to prove ansible can reach it
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Ping each host
+      ansible.builtin.ping:
+
+    - name: Read env vars set by the role
+      ansible.builtin.command: env
+      register: __env_out
+      changed_when: false
+
+    - name: Assert TEST_ROLE env propagated on centos host
+      ansible.builtin.assert:
+        that:
+          - "'TEST_ROLE=server' in __env_out.stdout"
+          - "'TEST_SCENARIO=real-images' in __env_out.stdout"
+      when: inventory_hostname == 'centos-stream10'
+
+    - name: Assert TEST_ROLE env propagated on ubuntu host
+      ansible.builtin.assert:
+        that:
+          - "'TEST_ROLE=client' in __env_out.stdout"
+      when: inventory_hostname == 'ubuntu-2604'
