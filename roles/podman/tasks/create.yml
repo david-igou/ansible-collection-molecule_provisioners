@@ -14,6 +14,7 @@
 - name: Create podman network(s)
   containers.podman.podman_network:
     name: "{{ item.name }}"
+    executable: "{{ mp_podman_executable }}"
     subnet: "{{ item.subnet | default(omit) }}"
     gateway: "{{ item.gateway | default(omit) }}"
     state: present
@@ -27,6 +28,7 @@
 - name: Create molecule instance(s)
   containers.podman.podman_container:
     name: "{{ item }}"
+    executable: "{{ mp_podman_executable }}"
     image: "{{ _mp_specs[item].image }}"
     state: started
     recreate: false

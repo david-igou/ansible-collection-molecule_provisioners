@@ -135,3 +135,9 @@
         fail_msg: >-
           Expected HostConfig.Memory=134217728 (128m from extra_opts);
           got {{ _ctr.HostConfig.Memory | default('<unset>') }}.
+
+    - name: Assert mp_podman_executable resolves to the env var default
+      ansible.builtin.assert:
+        that:
+          - (lookup('env', 'MOLECULE_PODMAN_EXECUTABLE') | default('podman', true)) | length > 0
+        fail_msg: "MOLECULE_PODMAN_EXECUTABLE lookup returned empty."

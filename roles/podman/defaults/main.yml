@@ -21,6 +21,10 @@ mp_podman_async_timeout: 7200
 mp_podman_async_retries: 300
 mp_podman_async_delay: 24
 
+# Operator override: swap `podman` for `podman-remote` (or similar) via env var.
+# Threaded through every containers.podman.podman_* module call.
+mp_podman_executable: "{{ lookup('env', 'MOLECULE_PODMAN_EXECUTABLE') | default('podman', true) }}"
+
 # Per-host field defaults. Layered as: this dict <- mp_defaults.podman <- hostvars[item].mp.podman.
 # Only `image` is required. Fields whose role default is "omit" (podman_network,
 # tmpfs, exposed_ports, published_ports, systemd, cgroupns) are intentionally absent

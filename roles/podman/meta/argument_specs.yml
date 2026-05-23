@@ -26,6 +26,12 @@ argument_specs:
         description: >-
           Seconds between async_status polls. retries * delay should
           equal async_timeout (default 300 * 24 = 7200).
+      mp_podman_executable:
+        type: str
+        default: podman
+        description: >-
+          Path or name of the podman executable. Picked up from
+          MOLECULE_PODMAN_EXECUTABLE env var by default.
   destroy:
     short_description: Destroy podman containers and (non-reserved) networks.
     options:
@@ -40,6 +46,12 @@ argument_specs:
       mp_podman_async_delay:
         type: int
         default: 24
+      mp_podman_executable:
+        type: str
+        default: podman
+        description: >-
+          Path or name of the podman executable. Picked up from
+          MOLECULE_PODMAN_EXECUTABLE env var by default.
   prepare:
     short_description: Run podman-side preparation tasks against created containers.
     options: {}

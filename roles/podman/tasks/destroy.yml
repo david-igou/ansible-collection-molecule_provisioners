@@ -2,6 +2,7 @@
 - name: Destroy molecule instance(s)
   containers.podman.podman_container:
     name: "{{ item }}"
+    executable: "{{ mp_podman_executable }}"
     state: absent
   register: __mp_podman_destroy
   loop: "{{ groups['molecule'] }}"
@@ -32,6 +33,7 @@
 - name: Delete podman network(s)
   containers.podman.podman_network:
     name: "{{ item.name }}"
+    executable: "{{ mp_podman_executable }}"
     state: absent
   loop: "{{ __mp_podman_networks }}"
   loop_control:
