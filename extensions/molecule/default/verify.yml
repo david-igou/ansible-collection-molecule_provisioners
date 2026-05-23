@@ -130,10 +130,10 @@
     - name: Assert extra_opts --memory took effect
       ansible.builtin.assert:
         that:
-          # 128 MiB = 134217728 bytes; podman_container_info reports Memory in bytes.
-          - (_ctr.HostConfig.Memory | int) == 134217728
+          # 512 MiB = 536870912 bytes; podman_container_info reports Memory in bytes.
+          - (_ctr.HostConfig.Memory | int) == 536870912
         fail_msg: >-
-          Expected HostConfig.Memory=134217728 (128m from extra_opts);
+          Expected HostConfig.Memory=536870912 (512m from extra_opts);
           got {{ _ctr.HostConfig.Memory | default('<unset>') }}.
 
     - name: Assert mp_podman_executable resolves to the env var default
