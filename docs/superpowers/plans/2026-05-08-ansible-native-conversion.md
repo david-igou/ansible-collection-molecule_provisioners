@@ -16,51 +16,51 @@
 
 ### Created
 
-| File | Responsibility |
-| --- | --- |
-| `playbooks/group_vars/all.yml` | Declares `mp_supported_backends`. Loaded by every dispatcher play (`hosts: localhost` matches `all`). |
-| `extensions/molecule/default/molecule.yml` | The single self-test scenario's molecule.yml in ansible-native shape. |
-| `extensions/molecule/default/{create,destroy,prepare}.yml` | One-line `import_playbook` wrappers (FQCN). |
-| `extensions/molecule/default/{converge,verify}.yml` | Self-test's own converge + verify (minimal — proves SSH/exec works). |
-| `extensions/molecule/default/inventory/hosts.yml` | Two hosts, each with `mp.podman` and `mp.kubevirt` blocks. |
-| `extensions/molecule/default/inventory/group_vars/molecule.yml` | `mp_backend` (env-driven) + `mp_defaults` for both backends. |
-| `docs/examples/inventory/hosts.yml` | Consumer-facing inventory shape example. |
-| `docs/examples/inventory/group_vars/molecule.yml` | Consumer-facing group_vars example. |
-| `changelogs/fragments/ansible-native-v1.yml` | Release-note fragment. |
+| File                                                            | Responsibility                                                                                        |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `playbooks/group_vars/all.yml`                                  | Declares `mp_supported_backends`. Loaded by every dispatcher play (`hosts: localhost` matches `all`). |
+| `extensions/molecule/default/molecule.yml`                      | The single self-test scenario's molecule.yml in ansible-native shape.                                 |
+| `extensions/molecule/default/{create,destroy,prepare}.yml`      | One-line `import_playbook` wrappers (FQCN).                                                           |
+| `extensions/molecule/default/{converge,verify}.yml`             | Self-test's own converge + verify (minimal — proves SSH/exec works).                                  |
+| `extensions/molecule/default/inventory/hosts.yml`               | Two hosts, each with `mp.podman` and `mp.kubevirt` blocks.                                            |
+| `extensions/molecule/default/inventory/group_vars/molecule.yml` | `mp_backend` (env-driven) + `mp_defaults` for both backends.                                          |
+| `docs/examples/inventory/hosts.yml`                             | Consumer-facing inventory shape example.                                                              |
+| `docs/examples/inventory/group_vars/molecule.yml`               | Consumer-facing group_vars example.                                                                   |
+| `changelogs/fragments/ansible-native-v1.yml`                    | Release-note fragment.                                                                                |
 
 ### Modified
 
-| File | What changes |
-| --- | --- |
-| `playbooks/create.yml` | Read `mp_backend` from `hostvars[groups['molecule'][0]]`; validate every host has the active backend block; `include_role` unchanged. |
-| `playbooks/destroy.yml` | Same dispatch logic as create. (No per-host block-existence assert — destroy is idempotent.) |
-| `playbooks/prepare.yml` | Same dispatch logic; runs against `hosts: all` (not `localhost`) so the role can `wait_for_connection` per host. |
-| `roles/podman/defaults/main.yml` | Add `mp_podman_role_defaults` (dict aggregating every optional field's default value). |
-| `roles/kubevirt/defaults/main.yml` | Add `mp_kubevirt_role_defaults`. |
-| `roles/podman/tasks/create.yml` | Add merge step at top (`_mp_specs`); loop over `groups['molecule']`; replace `item.podman.<f>` with `_mp_specs[item].<f>`; trim inventory-write block to only emit `ansible_connection: containers.podman.podman` per host. |
-| `roles/podman/tasks/destroy.yml` | Loop over `groups['molecule']`; use host name (`item`) instead of `item.name`. |
-| `roles/podman/tasks/prepare.yml` | No change to play body (already runs on each host). |
-| `roles/podman/tasks/_networks.yml` | Loop over `groups['molecule']`; read `_mp_specs[item].podman_network`. |
-| `roles/kubevirt/tasks/create.yml` | Add merge step; loop over `groups['molecule']`; standardize loop_var to `item`; trim inventory write. |
-| `roles/kubevirt/tasks/destroy.yml` | Loop over `groups['molecule']`; use host name. |
-| `roles/kubevirt/tasks/prepare.yml` | No change to play body. |
-| `roles/kubevirt/tasks/_create_vm.yml` | Replace `vm.kubevirt.*` field accesses with `_mp_specs[item].*`. |
-| `roles/kubevirt/tasks/_create_vm_dictionary.yml` | Same. |
-| `roles/podman/meta/argument_specs.yml` | Drop platform-shape validation; describe role-level inputs only (`mp_podman_role_defaults`, `mp_podman_async_*`, etc.). |
-| `roles/kubevirt/meta/argument_specs.yml` | Same. |
-| `roles/podman/README.md`, `roles/kubevirt/README.md` | Replace platform-schema docs with `mp.<backend>.*` schema. |
-| `.github/workflows/tests.yml` | Rename `integration` → `integration-podman`; rename `kubevirt` → `integration-kubevirt`; both run `pytest -k default`; update `all_green.needs`. |
-| `docs/examples/molecule.yml` | Ansible-native shape (no `driver:`, no `platforms:`, no `provisioner:`). |
-| `docs/MIGRATION.md` | Repurpose: from molecule v1 platforms-shape to this collection's ansible-native shape (the existing devhost-migration content is replaced wholesale). |
-| `CLAUDE.md` | Update Architecture, Public-contract, Common-commands, lint, CI, "When updating provisioner logic" sections. The "Do not depend on `molecule-plugins`" section stays. |
+| File                                                 | What changes                                                                                                                                                                                                                |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `playbooks/create.yml`                               | Read `mp_backend` from `hostvars[groups['molecule'][0]]`; validate every host has the active backend block; `include_role` unchanged.                                                                                       |
+| `playbooks/destroy.yml`                              | Same dispatch logic as create. (No per-host block-existence assert — destroy is idempotent.)                                                                                                                                |
+| `playbooks/prepare.yml`                              | Same dispatch logic; runs against `hosts: all` (not `localhost`) so the role can `wait_for_connection` per host.                                                                                                            |
+| `roles/podman/defaults/main.yml`                     | Add `mp_podman_role_defaults` (dict aggregating every optional field's default value).                                                                                                                                      |
+| `roles/kubevirt/defaults/main.yml`                   | Add `mp_kubevirt_role_defaults`.                                                                                                                                                                                            |
+| `roles/podman/tasks/create.yml`                      | Add merge step at top (`_mp_specs`); loop over `groups['molecule']`; replace `item.podman.<f>` with `_mp_specs[item].<f>`; trim inventory-write block to only emit `ansible_connection: containers.podman.podman` per host. |
+| `roles/podman/tasks/destroy.yml`                     | Loop over `groups['molecule']`; use host name (`item`) instead of `item.name`.                                                                                                                                              |
+| `roles/podman/tasks/prepare.yml`                     | No change to play body (already runs on each host).                                                                                                                                                                         |
+| `roles/podman/tasks/_networks.yml`                   | Loop over `groups['molecule']`; read `_mp_specs[item].podman_network`.                                                                                                                                                      |
+| `roles/kubevirt/tasks/create.yml`                    | Add merge step; loop over `groups['molecule']`; standardize loop_var to `item`; trim inventory write.                                                                                                                       |
+| `roles/kubevirt/tasks/destroy.yml`                   | Loop over `groups['molecule']`; use host name.                                                                                                                                                                              |
+| `roles/kubevirt/tasks/prepare.yml`                   | No change to play body.                                                                                                                                                                                                     |
+| `roles/kubevirt/tasks/_create_vm.yml`                | Replace `vm.kubevirt.*` field accesses with `_mp_specs[item].*`.                                                                                                                                                            |
+| `roles/kubevirt/tasks/_create_vm_dictionary.yml`     | Same.                                                                                                                                                                                                                       |
+| `roles/podman/meta/argument_specs.yml`               | Drop platform-shape validation; describe role-level inputs only (`mp_podman_role_defaults`, `mp_podman_async_*`, etc.).                                                                                                     |
+| `roles/kubevirt/meta/argument_specs.yml`             | Same.                                                                                                                                                                                                                       |
+| `roles/podman/README.md`, `roles/kubevirt/README.md` | Replace platform-schema docs with `mp.<backend>.*` schema.                                                                                                                                                                  |
+| `.github/workflows/tests.yml`                        | Rename `integration` → `integration-podman`; rename `kubevirt` → `integration-kubevirt`; both run `pytest -k default`; update `all_green.needs`.                                                                            |
+| `docs/examples/molecule.yml`                         | Ansible-native shape (no `driver:`, no `platforms:`, no `provisioner:`).                                                                                                                                                    |
+| `docs/MIGRATION.md`                                  | Repurpose: from molecule v1 platforms-shape to this collection's ansible-native shape (the existing devhost-migration content is replaced wholesale).                                                                       |
+| `CLAUDE.md`                                          | Update Architecture, Public-contract, Common-commands, lint, CI, "When updating provisioner logic" sections. The "Do not depend on `molecule-plugins`" section stays.                                                       |
 
 ### Deleted
 
-| File | Reason |
-| --- | --- |
-| `extensions/molecule/podman/` (whole tree) | Superseded by `extensions/molecule/default/`. |
-| `extensions/molecule/kubevirt/` (whole tree) | Superseded by `extensions/molecule/default/`. |
-| `docs/examples/platforms.yml` | Superseded by `docs/examples/inventory/hosts.yml` + `docs/examples/inventory/group_vars/molecule.yml`. |
+| File                                         | Reason                                                                                                 |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `extensions/molecule/podman/` (whole tree)   | Superseded by `extensions/molecule/default/`.                                                          |
+| `extensions/molecule/kubevirt/` (whole tree) | Superseded by `extensions/molecule/default/`.                                                          |
+| `docs/examples/platforms.yml`                | Superseded by `docs/examples/inventory/hosts.yml` + `docs/examples/inventory/group_vars/molecule.yml`. |
 
 ---
 
@@ -69,6 +69,7 @@
 ### Task 1: Add role-default dicts
 
 **Files:**
+
 - Modify: `roles/podman/defaults/main.yml`
 - Modify: `roles/kubevirt/defaults/main.yml`
 
@@ -123,6 +124,7 @@ git commit -m "feat(roles): add mp_<backend>_role_defaults dicts for ansible-nat
 ### Task 2: Add `mp_supported_backends` group var for dispatchers
 
 **Files:**
+
 - Create: `playbooks/group_vars/all.yml`
 
 The dispatcher plays target `hosts: localhost` (and `all` for prepare). A `playbooks/group_vars/all.yml` file is automatically loaded for plays in `playbooks/`, regardless of what host they target, because `localhost` is in the `all` group.
@@ -154,6 +156,7 @@ git commit -m "feat(playbooks): add mp_supported_backends group var for dispatch
 ### Task 3: Rewrite the three dispatcher playbooks
 
 **Files:**
+
 - Modify: `playbooks/create.yml`
 - Modify: `playbooks/destroy.yml`
 - Modify: `playbooks/prepare.yml`
@@ -255,7 +258,7 @@ Each dispatcher reads `mp_backend` from the molecule group's hostvars, validates
           - "'molecule' in groups"
           - groups['molecule'] | length > 0
         fail_msg: "Inventory must define a 'molecule' group with at least one host."
-      run_once: true  # noqa: run-once[task]
+      run_once: true # noqa: run-once[task]
 
     - name: Validate backend
       ansible.builtin.assert:
@@ -288,12 +291,13 @@ git commit -m "feat(playbooks): dispatchers read mp_backend from inventory, vali
 ### Task 4: Refactor the podman role's task files
 
 **Files:**
+
 - Modify: `roles/podman/tasks/create.yml`
 - Modify: `roles/podman/tasks/destroy.yml`
 - Modify: `roles/podman/tasks/prepare.yml`
 - Modify: `roles/podman/tasks/_networks.yml`
 
-The merge step is added once at the top of `create.yml`, `destroy.yml`, and any task file that needs per-host fields (here, only create.yml needs it directly; destroy uses just the host name; _networks reads `podman_network` from the merged spec). For DRY, the merge logic could be factored to its own task file (e.g. `_compute_specs.yml`), but keeping it inline matches the existing role's style of repeating small task patterns rather than over-abstracting.
+The merge step is added once at the top of `create.yml`, `destroy.yml`, and any task file that needs per-host fields (here, only create.yml needs it directly; destroy uses just the host name; \_networks reads `podman_network` from the merged spec). For DRY, the merge logic could be factored to its own task file (e.g. `_compute_specs.yml`), but keeping it inline matches the existing role's style of repeating small task patterns rather than over-abstracting.
 
 - [ ] **Step 1: Replace `roles/podman/tasks/create.yml` with the content below**
 
@@ -499,6 +503,7 @@ git commit -m "feat(roles/podman): loop over groups['molecule'], 3-level merge, 
 ### Task 5: Refactor the kubevirt role's task files
 
 **Files:**
+
 - Modify: `roles/kubevirt/tasks/create.yml`
 - Modify: `roles/kubevirt/tasks/destroy.yml`
 - Modify: `roles/kubevirt/tasks/prepare.yml`
@@ -787,6 +792,7 @@ git commit -m "feat(roles/kubevirt): loop over groups['molecule'], 3-level merge
 ### Task 6: Rewrite both roles' argument_specs
 
 **Files:**
+
 - Modify: `roles/podman/meta/argument_specs.yml`
 - Modify: `roles/kubevirt/meta/argument_specs.yml`
 
@@ -893,6 +899,7 @@ git commit -m "feat(roles): rewrite argument_specs for v2 ansible-native shape"
 ### Task 7: Replace the self-test scenarios
 
 **Files:**
+
 - Delete: `extensions/molecule/podman/` (whole tree)
 - Delete: `extensions/molecule/kubevirt/` (whole tree)
 - Create: `extensions/molecule/default/molecule.yml`
@@ -945,16 +952,19 @@ verifier:
 ```
 
 > **Implementation note:** The `--inventory=${MOLECULE_EPHEMERAL_DIRECTORY}/inventory/` arg relies on molecule expanding env vars in `executor.args.ansible_playbook` values when constructing the playbook command. If the local self-test in Task 8 fails with "inventory not found" or the molecule_runtime.yml file is written but its hostvars don't take effect, fall back to ANSIBLE_INVENTORY. Add to molecule.yml:
+>
 > ```yaml
 > ansible:
 >   env:
 >     ANSIBLE_INVENTORY: "inventory/:${MOLECULE_EPHEMERAL_DIRECTORY}/inventory/"
 > ```
+>
 > If that also fails, drop the second `--inventory` arg and have the role write `inventory/molecule_runtime.yml` (under the consumer's static inventory dir) on create and `git restore`-style remove it on destroy. Document the chosen mechanism in CLAUDE.md (Task 13).
 
 - [ ] **Step 3: Create the three lifecycle one-liners**
 
 `extensions/molecule/default/create.yml`:
+
 ```yaml
 ---
 - name: Provision molecule instances
@@ -962,6 +972,7 @@ verifier:
 ```
 
 `extensions/molecule/default/destroy.yml`:
+
 ```yaml
 ---
 - name: Tear down molecule instances
@@ -969,6 +980,7 @@ verifier:
 ```
 
 `extensions/molecule/default/prepare.yml`:
+
 ```yaml
 ---
 - name: Prepare molecule instances
@@ -1067,11 +1079,13 @@ Run: `ansible-galaxy collection install containers.podman kubernetes.core commun
 - [ ] **Step 2: Symlink the repo into the canonical collection path (if not already)**
 
 Run:
+
 ```bash
 mkdir -p "$HOME/.ansible/collections/ansible_collections/david_igou"
 ln -snf "$PWD" "$HOME/.ansible/collections/ansible_collections/david_igou/molecule_provisioners"
 ansible-galaxy collection list | grep molecule_provisioners
 ```
+
 Expected: shows `david_igou.molecule_provisioners 1.0.0`.
 
 - [ ] **Step 3: Run the podman self-test**
@@ -1080,6 +1094,7 @@ Run: `PROVISIONER=podman pytest tests/integration -v -k default`
 Expected: PASS. PLAY RECAP shows create/prepare/converge/verify/destroy tasks executing without error.
 
 If FAIL: read the molecule output. Common issues:
+
 - `groups['molecule']` undefined → static inventory not loaded → check `--inventory=inventory/` arg in molecule.yml.
 - `_mp_specs[item].image` undefined → merge step didn't run → check that the role's tasks/create.yml has the `_mp_specs` initialization above any other loops.
 - `ansible_connection` not applied → runtime inventory file not loaded → fall back to the alternative chain mechanism documented in Task 7's implementation note.
@@ -1105,6 +1120,7 @@ If no fixes needed, this step is a no-op.
 ### Task 9: Update CI workflow
 
 **Files:**
+
 - Modify: `.github/workflows/tests.yml`
 
 Today: jobs `integration` (podman scenario) and `kubevirt` (kubevirt scenario). v2: `integration-podman` and `integration-kubevirt`, both running the same scenario with different `PROVISIONER`.
@@ -1114,43 +1130,44 @@ Today: jobs `integration` (podman scenario) and `kubevirt` (kubevirt scenario). 
 In `.github/workflows/tests.yml`, replace the `integration:` job with:
 
 ```yaml
-  integration-podman:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout into the canonical collection path
-        uses: actions/checkout@v4
-        with:
-          path: ansible_collections/david_igou/molecule_provisioners
+integration-podman:
+  runs-on: ubuntu-latest
+  steps:
+    - name: Checkout into the canonical collection path
+      uses: actions/checkout@v4
+      with:
+        path: ansible_collections/david_igou/molecule_provisioners
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
 
-      - name: Install ansible + molecule + pytest plumbing
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        run: |
-          python -m pip install --upgrade pip
-          pip install ansible-core molecule \
-                      pytest pytest-ansible pytest-xdist
+    - name: Install ansible + molecule + pytest plumbing
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      run: |
+        python -m pip install --upgrade pip
+        pip install ansible-core molecule \
+                    pytest pytest-ansible pytest-xdist
 
-      - name: Install collection dependencies
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        run: |
-          ansible-galaxy collection install \
-            containers.podman kubernetes.core community.crypto
+    - name: Install collection dependencies
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      run: |
+        ansible-galaxy collection install \
+          containers.podman kubernetes.core community.crypto
 
-      - name: Run podman integration tests
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        env:
-          PROVISIONER: podman
-          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
-        run: pytest tests/integration -v -k default
+    - name: Run podman integration tests
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      env:
+        PROVISIONER: podman
+        ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
+      run: pytest tests/integration -v -k default
 ```
 
 - [ ] **Step 2: Rename the `kubevirt` job to `integration-kubevirt` and update its pytest invocation**
 
 Replace the `kubevirt:` job's "Run kubevirt scenario" step's `pytest` command with:
+
 ```bash
 pytest tests/integration -v -k default -s -o addopts=""
 ```
@@ -1162,6 +1179,7 @@ And rename the job key from `kubevirt:` to `integration-kubevirt:`.
 - [ ] **Step 3: Update `all_green.needs`**
 
 Replace:
+
 ```yaml
 needs:
   - changelog
@@ -1175,6 +1193,7 @@ needs:
 ```
 
 With:
+
 ```yaml
 needs:
   - changelog
@@ -1188,6 +1207,7 @@ needs:
 ```
 
 And the python assertion:
+
 ```yaml
 - run: >-
     python -c "assert 'failure' not in
@@ -1219,6 +1239,7 @@ git commit -m "ci: rename jobs to integration-{podman,kubevirt}, run combined sc
 ### Task 10: Update docs/examples/
 
 **Files:**
+
 - Delete: `docs/examples/platforms.yml`
 - Modify: `docs/examples/molecule.yml`
 - Create: `docs/examples/inventory/hosts.yml`
@@ -1328,16 +1349,17 @@ git commit -m "docs(examples): ansible-native inventory + molecule.yml starter"
 ### Task 11: Repurpose `docs/MIGRATION.md`
 
 **Files:**
+
 - Modify: `docs/MIGRATION.md`
 
 The existing content covers migration from devhost-style `extensions/molecule/provisioners/` to a v1 platforms-shape consumer. Since v1 platforms-shape is no longer a target, the document repurposes to: "you have a molecule scenario using the upstream `platforms:` shape and want to use this collection's ansible-native shape — here's the field-by-field translation."
 
 - [ ] **Step 1: Replace `docs/MIGRATION.md` with the content below**
 
-```markdown
+````markdown
 # Migrating to `david_igou.molecule_provisioners`
 
-If you have a molecule scenario using the upstream `platforms:` + `driver:` shape (now called *pre ansible-native* in molecule's own docs) and you want to use this collection, here is the field-by-field translation.
+If you have a molecule scenario using the upstream `platforms:` + `driver:` shape (now called _pre ansible-native_ in molecule's own docs) and you want to use this collection, here is the field-by-field translation.
 
 ## Before — pre-ansible-native shape
 
@@ -1363,6 +1385,7 @@ provisioner:
     destroy: destroy.yml
     prepare: prepare.yml
 ```
+````
 
 ## After — this collection's ansible-native shape
 
@@ -1383,7 +1406,8 @@ ansible:
 
 scenario:
   name: default
-  test_sequence: [dependency, syntax, create, prepare, converge, verify, destroy]
+  test_sequence:
+    [dependency, syntax, create, prepare, converge, verify, destroy]
 
 verifier:
   name: ansible
@@ -1426,16 +1450,16 @@ mp_defaults:
 
 ## Field-by-field translation
 
-| Pre-ansible-native | Ansible-native (this collection) |
-| --- | --- |
-| `driver: name: default` + `options.ansible_connection_options.connection` | gone — the role writes `ansible_connection` per host into the runtime inventory |
-| `platforms[].name` | inventory host name under `groups.molecule.hosts.<name>` |
-| `platforms[].image` (podman) | `hostvars[<name>].mp.podman.image` |
-| `platforms[].image` (kubevirt containerdisk) | `hostvars[<name>].mp.kubevirt.image` |
-| `platforms[].command`, `.privileged`, `.volumes`, etc. | `hostvars[<name>].mp.podman.<field>` (or hoisted to `mp_defaults.podman` if shared) |
-| `platforms[].kubevirt.namespace`, `.memory`, etc. | `hostvars[<name>].mp.kubevirt.<field>` (or hoisted to `mp_defaults.kubevirt`) |
-| `provisioner.name: ansible` + `provisioner.playbooks.*` | `ansible.playbooks.*` |
-| `provisioner.env.PROVISIONER` | `mp_backend` group var (this collection populates from `lookup('env', 'PROVISIONER')` in the example boilerplate, but the contract is `mp_backend`, not the env var name) |
+| Pre-ansible-native                                                        | Ansible-native (this collection)                                                                                                                                          |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `driver: name: default` + `options.ansible_connection_options.connection` | gone — the role writes `ansible_connection` per host into the runtime inventory                                                                                           |
+| `platforms[].name`                                                        | inventory host name under `groups.molecule.hosts.<name>`                                                                                                                  |
+| `platforms[].image` (podman)                                              | `hostvars[<name>].mp.podman.image`                                                                                                                                        |
+| `platforms[].image` (kubevirt containerdisk)                              | `hostvars[<name>].mp.kubevirt.image`                                                                                                                                      |
+| `platforms[].command`, `.privileged`, `.volumes`, etc.                    | `hostvars[<name>].mp.podman.<field>` (or hoisted to `mp_defaults.podman` if shared)                                                                                       |
+| `platforms[].kubevirt.namespace`, `.memory`, etc.                         | `hostvars[<name>].mp.kubevirt.<field>` (or hoisted to `mp_defaults.kubevirt`)                                                                                             |
+| `provisioner.name: ansible` + `provisioner.playbooks.*`                   | `ansible.playbooks.*`                                                                                                                                                     |
+| `provisioner.env.PROVISIONER`                                             | `mp_backend` group var (this collection populates from `lookup('env', 'PROVISIONER')` in the example boilerplate, but the contract is `mp_backend`, not the env var name) |
 
 ## Steps
 
@@ -1481,7 +1505,8 @@ Both should pass. If a host fails with "missing mp.<backend> in inventory", you 
 - KubeVirt service types other than NodePort.
 - Mixing backends within a single scenario run.
 - Molecule's `shared_state` pattern.
-```
+
+````
 
 - [ ] **Step 2: Lint**
 
@@ -1493,30 +1518,31 @@ Expected: no findings (or run `prettier --write` to auto-format).
 ```bash
 git add docs/MIGRATION.md
 git commit -m "docs(migration): rewrite for pre-ansible-native -> v2 ansible-native shape"
-```
+````
 
 ---
 
 ### Task 12: Update both role READMEs
 
 **Files:**
+
 - Modify: `roles/podman/README.md`
 - Modify: `roles/kubevirt/README.md`
 
 - [ ] **Step 1: Replace `roles/podman/README.md`**
 
-```markdown
+````markdown
 # `david_igou.molecule_provisioners.podman`
 
 Molecule provisioner role for podman containers. Not invoked directly — invoked via the collection's top-level `playbooks/{create,destroy,prepare}.yml` dispatchers, which read `mp_backend` from the molecule group's hostvars.
 
 ## Entry points
 
-| `tasks_from` | What it does |
-| --- | --- |
-| `create` | Computes per-host merged specs, creates user-defined podman networks, then creates containers from `hostvars[item].mp.podman.*` for each host in `groups['molecule']`. Writes `ansible_connection: containers.podman.podman` per host into the runtime inventory file. |
-| `destroy` | Removes those containers and any non-reserved networks. |
-| `prepare` | Installs `sudo` inside each container. |
+| `tasks_from` | What it does                                                                                                                                                                                                                                                           |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create`     | Computes per-host merged specs, creates user-defined podman networks, then creates containers from `hostvars[item].mp.podman.*` for each host in `groups['molecule']`. Writes `ansible_connection: containers.podman.podman` per host into the runtime inventory file. |
+| `destroy`    | Removes those containers and any non-reserved networks.                                                                                                                                                                                                                |
+| `prepare`    | Installs `sudo` inside each container.                                                                                                                                                                                                                                 |
 
 ## Inputs (per-host, in inventory)
 
@@ -1528,24 +1554,26 @@ all:
         instance:
           mp:
             podman:
-              image: docker.io/...:tag         # required
-              command: /sbin/init              # optional, role default '/sbin/init'
-              privileged: false                # optional, role default false
-              volumes: []                      # optional
-              capabilities: []                 # optional
-              podman_network: []               # optional, list or single string
-              env: {}                          # optional
-              tmpfs: []                        # optional
-              exposed_ports: []                # optional
-              published_ports: []              # optional
+              image: docker.io/...:tag # required
+              command: /sbin/init # optional, role default '/sbin/init'
+              privileged: false # optional, role default false
+              volumes: [] # optional
+              capabilities: [] # optional
+              podman_network: [] # optional, list or single string
+              env: {} # optional
+              tmpfs: [] # optional
+              exposed_ports: [] # optional
+              published_ports: [] # optional
 ```
+````
 
 Shared defaults can be hoisted into `mp_defaults.podman` in `inventory/group_vars/molecule.yml` (overrides role defaults; per-host fields override mp_defaults). Field resolution order in the role: role defaults <- `mp_defaults.podman` <- `hostvars[item].mp.podman`.
 
 ## Role-level overrides
 
 See `defaults/main.yml` (`mp_podman_role_defaults`, `mp_podman_async_*`, `mp_podman_reserved_networks`).
-```
+
+````
 
 - [ ] **Step 2: Replace `roles/kubevirt/README.md`**
 
@@ -1582,7 +1610,7 @@ all:
               memory: 1Gi                                  # optional, role default '1Gi'
               ssh_service:
                 type: NodePort                             # optional, only NodePort supported in v1
-```
+````
 
 Shared defaults can be hoisted into `mp_defaults.kubevirt` in `inventory/group_vars/molecule.yml`. Field resolution order: role defaults <- `mp_defaults.kubevirt` <- `hostvars[item].mp.kubevirt`.
 
@@ -1593,7 +1621,8 @@ See `defaults/main.yml` (`mp_kubevirt_role_defaults`, `mp_kubevirt_ssh_key_path`
 ## v1 limitation
 
 Only `ssh_service.type: NodePort` is supported. The role asserts this on create. LoadBalancer / ClusterIP+port-forward are out of scope for v1.
-```
+
+````
 
 - [ ] **Step 3: Lint**
 
@@ -1605,13 +1634,14 @@ Expected: no findings.
 ```bash
 git add roles/podman/README.md roles/kubevirt/README.md
 git commit -m "docs(roles): rewrite README for ansible-native shape"
-```
+````
 
 ---
 
 ### Task 13: Update CLAUDE.md
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 
 The current CLAUDE.md describes v1 platforms-shape semantics in several places. Update Architecture, Key files, Common commands, Public contract, and "When updating provisioner logic" sections. Leave the "Do not depend on `molecule-plugins`" section unchanged.
@@ -1619,6 +1649,7 @@ The current CLAUDE.md describes v1 platforms-shape semantics in several places. 
 - [ ] **Step 1: Replace the "Architecture (one-paragraph version)" section**
 
 Find:
+
 ```markdown
 ## Architecture (one-paragraph version)
 
@@ -1626,6 +1657,7 @@ Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) 
 ```
 
 Replace with:
+
 ```markdown
 ## Architecture (one-paragraph version)
 
@@ -1635,6 +1667,7 @@ Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) 
 - [ ] **Step 2: Replace the "Key files" section**
 
 Find:
+
 ```markdown
 - `playbooks/{create,destroy,prepare}.yml` — dispatcher entry points; the `import_playbook` targets that consumers reference by FQCN.
 - `roles/podman/tasks/{create,destroy,prepare,_networks}.yml` — podman lifecycle. `_networks.yml` is shared between create and destroy.
@@ -1645,6 +1678,7 @@ Find:
 ```
 
 Replace with:
+
 ```markdown
 - `playbooks/{create,destroy,prepare}.yml` — dispatcher entry points; the `import_playbook` targets that consumers reference by FQCN.
 - `playbooks/group_vars/all.yml` — declares `mp_supported_backends`.
@@ -1659,6 +1693,7 @@ Replace with:
 - [ ] **Step 3: Replace the "Common commands" table**
 
 Find:
+
 ```markdown
 | Run podman self-test | `pytest tests/integration -v -k podman` |
 | Run kubevirt self-test (requires `$KUBECONFIG` pointing at a cluster with KubeVirt) | `pytest tests/integration -v -k kubevirt` |
@@ -1666,6 +1701,7 @@ Find:
 ```
 
 Replace with:
+
 ```markdown
 | Run podman self-test | `PROVISIONER=podman pytest tests/integration -v -k default` |
 | Run kubevirt self-test (requires `$KUBECONFIG` pointing at a cluster with KubeVirt) | `PROVISIONER=kubevirt pytest tests/integration -v -k default` |
@@ -1677,7 +1713,8 @@ Replace with:
 Find the entire section starting with `## Public contract (the thing we don't break without a major bump)` through the next `##` header.
 
 Replace with:
-```markdown
+
+````markdown
 ## Public contract (the thing we don't break without a major bump)
 
 The inventory shape consumers ship:
@@ -1689,26 +1726,29 @@ all:
       hosts:
         <name>:
           mp:
-            podman:                     # required when mp_backend == podman
-              image: <str>              # required
+            podman: # required when mp_backend == podman
+              image: <str> # required
               # optional: command, privileged, volumes, capabilities,
               # podman_network, env, tmpfs, exposed_ports, published_ports
-            kubevirt:                   # required when mp_backend == kubevirt
-              image: <str>              # required (containerdisk)
-              namespace: <str>          # optional, role default 'molecule'
-              ssh_user: <str>           # optional, role default 'cloud-user'
-              memory: <str>             # optional, role default '1Gi'
+            kubevirt: # required when mp_backend == kubevirt
+              image: <str> # required (containerdisk)
+              namespace: <str> # optional, role default 'molecule'
+              ssh_user: <str> # optional, role default 'cloud-user'
+              memory: <str> # optional, role default '1Gi'
               ssh_service:
-                type: NodePort          # optional, only NodePort in v1
+                type: NodePort # optional, only NodePort in v1
 ```
+````
 
 Plus:
+
 - `inventory/group_vars/molecule.yml` must define `mp_backend` (one of `mp_supported_backends`).
 - `mp_defaults.<backend>.<field>` is an optional group-var layer between role defaults and per-host hostvars.
 - `molecule.yml` uses molecule's ansible-native shape (`ansible:` block).
 
 Breaking changes to the above keys → major version bump. New optional fields → minor.
-```
+
+````
 
 - [ ] **Step 5: Replace the "When updating provisioner logic" section**
 
@@ -1724,9 +1764,10 @@ Find:
    - `roles/<backend>/README.md`
    - `docs/examples/platforms.yml`
    - the schema section above
-```
+````
 
 Replace with:
+
 ```markdown
 ## When updating provisioner logic
 
@@ -1758,6 +1799,7 @@ git commit -m "docs(claude): update for ansible-native shape (architecture, cont
 ### Task 14: Add changelog fragment
 
 **Files:**
+
 - Modify: `changelogs/fragments/v1.0.0.yml` (already exists; rewrite)
 
 The existing fragment describes a v1.0 release that selects backend via `$PROVISIONER`. Update to describe the v1.0 ansible-native shape that actually ships.
@@ -1807,6 +1849,7 @@ git push origin main
 
 Run: `gh run watch` (or `gh run list --limit 1` to find the run id, then `gh run view <id> --log`)
 Expected:
+
 - `changelog`, `build-import`, `ansible-lint`, `sanity`, `unit-galaxy`, `unit-source` pass
 - `integration-podman` PLAY RECAPs show create/prepare/converge/verify/destroy succeeding under `PROVISIONER=podman`
 - `integration-kubevirt` PLAY RECAPs same under `PROVISIONER=kubevirt`; the "Assert a VirtualMachine existed during the run" guard passes
@@ -1815,6 +1858,7 @@ Expected:
 - [ ] **Step 3: If CI fails, debug**
 
 Read the failing job's log. Common kubevirt-side issues:
+
 - `groups['molecule']` undefined in the dispatcher → consumer's `inventory/hosts.yml` not loaded → confirm `--inventory=inventory/` arg in molecule.yml, and that `pytest_ansible.molecule_scenario` is invoking molecule with the scenario's CWD.
 - VirtualMachine never reaches Running → fall back to addopts override; check VM watcher trace and virt-launcher logs.
 

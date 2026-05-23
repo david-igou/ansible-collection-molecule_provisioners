@@ -15,6 +15,7 @@
 ## File Map
 
 **Create:**
+
 - `roles/docker/defaults/main.yml`
 - `roles/docker/meta/main.yml`
 - `roles/docker/meta/argument_specs.yml`
@@ -36,6 +37,7 @@
 - `tests/integration/docker/assertions/run_destroy.yml`
 
 **Modify:**
+
 - `playbooks/group_vars/all.yml` — add `docker` to `mp_supported_backends`
 - `galaxy.yml` — add `community.docker: ">=4.0.0"` dependency; add `docker` to tags; update description
 - `extensions/molecule/default/inventory/hosts.yml` — add `mp.docker` block on `instance`
@@ -76,6 +78,7 @@ Expected: a doc header for the docker connection plugin, no traceback.
 - [ ] **Step 4: Smoke-test a single container round-trip**
 
 Run:
+
 ```bash
 docker run --rm --name mp-docker-smoke -d alpine:3.20 sleep 30 \
   && docker exec mp-docker-smoke true \
@@ -92,6 +95,7 @@ Expected: ends with `OK`. If this fails (rootless permission, no internet, cgrou
 ### Task 1: Add docker to the backend allow-list
 
 **Files:**
+
 - Modify: `playbooks/group_vars/all.yml`
 
 - [ ] **Step 1: Read the current allow-list**
@@ -99,6 +103,7 @@ Expected: ends with `OK`. If this fails (rootless permission, no internet, cgrou
 Run: `cat playbooks/group_vars/all.yml`
 
 Expected:
+
 ```yaml
 ---
 # Loaded by every dispatcher play in playbooks/.
@@ -111,6 +116,7 @@ mp_supported_backends:
 - [ ] **Step 2: Append `docker`**
 
 Edit `playbooks/group_vars/all.yml` to read:
+
 ```yaml
 ---
 # Loaded by every dispatcher play in playbooks/.
@@ -124,6 +130,7 @@ mp_supported_backends:
 - [ ] **Step 3: Verify the dispatcher accepts `docker` (it'll still fail later because the role doesn't exist yet, but the allow-list check must pass)**
 
 Run:
+
 ```bash
 ANSIBLE_COLLECTIONS_PATH="$HOME/.ansible/collections" \
   ansible-playbook playbooks/create.yml \
@@ -147,6 +154,7 @@ git commit -m "feat(docker): register backend in dispatcher allow-list"
 ### Task 2: Scaffold the role layout (entry point + defaults)
 
 **Files:**
+
 - Create: `roles/docker/tasks/main.yml`
 - Create: `roles/docker/defaults/main.yml`
 - Create: `roles/docker/meta/main.yml`
@@ -154,6 +162,7 @@ git commit -m "feat(docker): register backend in dispatcher allow-list"
 - [ ] **Step 1: Create the directory structure**
 
 Run:
+
 ```bash
 mkdir -p roles/docker/{tasks,defaults,meta}
 ```
@@ -161,6 +170,7 @@ mkdir -p roles/docker/{tasks,defaults,meta}
 - [ ] **Step 2: Write the default entry point (refuses direct invocation)**
 
 Create `roles/docker/tasks/main.yml`:
+
 ```yaml
 ---
 - name: "Docker role: no default entry point"
@@ -173,6 +183,7 @@ Create `roles/docker/tasks/main.yml`:
 - [ ] **Step 3: Write `defaults/main.yml`**
 
 Create `roles/docker/defaults/main.yml`:
+
 ```yaml
 ---
 # Defaults for david_igou.molecule_provisioners.docker.
@@ -211,6 +222,7 @@ mp_docker_role_defaults:
 - [ ] **Step 4: Write `meta/main.yml`**
 
 Create `roles/docker/meta/main.yml`:
+
 ```yaml
 ---
 galaxy_info:
@@ -250,6 +262,7 @@ git commit -m "feat(docker): scaffold role layout with defaults and entry point"
 ### Task 3: Write failing tests for spec merge and validation
 
 **Files:**
+
 - Create: `tests/integration/docker/__init__.py`
 - Create: `tests/integration/docker/test_docker_unit.py`
 - Create: `tests/integration/docker/fixtures/valid_minimal.yml`
@@ -259,6 +272,7 @@ git commit -m "feat(docker): scaffold role layout with defaults and entry point"
 - [ ] **Step 1: Create the directory structure**
 
 Run:
+
 ```bash
 mkdir -p tests/integration/docker/{fixtures,assertions}
 touch tests/integration/docker/__init__.py
@@ -267,6 +281,7 @@ touch tests/integration/docker/__init__.py
 - [ ] **Step 2: Write the minimal-valid fixture**
 
 Create `tests/integration/docker/fixtures/valid_minimal.yml`:
+
 ```yaml
 ---
 all:
@@ -294,6 +309,7 @@ all:
 - [ ] **Step 3: Write the missing-image fixture**
 
 Create `tests/integration/docker/fixtures/missing_image.yml`:
+
 ```yaml
 ---
 all:
@@ -312,6 +328,7 @@ all:
 - [ ] **Step 4: Write the validate-runner playbook**
 
 Create `tests/integration/docker/assertions/run_validate.yml`:
+
 ```yaml
 ---
 - name: Exercise spec-merge + validation
@@ -336,12 +353,13 @@ Create `tests/integration/docker/assertions/run_validate.yml`:
           - _mp_specs['h-minimal'].command == '/sbin/init'
           - _mp_specs['h-minimal'].privileged == false
         fail_msg: "Spec merge did not layer mp_defaults onto role_defaults correctly."
-      when: groups['molecule'] | length == 2  # only the valid_minimal fixture has h-minimal
+      when: groups['molecule'] | length == 2 # only the valid_minimal fixture has h-minimal
 ```
 
 - [ ] **Step 5: Write the pytest module**
 
 Create `tests/integration/docker/test_docker_unit.py`:
+
 ```python
 """Fast, daemon-less tests for the docker role's validation and merge logic."""
 
@@ -393,11 +411,13 @@ git commit -m "test(docker): add failing tests for spec merge and validation"
 ### Task 4: Implement spec merge
 
 **Files:**
+
 - Create: `roles/docker/tasks/_spec_merge.yml`
 
 - [ ] **Step 1: Write `_spec_merge.yml`**
 
 Create `roles/docker/tasks/_spec_merge.yml`:
+
 ```yaml
 ---
 # Build _mp_specs[host] from three layers:
@@ -429,11 +449,13 @@ Expected: still FAILS — error now points at the missing `_validate.yml`. This 
 ### Task 5: Implement validation
 
 **Files:**
+
 - Create: `roles/docker/tasks/_validate.yml`
 
 - [ ] **Step 1: Write `_validate.yml`**
 
 Create `roles/docker/tasks/_validate.yml`:
+
 ```yaml
 ---
 # Fail-fast validation. Run after _spec_merge.yml. No side effects.
@@ -470,6 +492,7 @@ git commit -m "feat(docker): spec merge + image-set validation"
 ### Task 6: Write failing test for the network collector
 
 **Files:**
+
 - Create: `tests/integration/docker/fixtures/networks_and_reserved.yml`
 - Create: `tests/integration/docker/assertions/run_networks.yml`
 - Modify: `tests/integration/docker/test_docker_unit.py`
@@ -477,6 +500,7 @@ git commit -m "feat(docker): spec merge + image-set validation"
 - [ ] **Step 1: Write the fixture (two distinct networks + one reserved name)**
 
 Create `tests/integration/docker/fixtures/networks_and_reserved.yml`:
+
 ```yaml
 ---
 all:
@@ -489,13 +513,13 @@ all:
               image: docker.io/library/alpine:3.20
               networks:
                 - name: mp-net-a
-                - name: bridge   # reserved; must be filtered
+                - name: bridge # reserved; must be filtered
         h-b:
           mp:
             docker:
               image: docker.io/library/alpine:3.20
               networks:
-                - name: mp-net-a   # duplicate; must be unique-ified
+                - name: mp-net-a # duplicate; must be unique-ified
                 - name: mp-net-b
   vars:
     mp_backend: docker
@@ -504,6 +528,7 @@ all:
 - [ ] **Step 2: Write the network-runner playbook**
 
 Create `tests/integration/docker/assertions/run_networks.yml`:
+
 ```yaml
 ---
 - name: Exercise the network collector
@@ -528,6 +553,7 @@ Create `tests/integration/docker/assertions/run_networks.yml`:
 - [ ] **Step 3: Add the test case to the pytest module**
 
 Edit `tests/integration/docker/test_docker_unit.py`, appending:
+
 ```python
 
 
@@ -549,11 +575,13 @@ Expected: FAIL — `_networks.yml` doesn't exist.
 ### Task 7: Implement `_networks.yml`
 
 **Files:**
+
 - Create: `roles/docker/tasks/_networks.yml`
 
 - [ ] **Step 1: Write the collector**
 
 Create `roles/docker/tasks/_networks.yml`:
+
 ```yaml
 ---
 # Build __mp_docker_networks: the deduped list of non-reserved network names
@@ -605,6 +633,7 @@ git commit -m "feat(docker): network collector with dedup and reserved-name filt
 ### Task 8: Implement `create.yml`
 
 **Files:**
+
 - Create: `roles/docker/tasks/create.yml`
 
 This task has no unit-test red/green — the E2E molecule run in Phase 9 is the verification step. The file is mostly explicit option forwarding, mirroring podman's create.yml.
@@ -612,6 +641,7 @@ This task has no unit-test red/green — the E2E molecule run in Phase 9 is the 
 - [ ] **Step 1: Write `create.yml`**
 
 Create `roles/docker/tasks/create.yml`:
+
 ```yaml
 ---
 - name: Merge per-host specs
@@ -756,12 +786,14 @@ git commit -m "feat(docker): create.yml with async container launch + runtime in
 ### Task 9: Write failing destroy-idempotency test
 
 **Files:**
+
 - Create: `tests/integration/docker/assertions/run_destroy.yml`
 - Modify: `tests/integration/docker/test_docker_unit.py`
 
 - [ ] **Step 1: Write the destroy-runner playbook**
 
 Create `tests/integration/docker/assertions/run_destroy.yml`:
+
 ```yaml
 ---
 # Verify destroy.yml is idempotent on a fresh (never-created) state.
@@ -770,8 +802,9 @@ Create `tests/integration/docker/assertions/run_destroy.yml`:
   connection: local
   gather_facts: false
   vars:
-    molecule_ephemeral_directory: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
-                                       | default('/tmp/molecule-fake-ephemeral', true) }}"
+    molecule_ephemeral_directory:
+      "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
+      | default('/tmp/molecule-fake-ephemeral', true) }}"
   tasks:
     - name: Include role defaults
       ansible.builtin.include_vars:
@@ -786,6 +819,7 @@ Create `tests/integration/docker/assertions/run_destroy.yml`:
 - [ ] **Step 2: Add the test case**
 
 Edit `tests/integration/docker/test_docker_unit.py`, appending:
+
 ```python
 
 
@@ -810,11 +844,13 @@ Expected: FAIL — `roles/docker/tasks/destroy.yml` doesn't exist.
 ### Task 10: Implement `destroy.yml`
 
 **Files:**
+
 - Create: `roles/docker/tasks/destroy.yml`
 
 - [ ] **Step 1: Write `destroy.yml`**
 
 Create `roles/docker/tasks/destroy.yml`:
+
 ```yaml
 ---
 # Defensive merge — a host may not have an mp.docker block on destroy if the
@@ -880,6 +916,7 @@ git commit -m "feat(docker): destroy.yml with async parallel teardown + network 
 ### Task 11: Implement `prepare.yml`
 
 **Files:**
+
 - Create: `roles/docker/tasks/prepare.yml`
 
 - [ ] **Step 1: Write `prepare.yml`**
@@ -887,6 +924,7 @@ git commit -m "feat(docker): destroy.yml with async parallel teardown + network 
 Looking at the podman role's `prepare.yml`, it installs `sudo` inside each container. The docker role uses the same `community.docker.docker` connection plugin and the same expectation of an init-capable image, so we mirror it:
 
 Create `roles/docker/tasks/prepare.yml`:
+
 ```yaml
 ---
 - name: Ensure sudo is installed
@@ -915,12 +953,14 @@ git commit -m "feat(docker): prepare.yml installs sudo in each container"
 ### Task 12: Add docker block to the default scenario
 
 **Files:**
+
 - Modify: `extensions/molecule/default/inventory/hosts.yml`
 - Modify: `extensions/molecule/default/inventory/group_vars/molecule.yml`
 
 - [ ] **Step 1: Add `mp.docker` to the `instance` host**
 
 Edit `extensions/molecule/default/inventory/hosts.yml`:
+
 ```yaml
 ---
 all:
@@ -945,13 +985,15 @@ all:
 - [ ] **Step 2: Add `mp_defaults.docker`**
 
 Edit `extensions/molecule/default/inventory/group_vars/molecule.yml`, appending under `mp_defaults:`:
+
 ```yaml
-  docker:
-    command: /sbin/init
-    privileged: true
+docker:
+  command: /sbin/init
+  privileged: true
 ```
 
 Final file should look like:
+
 ```yaml
 ---
 mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
@@ -978,6 +1020,7 @@ mp_defaults:
 - [ ] **Step 3: Run the molecule scenario locally under `PROVISIONER=docker`**
 
 Run:
+
 ```bash
 cd /home/igou/ansible-collection-molecule_provisioners
 PROVISIONER=docker ANSIBLE_COLLECTIONS_PATH="$HOME/.ansible/collections" \
@@ -1003,45 +1046,47 @@ git commit -m "test(docker): wire docker backend into the default self-test scen
 ### Task 13: Add `integration-docker` job and update `all_green`
 
 **Files:**
+
 - Modify: `.github/workflows/tests.yml`
 
 - [ ] **Step 1: Add the job (after `integration-qemu`, before `all_green`)**
 
 In `.github/workflows/tests.yml`, insert this job after the `integration-qemu` block:
+
 ```yaml
-  integration-docker:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout into the canonical collection path
-        uses: actions/checkout@v4
-        with:
-          path: ansible_collections/david_igou/molecule_provisioners
+integration-docker:
+  runs-on: ubuntu-latest
+  timeout-minutes: 15
+  steps:
+    - name: Checkout into the canonical collection path
+      uses: actions/checkout@v4
+      with:
+        path: ansible_collections/david_igou/molecule_provisioners
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
 
-      - name: Install ansible + molecule + pytest plumbing
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        run: |
-          python -m pip install --upgrade pip
-          pip install ansible-core molecule \
-                      pytest pytest-ansible pytest-xdist docker
+    - name: Install ansible + molecule + pytest plumbing
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      run: |
+        python -m pip install --upgrade pip
+        pip install ansible-core molecule \
+                    pytest pytest-ansible pytest-xdist docker
 
-      - name: Install collection dependencies
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        run: |
-          ansible-galaxy collection install \
-            containers.podman kubernetes.core community.crypto community.docker
+    - name: Install collection dependencies
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      run: |
+        ansible-galaxy collection install \
+          containers.podman kubernetes.core community.crypto community.docker
 
-      - name: Run docker integration tests
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        env:
-          PROVISIONER: docker
-          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
-        run: pytest tests/integration -v -k default
+    - name: Run docker integration tests
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      env:
+        PROVISIONER: docker
+        ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
+      run: pytest tests/integration -v -k default
 ```
 
 (GitHub-hosted `ubuntu-latest` runners ship a running docker daemon — no `sudo systemctl start docker` or socket-permission dance required. The `docker` pip package is needed by `community.docker` modules for the API client.)
@@ -1049,35 +1094,36 @@ In `.github/workflows/tests.yml`, insert this job after the `integration-qemu` b
 - [ ] **Step 2: Update `all_green` to depend on the new job**
 
 In the same file, edit the `all_green` block:
+
 ```yaml
-  all_green:
-    if: ${{ always() }}
-    needs:
-      - changelog
-      - build-import
-      - sanity
-      - unit-galaxy
-      - unit-source
-      - ansible-lint
-      - integration-podman
-      - integration-kubevirt
-      - integration-qemu
-      - integration-docker
-    runs-on: ubuntu-latest
-    steps:
-      - run: >-
-          python -c "assert 'failure' not in
-          set([
-          '${{ needs.changelog.result }}',
-          '${{ needs.sanity.result }}',
-          '${{ needs.unit-galaxy.result }}',
-          '${{ needs.ansible-lint.result }}',
-          '${{ needs.unit-source.result }}',
-          '${{ needs.integration-podman.result }}',
-          '${{ needs.integration-kubevirt.result }}',
-          '${{ needs.integration-qemu.result }}',
-          '${{ needs.integration-docker.result }}'
-          ])"
+all_green:
+  if: ${{ always() }}
+  needs:
+    - changelog
+    - build-import
+    - sanity
+    - unit-galaxy
+    - unit-source
+    - ansible-lint
+    - integration-podman
+    - integration-kubevirt
+    - integration-qemu
+    - integration-docker
+  runs-on: ubuntu-latest
+  steps:
+    - run: >-
+        python -c "assert 'failure' not in
+        set([
+        '${{ needs.changelog.result }}',
+        '${{ needs.sanity.result }}',
+        '${{ needs.unit-galaxy.result }}',
+        '${{ needs.ansible-lint.result }}',
+        '${{ needs.unit-source.result }}',
+        '${{ needs.integration-podman.result }}',
+        '${{ needs.integration-kubevirt.result }}',
+        '${{ needs.integration-qemu.result }}',
+        '${{ needs.integration-docker.result }}'
+        ])"
 ```
 
 - [ ] **Step 3: Validate workflow YAML parses**
@@ -1100,6 +1146,7 @@ git commit -m "ci(docker): add integration-docker job and wire into all_green"
 ### Task 14: Wire `community.docker` into galaxy.yml and requirements.txt
 
 **Files:**
+
 - Modify: `galaxy.yml`
 - Modify: `requirements.txt`
 
@@ -1110,6 +1157,7 @@ Run: `cat galaxy.yml`
 - [ ] **Step 2: Update the description, tags, and dependencies**
 
 Edit `galaxy.yml` so the relevant blocks read:
+
 ```yaml
 description: >-
   Reusable Molecule provisioner playbooks and roles (podman, kubevirt, qemu, docker) for
@@ -1135,6 +1183,7 @@ dependencies:
 - [ ] **Step 3: Add an explicit comment about community.docker in requirements.txt**
 
 Edit `requirements.txt` to read:
+
 ```
 # TO-DO: add python packages that are required for this collection
 # Note: community.docker (declared in galaxy.yml) requires the `docker` python
@@ -1158,11 +1207,13 @@ git commit -m "feat(docker): declare community.docker dependency in galaxy.yml"
 ### Task 15: Write `roles/docker/meta/argument_specs.yml`
 
 **Files:**
+
 - Create: `roles/docker/meta/argument_specs.yml`
 
 - [ ] **Step 1: Write the argument_specs**
 
 Create `roles/docker/meta/argument_specs.yml`:
+
 ```yaml
 ---
 argument_specs:
@@ -1236,23 +1287,25 @@ git commit -m "docs(docker): declare argument_specs for ansible-doc"
 ### Task 16: Write `roles/docker/README.md`
 
 **Files:**
+
 - Create: `roles/docker/README.md`
 
 - [ ] **Step 1: Write the README**
 
 Create `roles/docker/README.md`:
-```markdown
+
+````markdown
 # `david_igou.molecule_provisioners.docker`
 
 Molecule provisioner role for docker containers. Not invoked directly — invoked via the collection's top-level `playbooks/{create,destroy,prepare}.yml` dispatchers, which read `mp_backend` from the molecule group's hostvars.
 
 ## Entry points
 
-| `tasks_from` | What it does |
-| --- | --- |
-| `create` | Computes per-host merged specs, creates user-defined docker networks, then creates containers from `hostvars[item].mp.docker.*` for each host in `groups['molecule']`. Writes `ansible_connection: community.docker.docker` per host into the runtime inventory file. |
-| `destroy` | Removes those containers and any non-reserved networks. |
-| `prepare` | Installs `sudo` inside each container. |
+| `tasks_from` | What it does                                                                                                                                                                                                                                                          |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create`     | Computes per-host merged specs, creates user-defined docker networks, then creates containers from `hostvars[item].mp.docker.*` for each host in `groups['molecule']`. Writes `ansible_connection: community.docker.docker` per host into the runtime inventory file. |
+| `destroy`    | Removes those containers and any non-reserved networks.                                                                                                                                                                                                               |
+| `prepare`    | Installs `sudo` inside each container.                                                                                                                                                                                                                                |
 
 ## Inputs (per-host, in inventory)
 
@@ -1264,48 +1317,49 @@ all:
         instance:
           mp:
             docker:
-              image: docker.io/...:tag         # required
-              command: /sbin/init              # optional
-              command_handling: compatibility  # optional, role default 'compatibility'
-              override_command: true           # optional, role default true
-              hostname: <str>                  # optional, defaults to inventory_hostname
-              privileged: false                # optional, role default false
-              user: <str>                      # optional
-              tty: <bool>                      # optional
-              pid_mode: <str>                  # optional
-              cgroupns_mode: <str>             # optional
-              runtime: <str>                   # optional
-              platform: <str>                  # optional
-              capabilities: []                 # optional
-              security_opts: [<str>]           # optional
-              sysctls: {<k>: <v>}              # optional
-              ulimits: [<str>]                 # optional
-              devices: [<str>]                 # optional
-              volumes: []                      # optional
-              mounts: [<dict>]                 # optional
-              tmpfs: [<str>]                   # optional
-              shm_size: <str>                  # optional
-              networks: [{name: <str>}]        # optional; role creates/deletes the network
-              network_mode: <str>              # optional
-              networks_cli_compatible: true    # optional, role default true
-              purge_networks: <bool>           # optional
-              dns_servers: [<str>]             # optional
-              etc_hosts: {<host>: <ip>}        # optional
-              exposed_ports: [<str>]           # optional
-              published_ports: [<str>]         # optional
-              links: [<str>]                   # optional
-              env: {}                          # optional
-              labels: {}                       # optional
-              restart_policy: <str>            # optional
-              restart_retries: <int>           # optional
-              stop_signal: <str>               # optional
-              kill_signal: <str>               # optional
-              memory: <str>                    # optional
-              memory_swap: <str>               # optional
+              image: docker.io/...:tag # required
+              command: /sbin/init # optional
+              command_handling: compatibility # optional, role default 'compatibility'
+              override_command: true # optional, role default true
+              hostname: <str> # optional, defaults to inventory_hostname
+              privileged: false # optional, role default false
+              user: <str> # optional
+              tty: <bool> # optional
+              pid_mode: <str> # optional
+              cgroupns_mode: <str> # optional
+              runtime: <str> # optional
+              platform: <str> # optional
+              capabilities: [] # optional
+              security_opts: [<str>] # optional
+              sysctls: { <k>: <v> } # optional
+              ulimits: [<str>] # optional
+              devices: [<str>] # optional
+              volumes: [] # optional
+              mounts: [<dict>] # optional
+              tmpfs: [<str>] # optional
+              shm_size: <str> # optional
+              networks: [{ name: <str> }] # optional; role creates/deletes the network
+              network_mode: <str> # optional
+              networks_cli_compatible: true # optional, role default true
+              purge_networks: <bool> # optional
+              dns_servers: [<str>] # optional
+              etc_hosts: { <host>: <ip> } # optional
+              exposed_ports: [<str>] # optional
+              published_ports: [<str>] # optional
+              links: [<str>] # optional
+              env: {} # optional
+              labels: {} # optional
+              restart_policy: <str> # optional
+              restart_retries: <int> # optional
+              stop_signal: <str> # optional
+              kill_signal: <str> # optional
+              memory: <str> # optional
+              memory_swap: <str> # optional
               # destroy-time
-              force_kill: true                 # optional, role default true
-              keep_volumes: true               # optional, role default true
+              force_kill: true # optional, role default true
+              keep_volumes: true # optional, role default true
 ```
+````
 
 Shared defaults can be hoisted into `mp_defaults.docker` in `inventory/group_vars/molecule.yml` (overrides role defaults; per-host fields override mp_defaults). Field resolution order in the role: role defaults <- `mp_defaults.docker` <- `hostvars[item].mp.docker`.
 
@@ -1324,24 +1378,27 @@ See `defaults/main.yml` (`mp_docker_role_defaults`, `mp_docker_async_*`, `mp_doc
 - Image build at create time (`Dockerfile.j2`, `pre_build_image`, `buildargs`, `cache_from`). Ship a fully-prepared image.
 - Private registry login (`docker_login`). Bake credentials into the docker daemon config or pre-pull the image.
 - Remote docker daemons / TLS (`docker_host`, `cacert_path`, `cert_path`, `key_path`, `tls_verify`). Local socket only.
-```
+
+````
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add roles/docker/README.md
 git commit -m "docs(docker): role README with schema and prereqs"
-```
+````
 
 ### Task 17: Update `docs/examples/` to include docker
 
 **Files:**
+
 - Modify: `docs/examples/inventory/hosts.yml`
 - Modify: `docs/examples/inventory/group_vars/molecule.yml`
 
 - [ ] **Step 1: Add `mp.docker` block to hosts.yml**
 
 Edit `docs/examples/inventory/hosts.yml`:
+
 ```yaml
 ---
 # Example inventory shape for david_igou.molecule_provisioners.
@@ -1369,6 +1426,7 @@ all:
 - [ ] **Step 2: Add `mp_defaults.docker` to group_vars/molecule.yml**
 
 Edit `docs/examples/inventory/group_vars/molecule.yml`:
+
 ```yaml
 ---
 # Backend selector. Drives which role the dispatcher includes.
@@ -1399,6 +1457,7 @@ git commit -m "docs(examples): add docker block to inventory + defaults example"
 ### Task 18: Update top-level `CLAUDE.md`
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 
 - [ ] **Step 1: Update the architecture paragraph**
@@ -1410,6 +1469,7 @@ Specifically, edit the paragraph that currently reads "into one of two roles (`r
 - [ ] **Step 2: Update the "Key files" list**
 
 Find the "Key files" section. Add a line for the docker role's task layout, mirroring the podman line, just after the qemu entry:
+
 ```
 - `roles/docker/tasks/{create,destroy,prepare,_spec_merge,_validate,_networks}.yml` — docker lifecycle. `_networks.yml` is shared between create and destroy.
 ```
@@ -1417,22 +1477,24 @@ Find the "Key files" section. Add a line for the docker role's task layout, mirr
 - [ ] **Step 3: Update the "Public contract" schema block**
 
 In the "Public contract (the thing we don't break without a major bump)" section, append a `docker:` schema block under the inventory shape example, after the `kubevirt:` block:
+
 ```yaml
-            docker:                      # required when mp_backend == docker
-              image: <str>               # required
-              # optional: command, command_handling, override_command, hostname,
-              #   privileged, user, tty, pid_mode, cgroupns_mode, runtime, platform,
-              #   capabilities, security_opts, sysctls, ulimits, devices,
-              #   volumes, mounts, tmpfs, shm_size,
-              #   networks, network_mode, networks_cli_compatible, purge_networks,
-              #   dns_servers, etc_hosts, exposed_ports, published_ports, links,
-              #   env, labels, restart_policy, restart_retries, stop_signal, kill_signal,
-              #   memory, memory_swap, force_kill, keep_volumes
+docker: # required when mp_backend == docker
+  image: <str> # required
+  # optional: command, command_handling, override_command, hostname,
+  #   privileged, user, tty, pid_mode, cgroupns_mode, runtime, platform,
+  #   capabilities, security_opts, sysctls, ulimits, devices,
+  #   volumes, mounts, tmpfs, shm_size,
+  #   networks, network_mode, networks_cli_compatible, purge_networks,
+  #   dns_servers, etc_hosts, exposed_ports, published_ports, links,
+  #   env, labels, restart_policy, restart_retries, stop_signal, kill_signal,
+  #   memory, memory_swap, force_kill, keep_volumes
 ```
 
 - [ ] **Step 4: Update the "Common commands" table**
 
 Find the row for the kubevirt self-test and add a docker row right after it:
+
 ```
 | Run docker self-test | `PROVISIONER=docker pytest tests/integration -v -k default` |
 ```
@@ -1479,6 +1541,7 @@ Expected: exit 0 with `PLAY RECAP` showing successful create/prepare/converge/ve
 - [ ] **Step 5: Confirm no regression on existing backends**
 
 Run:
+
 ```bash
 PROVISIONER=podman ANSIBLE_COLLECTIONS_PATH="$HOME/.ansible/collections" \
   pytest tests/integration -v -k default

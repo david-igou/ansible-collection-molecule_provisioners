@@ -4,8 +4,9 @@
   connection: local
   gather_facts: true
   vars:
-    molecule_ephemeral_directory: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
-                                       | mandatory }}"
+    molecule_ephemeral_directory:
+      "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
+      | mandatory }}"
     mp_qemu_template_dir_override: "{{ playbook_dir }}/../../../../roles/qemu/templates"
   tasks:
     - name: Include role defaults

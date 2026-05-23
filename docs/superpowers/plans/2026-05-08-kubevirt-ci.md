@@ -11,6 +11,7 @@
 **Branch:** `kubevirt-ci` (already created; spec already committed there).
 
 **Honest note on TDD applicability:** This work is YAML/CI infrastructure. There are no unit-testable functions to TDD against. The verification loop is:
+
 1. Local lint (ansible-lint, yamllint, pre-commit) — fast, runs on every commit.
 2. CI on the draft PR — the real integration test, runs after Task 7 opens the PR.
 
@@ -23,6 +24,7 @@ Each task ends with a commit. Iterate by pushing and watching CI logs; failures 
 ## File Structure
 
 **Create:**
+
 - `extensions/molecule/kubevirt_ci/molecule.yml` — scenario config (single platform, fedora-cloud demo image, NodePort SSH)
 - `extensions/molecule/kubevirt_ci/create.yml` — `import_playbook` one-liner
 - `extensions/molecule/kubevirt_ci/destroy.yml` — `import_playbook` one-liner
@@ -33,6 +35,7 @@ Each task ends with a commit. Iterate by pushing and watching CI logs; failures 
 - `changelogs/fragments/kubevirt-ci.yml` — `trivial:` fragment to satisfy changelog gate
 
 **Modify:**
+
 - `.github/workflows/tests.yml` — add `kubevirt` job; add `kubevirt` to `all_green.needs` and to its python result-set check
 - `CLAUDE.md` — add command-table row pointing at `pytest -k kubevirt_ci`
 
@@ -41,6 +44,7 @@ Each task ends with a commit. Iterate by pushing and watching CI logs; failures 
 ## Task 1: Create scenario lifecycle one-liners + group_vars
 
 **Files:**
+
 - Create: `extensions/molecule/kubevirt_ci/create.yml`
 - Create: `extensions/molecule/kubevirt_ci/destroy.yml`
 - Create: `extensions/molecule/kubevirt_ci/prepare.yml`
@@ -144,6 +148,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ## Task 2: Create `molecule.yml` for kubevirt_ci scenario
 
 **Files:**
+
 - Create: `extensions/molecule/kubevirt_ci/molecule.yml`
 
 Scenario config. Single platform, small fedora-cloud-container-disk-demo image, sized for emulation runtime.
@@ -227,6 +232,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ## Task 3: Add `kubevirt` job to `.github/workflows/tests.yml`
 
 **Files:**
+
 - Modify: `.github/workflows/tests.yml`
 
 Insert the new job before the `all_green` job and wire it into `all_green`'s `needs:` list and python result-set check.
@@ -244,65 +250,65 @@ Expected: a line number (currently around line 65). The new `kubevirt:` job is i
 Insert the following YAML block immediately before the `all_green:` block (preserving 2-space indentation; this is at job-level, same indent as `integration:`):
 
 ```yaml
-  kubevirt:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - name: Checkout into the canonical collection path
-        uses: actions/checkout@v4
-        with:
-          path: ansible_collections/david_igou/molecule_provisioners
+kubevirt:
+  runs-on: ubuntu-latest
+  timeout-minutes: 45
+  steps:
+    - name: Checkout into the canonical collection path
+      uses: actions/checkout@v4
+      with:
+        path: ansible_collections/david_igou/molecule_provisioners
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
 
-      - name: Install ansible + molecule + pytest plumbing
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        run: |
-          python -m pip install --upgrade pip
-          pip install ansible-core molecule "molecule-plugins[podman]" \
-                      pytest pytest-ansible pytest-xdist kubernetes
+    - name: Install ansible + molecule + pytest plumbing
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      run: |
+        python -m pip install --upgrade pip
+        pip install ansible-core molecule "molecule-plugins[podman]" \
+                    pytest pytest-ansible pytest-xdist kubernetes
 
-      - name: Install collection dependencies
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        run: |
-          ansible-galaxy collection install \
-            containers.podman kubernetes.core community.crypto
+    - name: Install collection dependencies
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      run: |
+        ansible-galaxy collection install \
+          containers.podman kubernetes.core community.crypto
 
-      - name: Create kind cluster
-        uses: helm/kind-action@v1
-        with:
-          version: v0.24.0
-          cluster_name: kubevirt-ci
-          wait: 120s
+    - name: Create kind cluster
+      uses: helm/kind-action@v1
+      with:
+        version: v0.24.0
+        cluster_name: kubevirt-ci
+        wait: 120s
 
-      - name: Install KubeVirt operator + CR (emulation mode)
-        run: |
-          KUBEVIRT_VERSION=$(curl -fsSL https://api.github.com/repos/kubevirt/kubevirt/releases/latest | jq -r .tag_name)
-          echo "Installing KubeVirt ${KUBEVIRT_VERSION}"
-          kubectl apply -f "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-operator.yaml"
-          kubectl apply -f "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-cr.yaml"
-          kubectl -n kubevirt patch kubevirt kubevirt --type=merge \
-            -p '{"spec":{"configuration":{"developerConfiguration":{"useEmulation":true}}}}'
-          kubectl -n kubevirt wait --for=condition=Available kv/kubevirt --timeout=10m
+    - name: Install KubeVirt operator + CR (emulation mode)
+      run: |
+        KUBEVIRT_VERSION=$(curl -fsSL https://api.github.com/repos/kubevirt/kubevirt/releases/latest | jq -r .tag_name)
+        echo "Installing KubeVirt ${KUBEVIRT_VERSION}"
+        kubectl apply -f "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-operator.yaml"
+        kubectl apply -f "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-cr.yaml"
+        kubectl -n kubevirt patch kubevirt kubevirt --type=merge \
+          -p '{"spec":{"configuration":{"developerConfiguration":{"useEmulation":true}}}}'
+        kubectl -n kubevirt wait --for=condition=Available kv/kubevirt --timeout=10m
 
-      - name: Run kubevirt_ci scenario
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        env:
-          PROVISIONER: kubevirt
-          MOLECULE_KUBEVIRT_ENABLED: "1"
-          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
-        run: pytest tests/integration -v -k kubevirt_ci
+    - name: Run kubevirt_ci scenario
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      env:
+        PROVISIONER: kubevirt
+        MOLECULE_KUBEVIRT_ENABLED: "1"
+        ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
+      run: pytest tests/integration -v -k kubevirt_ci
 
-      - name: Collect cluster diagnostics on failure
-        if: failure()
-        run: |
-          kubectl get all -A
-          kubectl -n kubevirt describe kv kubevirt
-          kubectl -n molecule describe vm,vmi,pod,svc 2>/dev/null || true
-          kubectl -n molecule logs -l kubevirt.io=virt-launcher --tail=200 2>/dev/null || true
+    - name: Collect cluster diagnostics on failure
+      if: failure()
+      run: |
+        kubectl get all -A
+        kubectl -n kubevirt describe kv kubevirt
+        kubectl -n molecule describe vm,vmi,pod,svc 2>/dev/null || true
+        kubectl -n molecule logs -l kubevirt.io=virt-launcher --tail=200 2>/dev/null || true
 ```
 
 - [ ] **Step 3: Wire `kubevirt` into `all_green.needs:`**
@@ -310,28 +316,28 @@ Insert the following YAML block immediately before the `all_green:` block (prese
 Edit the `all_green:` block. The current `needs:` list is:
 
 ```yaml
-    needs:
-      - changelog
-      - build-import
-      - sanity
-      - unit-galaxy
-      - unit-source
-      - ansible-lint
-      - integration
+needs:
+  - changelog
+  - build-import
+  - sanity
+  - unit-galaxy
+  - unit-source
+  - ansible-lint
+  - integration
 ```
 
 Add `- kubevirt` so it becomes:
 
 ```yaml
-    needs:
-      - changelog
-      - build-import
-      - sanity
-      - unit-galaxy
-      - unit-source
-      - ansible-lint
-      - integration
-      - kubevirt
+needs:
+  - changelog
+  - build-import
+  - sanity
+  - unit-galaxy
+  - unit-source
+  - ansible-lint
+  - integration
+  - kubevirt
 ```
 
 - [ ] **Step 4: Wire `kubevirt` into the python result-set check**
@@ -339,32 +345,32 @@ Add `- kubevirt` so it becomes:
 The current check is:
 
 ```yaml
-      - run: >-
-          python -c "assert 'failure' not in
-          set([
-          '${{ needs.changelog.result }}',
-          '${{ needs.sanity.result }}',
-          '${{ needs.unit-galaxy.result }}',
-          '${{ needs.ansible-lint.result }}',
-          '${{ needs.unit-source.result }}',
-          '${{ needs.integration.result }}'
-          ])"
+- run: >-
+    python -c "assert 'failure' not in
+    set([
+    '${{ needs.changelog.result }}',
+    '${{ needs.sanity.result }}',
+    '${{ needs.unit-galaxy.result }}',
+    '${{ needs.ansible-lint.result }}',
+    '${{ needs.unit-source.result }}',
+    '${{ needs.integration.result }}'
+    ])"
 ```
 
 Add `'${{ needs.kubevirt.result }}',` before the closing `])`. Final shape:
 
 ```yaml
-      - run: >-
-          python -c "assert 'failure' not in
-          set([
-          '${{ needs.changelog.result }}',
-          '${{ needs.sanity.result }}',
-          '${{ needs.unit-galaxy.result }}',
-          '${{ needs.ansible-lint.result }}',
-          '${{ needs.unit-source.result }}',
-          '${{ needs.integration.result }}',
-          '${{ needs.kubevirt.result }}'
-          ])"
+- run: >-
+    python -c "assert 'failure' not in
+    set([
+    '${{ needs.changelog.result }}',
+    '${{ needs.sanity.result }}',
+    '${{ needs.unit-galaxy.result }}',
+    '${{ needs.ansible-lint.result }}',
+    '${{ needs.unit-source.result }}',
+    '${{ needs.integration.result }}',
+    '${{ needs.kubevirt.result }}'
+    ])"
 ```
 
 - [ ] **Step 5: Lint the workflow YAML**
@@ -399,6 +405,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ## Task 4: Add changelog fragment
 
 **Files:**
+
 - Create: `changelogs/fragments/kubevirt-ci.yml`
 
 The repo's `changelog` job (reusable from `ansible/ansible-content-actions`) requires a fragment under `changelogs/fragments/` for any PR. CI-only changes should use the `trivial:` section so they don't appear in the user-facing changelog.
@@ -431,6 +438,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ## Task 5: Update `CLAUDE.md` command table
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 
 Add a row to the command table pointing at the new pytest selector. Locate the existing table around line 34-43.
@@ -502,6 +510,7 @@ yamllint .
 ```
 
 Expected: pass. Common failures:
+
 - Line-length: `.yamllint` raises the limit to 120; if you still exceed it, wrap the line.
 - Indent: 2-space indent, list dashes flush with key indentation.
 
@@ -512,6 +521,7 @@ ansible-lint
 ```
 
 Expected: pass. Common failures and fixes:
+
 - `name[play]` on `import_playbook` → already named in Task 1 (Steps 3-5).
 - `var-naming[no-role-prefix]` → globally skipped; if it surfaces, check `.ansible-lint`.
 
@@ -606,14 +616,14 @@ gh run view <run-id> --log-failed
 
 Likely failure modes and fixes:
 
-| Failure | Fix |
-| --- | --- |
-| `kubectl wait` times out on `kv/kubevirt` | Bump `--timeout` from `10m` to `15m`; emulation operator startup is slower than typical. |
-| `helm/kind-action@v1` fails to start cluster | Pin a different `version:` (try `v0.23.0`); kind versions occasionally regress. |
-| KubeVirt latest manifest references CRDs not in pinned kind | Pin `KUBEVIRT_VERSION` explicitly (e.g., `export KUBEVIRT_VERSION=v1.4.0`) instead of resolving latest. |
+| Failure                                                          | Fix                                                                                                                                         |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kubectl wait` times out on `kv/kubevirt`                        | Bump `--timeout` from `10m` to `15m`; emulation operator startup is slower than typical.                                                    |
+| `helm/kind-action@v1` fails to start cluster                     | Pin a different `version:` (try `v0.23.0`); kind versions occasionally regress.                                                             |
+| KubeVirt latest manifest references CRDs not in pinned kind      | Pin `KUBEVIRT_VERSION` explicitly (e.g., `export KUBEVIRT_VERSION=v1.4.0`) instead of resolving latest.                                     |
 | VM never reaches `Running` (visible in failure-diagnostics step) | Inspect virt-launcher logs in the failure dump. Common: image pull from quay.io rate-limited — add a `kind load docker-image` preload step. |
-| pytest reports `groups['molecule'] = []` | Re-check `_create_vm_dictionary.yml` retries; raise `retries: 10` to `retries: 20` if NodePort assignment is slow under emulation. |
-| ansible-lint fails on the workflow itself | ansible-lint doesn't lint workflow YAML; this would be yamllint or actionlint. |
+| pytest reports `groups['molecule'] = []`                         | Re-check `_create_vm_dictionary.yml` retries; raise `retries: 10` to `retries: 20` if NodePort assignment is slow under emulation.          |
+| ansible-lint fails on the workflow itself                        | ansible-lint doesn't lint workflow YAML; this would be yamllint or actionlint.                                                              |
 
 For each iteration: edit, lint locally, commit, `git push`, watch CI again. Do **not** force-push; rebase merges keep history readable.
 
@@ -637,25 +647,26 @@ Expected: PR merged to `main`, branch deleted on remote, local `kubevirt-ci` orp
 
 **Spec coverage check** (done while writing this plan):
 
-| Spec section | Implemented in |
-| --- | --- |
-| Goal: regression coverage parity with podman | Task 3 (kubevirt job + all_green wiring) |
-| Non-goals (multi-platform, KVM, real-cluster CI, PVC, schema changes) | Honored — no tasks touch those |
-| Architecture (kind + KubeVirt + useEmulation + pytest -k kubevirt_ci) | Task 3 |
-| `extensions/molecule/kubevirt_ci/` scenario (all 6 files + group_vars) | Tasks 1, 2 |
-| Image: fedora-cloud-container-disk-demo, 1Gi mem, 5Gi disk | Task 2 |
-| `.github/workflows/tests.yml` job + all_green wiring | Task 3 |
-| kind v0.24.0 pinned, KubeVirt latest at job time | Task 3 Step 2 |
-| Failure diagnostics step | Task 3 Step 2 (Collect cluster diagnostics) |
-| Test gating: existing conftest substring "kubevirt" still applies, no change | Task 3 (uses `MOLECULE_KUBEVIRT_ENABLED=1` and `-k kubevirt_ci`) — confirmed no conftest edit needed |
-| Documentation: CLAUDE.md command table row | Task 5 |
-| Documentation: `docs/MIGRATION.md` no change | Honored — no task touches it |
-| Documentation: `docs/examples/` no change | Honored |
-| Naming note: `kubevirt_ci` (underscore) for pytest, `kubevirt-ci` for kind cluster_name | Task 2 (scenario name), Task 3 (cluster_name) |
+| Spec section                                                                            | Implemented in                                                                                       |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Goal: regression coverage parity with podman                                            | Task 3 (kubevirt job + all_green wiring)                                                             |
+| Non-goals (multi-platform, KVM, real-cluster CI, PVC, schema changes)                   | Honored — no tasks touch those                                                                       |
+| Architecture (kind + KubeVirt + useEmulation + pytest -k kubevirt_ci)                   | Task 3                                                                                               |
+| `extensions/molecule/kubevirt_ci/` scenario (all 6 files + group_vars)                  | Tasks 1, 2                                                                                           |
+| Image: fedora-cloud-container-disk-demo, 1Gi mem, 5Gi disk                              | Task 2                                                                                               |
+| `.github/workflows/tests.yml` job + all_green wiring                                    | Task 3                                                                                               |
+| kind v0.24.0 pinned, KubeVirt latest at job time                                        | Task 3 Step 2                                                                                        |
+| Failure diagnostics step                                                                | Task 3 Step 2 (Collect cluster diagnostics)                                                          |
+| Test gating: existing conftest substring "kubevirt" still applies, no change            | Task 3 (uses `MOLECULE_KUBEVIRT_ENABLED=1` and `-k kubevirt_ci`) — confirmed no conftest edit needed |
+| Documentation: CLAUDE.md command table row                                              | Task 5                                                                                               |
+| Documentation: `docs/MIGRATION.md` no change                                            | Honored — no task touches it                                                                         |
+| Documentation: `docs/examples/` no change                                               | Honored                                                                                              |
+| Naming note: `kubevirt_ci` (underscore) for pytest, `kubevirt-ci` for kind cluster_name | Task 2 (scenario name), Task 3 (cluster_name)                                                        |
 
 **Placeholder scan:** No "TBD", "TODO", or vague language remains. All YAML blocks are complete, all commands have expected output described.
 
 **Type/name consistency:**
+
 - Scenario directory: `extensions/molecule/kubevirt_ci/` — consistent across Tasks 1, 2, 5.
 - Scenario name: `kubevirt_ci` — consistent in molecule.yml `scenario.name`, pytest selector, conftest substring match, branch name.
 - Kind cluster_name: `kubevirt-ci` (hyphen) — consistent in Task 3 only.

@@ -70,12 +70,12 @@ all:
           mp:
             qemu:
               image: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
-              image_checksum: "sha256:abcd…"     # forwarded to get_url; optional
-              cpus: 2                            # default 2
-              memory: 1024                       # MiB, integer; default 1024
-              disk_size: 10G                     # passed to qemu-img resize; null = no resize
-              ssh_user: ubuntu                   # default 'cloud-user'
-              extra_args: []                     # appended to qemu-system argv
+              image_checksum: "sha256:abcd…" # forwarded to get_url; optional
+              cpus: 2 # default 2
+              memory: 1024 # MiB, integer; default 1024
+              disk_size: 10G # passed to qemu-img resize; null = no resize
+              ssh_user: ubuntu # default 'cloud-user'
+              extra_args: [] # appended to qemu-system argv
 ```
 
 **`inventory/group_vars/molecule.yml` — backend selector + defaults**:
@@ -99,8 +99,8 @@ mp_qemu_role_defaults:
   ssh_user: cloud-user
 
 mp_qemu_image_cache_dir: "{{ (lookup('env', 'XDG_CACHE_HOME')
-                              | default(lookup('env', 'HOME') ~ '/.cache', true))
-                             ~ '/molecule-qemu' }}"
+  | default(lookup('env', 'HOME') ~ '/.cache', true))
+  ~ '/molecule-qemu' }}"
 mp_qemu_ssh_key_path: "{{ molecule_ephemeral_directory }}/identity_file"
 mp_qemu_wait_timeout: 180
 mp_qemu_slirp_port_base: 2222
@@ -176,6 +176,7 @@ Switching backends: `PROVISIONER=podman pytest tests/integration -v -k default`,
 **`verify.yml`**: `ansible.builtin.ping` each molecule host.
 
 **CI job** (`.github/workflows/tests.yml` → `integration-qemu`):
+
 - Runs on `ubuntu-latest`. Installs `qemu-system-x86_64`, `qemu-utils`, `cloud-image-utils`.
 - `/dev/kvm` is **not** available on GitHub-hosted runners — the job exercises the TCG branch.
 - `actions/cache@v4` keyed on the Ubuntu cloud image's pinned sha256 maps to `~/.cache/molecule-qemu/`; subsequent runs skip the ~600 MB download.

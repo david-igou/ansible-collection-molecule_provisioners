@@ -34,6 +34,7 @@ Consumers that need any of the above today have to fork the role or work around 
 - LoadBalancer `ssh_service.type` (still a v1 limitation per the original collection spec).
 - Multi-NIC connection: the runtime inventory still uses the pod-network NodePort. If a user adds an `extra_interfaces` Multus NIC, they own any cluster-side routing.
 - Integration-testing the non-containerDisk boot modes in CI. CDI is not installed in the kind cluster; adding it is a separate scope-cut.
+- HTTP-source checksum verification for `data_volume_url`. CDI does not natively support it; implementing via post-import jobs or out-of-band Secrets is out of scope for this widening.
 
 ## Public schema
 
@@ -51,7 +52,6 @@ mp:
     boot_source:
       type: data_volume_url
       url: https://cloud-images.ubuntu.com/.../noble.img
-      checksum: "sha256:..."        # optional
       size: 10Gi                    # required
       storage_class: standard       # optional
 
@@ -176,7 +176,7 @@ Three-layer variable assembly, then escape-hatch merge. Each step is its own `se
    - `spec.template.spec.networks[0]` is the default `pod`.
 
 2. **`__mp_curated`** — applies first-class fields onto the base:
-   - Boot-source dispatch: depending on `boot_source.type`, prepend the boot disk to `disks` and the boot volume to `volumes` (or, for the data_volume_* types, also set `spec.dataVolumeTemplates`).
+   - Boot-source dispatch: depending on `boot_source.type`, prepend the boot disk to `disks` and the boot volume to `volumes` (or, for the data*volume*\* types, also set `spec.dataVolumeTemplates`).
    - If `instancetype` is unset: set `domain.cpu`, `domain.resources.requests.memory`, optionally `domain.resources.limits.memory`. Default `cpu` is `{cores: 2}` if not supplied (matches today's behavior).
    - If `instancetype` is set: omit `domain.cpu` and `domain.resources` entirely. Set `spec.instancetype` and (if `preference` is set) `spec.preference`.
    - Append `extra_disks` to `domain.devices.disks`, `extra_volumes` to `volumes`, `extra_interfaces` to `domain.devices.interfaces`, `extra_networks` to `networks`.
@@ -249,6 +249,7 @@ kubevirt:
 This covers: required `boot_source`, first-class `cpu` (proves the renderer applies it), and `vm_overrides` (proves the deep-merge reaches `metadata.labels`). The kubevirt CI job (`-k default`, `PROVISIONER=kubevirt`) exercises the path end-to-end on kind+KubeVirt with `useEmulation`.
 
 Other boot-source variants are NOT integration-tested:
+
 - `data_volume_url` needs CDI installed on the kind cluster (separate scope-cut).
 - `data_volume_pvc` and `pvc` need pre-seeded golden PVCs.
 - `instancetype` needs a pre-created `VirtualMachineClusterInstancetype`.
@@ -259,16 +260,16 @@ This is the first unit-test surface in the repo. Add `tests/unit/test_kubevirt_r
 
 Cases:
 
-| Case | Assertion |
-| --- | --- |
-| containerDisk + defaults | `__mp_kubevirt_vm` matches the v1.0 rendered shape, `cpu.cores == 2` |
-| `data_volume_url` | `spec.dataVolumeTemplates` present with `source.http.url`, boot volume is `dataVolume` |
-| `data_volume_pvc` | `spec.dataVolumeTemplates` present with `source.pvc.{name,namespace}` |
-| `pvc` | boot volume has `persistentVolumeClaim.claimName`, no `dataVolumeTemplates` |
-| `instancetype` set | `domain.cpu` and `domain.resources` are absent; `spec.instancetype` present |
-| `extra_disks: [foo]` | final spec has 3 disks (containerdisk OR equivalent, cloudinitdisk, foo) |
-| `vm_overrides.metadata.labels` | labels appear on final spec |
-| `vm_overrides.spec.template.spec.tolerations: [t]` + `tolerations: [t2]` curated | final spec has both (list-append proof) |
+| Case                                                                             | Assertion                                                                              |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| containerDisk + defaults                                                         | `__mp_kubevirt_vm` matches the v1.0 rendered shape, `cpu.cores == 2`                   |
+| `data_volume_url`                                                                | `spec.dataVolumeTemplates` present with `source.http.url`, boot volume is `dataVolume` |
+| `data_volume_pvc`                                                                | `spec.dataVolumeTemplates` present with `source.pvc.{name,namespace}`                  |
+| `pvc`                                                                            | boot volume has `persistentVolumeClaim.claimName`, no `dataVolumeTemplates`            |
+| `instancetype` set                                                               | `domain.cpu` and `domain.resources` are absent; `spec.instancetype` present            |
+| `extra_disks: [foo]`                                                             | final spec has 3 disks (containerdisk OR equivalent, cloudinitdisk, foo)               |
+| `vm_overrides.metadata.labels`                                                   | labels appear on final spec                                                            |
+| `vm_overrides.spec.template.spec.tolerations: [t]` + `tolerations: [t2]` curated | final spec has both (list-append proof)                                                |
 
 No new infra dependencies (pyyaml is already pulled in by ansible-core).
 
@@ -290,19 +291,19 @@ No new infra dependencies (pyyaml is already pulled in by ansible-core).
 
 ## File-by-file change list
 
-| File | Change |
-| --- | --- |
-| `roles/kubevirt/defaults/main.yml` | Keep existing dict; no new keys. |
-| `roles/kubevirt/tasks/create.yml` | Add `boot_source` validation loop and instancetype-conflict debug loop. |
-| `roles/kubevirt/tasks/_build_vm.yml` | NEW — three-layer renderer per host. |
-| `roles/kubevirt/tasks/_create_vm.yml` | Refactor: include `_build_vm.yml` then `k8s: definition: "{{ __mp_kubevirt_vm }}"`. |
-| `roles/kubevirt/tasks/destroy.yml` | Unchanged. |
-| `roles/kubevirt/tasks/prepare.yml` | Unchanged. |
-| `roles/kubevirt/tasks/_create_vm_dictionary.yml` | Unchanged. |
-| `roles/kubevirt/meta/argument_specs.yml` | Extend `create` docs. |
-| `roles/kubevirt/README.md` | Rewrite Inputs section; add boot-source examples; add foot-guns subsection. |
-| `extensions/molecule/default/inventory/hosts.yml` | Update kubevirt block: `boot_source` + `cpu` + `vm_overrides`. |
-| `docs/examples/inventory/hosts.yml` | Update kubevirt block to use `boot_source`. |
-| `docs/MIGRATION.md` | Add v1.0 → kubevirt schema section. |
-| `CLAUDE.md` | Refresh Public contract kubevirt schema. |
-| `tests/unit/test_kubevirt_render.py` | NEW — renderer unit tests (first unit test in the repo). |
+| File                                              | Change                                                                              |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `roles/kubevirt/defaults/main.yml`                | Keep existing dict; no new keys.                                                    |
+| `roles/kubevirt/tasks/create.yml`                 | Add `boot_source` validation loop and instancetype-conflict debug loop.             |
+| `roles/kubevirt/tasks/_build_vm.yml`              | NEW — three-layer renderer per host.                                                |
+| `roles/kubevirt/tasks/_create_vm.yml`             | Refactor: include `_build_vm.yml` then `k8s: definition: "{{ __mp_kubevirt_vm }}"`. |
+| `roles/kubevirt/tasks/destroy.yml`                | Unchanged.                                                                          |
+| `roles/kubevirt/tasks/prepare.yml`                | Unchanged.                                                                          |
+| `roles/kubevirt/tasks/_create_vm_dictionary.yml`  | Unchanged.                                                                          |
+| `roles/kubevirt/meta/argument_specs.yml`          | Extend `create` docs.                                                               |
+| `roles/kubevirt/README.md`                        | Rewrite Inputs section; add boot-source examples; add foot-guns subsection.         |
+| `extensions/molecule/default/inventory/hosts.yml` | Update kubevirt block: `boot_source` + `cpu` + `vm_overrides`.                      |
+| `docs/examples/inventory/hosts.yml`               | Update kubevirt block to use `boot_source`.                                         |
+| `docs/MIGRATION.md`                               | Add v1.0 → kubevirt schema section.                                                 |
+| `CLAUDE.md`                                       | Refresh Public contract kubevirt schema.                                            |
+| `tests/unit/test_kubevirt_render.py`              | NEW — renderer unit tests (first unit test in the repo).                            |
