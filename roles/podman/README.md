@@ -48,6 +48,7 @@ all:
               storage_opt: []                  # optional — list of '--storage-opt=' values
               storage_driver: <str>            # optional — '--storage-driver=' value
               extra_opts: []                   # optional — raw `podman` CLI flags appended last
+              labels: {}                       # optional — merged with default {owner: molecule}
 ```
 
 ### Network shape

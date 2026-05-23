@@ -1,5 +1,5 @@
 ---
-- name: Molecule provisioner — reset (purge owner=molecule containers/networks)
+- name: Molecule provisioner — reset (purge owner=molecule containers)
   hosts: localhost
   connection: local
   gather_facts: false
