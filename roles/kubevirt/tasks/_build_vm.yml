@@ -184,22 +184,22 @@
 - name: "Build instancetype/preference patch: {{ item }}"
   vars:
     _spec: "{{ _mp_specs[item] }}"
-    _it_raw: "{{ _spec.instancetype | default(none) }}"
-    _pref_raw: "{{ _spec.preference | default(none) }}"
+    _it_raw: "{{ _spec.instancetype | default('') }}"
+    _pref_raw: "{{ _spec.preference | default('') }}"
     _it_block: >-
       {{
-        ({'name': _it_raw} if _it_raw is string else (_it_raw | default({})))
+        ({'name': _it_raw} if _it_raw is string else _it_raw)
       }}
     _pref_block: >-
       {{
-        ({'name': _pref_raw} if _pref_raw is string else (_pref_raw | default({})))
+        ({'name': _pref_raw} if _pref_raw is string else _pref_raw)
       }}
   ansible.builtin.set_fact:
     __mp_instancetype_patch: >-
       {{
         {'spec': {}}
-        | combine({'spec': {'instancetype': _it_block}} if _it_raw is not none else {}, recursive=True)
-        | combine({'spec': {'preference': _pref_block}} if _pref_raw is not none else {}, recursive=True)
+        | combine({'spec': {'instancetype': _it_block}} if _spec.instancetype is defined else {}, recursive=True)
+        | combine({'spec': {'preference': _pref_block}} if _spec.preference is defined else {}, recursive=True)
       }}
 
 - name: "Build scheduling patch: {{ item }}"
