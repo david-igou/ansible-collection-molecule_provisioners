@@ -62,11 +62,13 @@
 ## Task 0: Bootstrap workspace and baseline
 
 **Files:**
+
 - Create: `~/ansible_collections/david_igou/molecule_provisioners` (symlink to repo)
 
 - [ ] **Step 1: Verify working directory and Ansible toolchain**
 
 Run:
+
 ```bash
 cd /workspace/ansible-collection-molecule_provisioners
 ansible --version
@@ -82,6 +84,7 @@ Expected: each command prints a version. Ansible >=2.15. If any are missing, ins
 Tooling (especially `ansible-test sanity` and FQCN resolution like `david_igou.molecule_provisioners.create`) requires the collection to live at `ansible_collections/david_igou/molecule_provisioners/` somewhere on `ANSIBLE_COLLECTIONS_PATH`.
 
 Run:
+
 ```bash
 mkdir -p "$HOME/ansible_collections/david_igou"
 ln -snf /workspace/ansible-collection-molecule_provisioners \
@@ -92,11 +95,13 @@ ls -l "$HOME/ansible_collections/david_igou/molecule_provisioners"
 Expected: the symlink is listed and points at the repo.
 
 Also append to your shell init (or set in this shell) so subsequent commands find it:
+
 ```bash
 export ANSIBLE_COLLECTIONS_PATH="$HOME${ANSIBLE_COLLECTIONS_PATH:+:$ANSIBLE_COLLECTIONS_PATH}"
 ```
 
 Verify:
+
 ```bash
 ansible-galaxy collection list 2>&1 | grep david_igou
 ```
@@ -108,6 +113,7 @@ Expected output includes a line like `david_igou.molecule_provisioners 1.0.0`.
 The repo currently contains untracked ansible-creator scaffolding. Snapshot it before deletion so history is meaningful.
 
 Run:
+
 ```bash
 git add -A
 git status -s | head -40
@@ -116,6 +122,7 @@ git status -s | head -40
 Expected: ~30 files staged.
 
 Commit:
+
 ```bash
 git commit -m "$(cat <<'EOF'
 Snapshot ansible-creator scaffold as v1.0 baseline
@@ -136,6 +143,7 @@ Expected: three commits total (spec, refinement, scaffold baseline).
 ## Task 1: Strip ansible-creator scaffolding
 
 **Files:**
+
 - Delete: `plugins/action/sample_action.py`, `plugins/filter/sample_filter.py`, `plugins/lookup/sample_lookup.py`, `plugins/test/sample_test.py`, `plugins/modules/sample_action.py`, `plugins/modules/sample_module.py`
 - Delete: `plugins/cache/`, `plugins/inventory/`, `plugins/module_utils/`, `plugins/plugin_utils/`, `plugins/sub_plugins/` (all empty after sample removal)
 - Delete: `roles/run/`
@@ -146,6 +154,7 @@ Expected: three commits total (spec, refinement, scaffold baseline).
 - [ ] **Step 1: Delete sample plugin files**
 
 Run:
+
 ```bash
 git rm plugins/action/sample_action.py \
        plugins/filter/sample_filter.py \
@@ -162,12 +171,14 @@ Expected: each file shows as `rm 'plugins/...'`.
 The remaining `plugins/<dir>/__init__.py` files exist for empty dirs we don't need:
 
 Run:
+
 ```bash
 git rm -r plugins/cache/ plugins/inventory/ plugins/module_utils/ \
           plugins/plugin_utils/ plugins/sub_plugins/
 ```
 
 Then check what's left:
+
 ```bash
 ls plugins/
 ```
@@ -177,6 +188,7 @@ Expected: only `action/`, `filter/`, `lookup/`, `modules/`, `test/` remain (each
 - [ ] **Step 3: Delete the demo `run` role**
 
 Run:
+
 ```bash
 git rm -r roles/run/
 ls roles/
@@ -185,6 +197,7 @@ ls roles/
 Expected: `roles/` is empty (or doesn't exist after `rmdir` if git removed it).
 
 If `roles/` directory itself remains:
+
 ```bash
 rmdir roles/  # ok if it fails (we'll re-create roles/podman, roles/kubevirt later)
 ```
@@ -192,6 +205,7 @@ rmdir roles/  # ok if it fails (we'll re-create roles/podman, roles/kubevirt lat
 - [ ] **Step 4: Delete demo molecule + integration target**
 
 Run:
+
 ```bash
 git rm -r extensions/molecule/integration_hello_world/ \
           extensions/molecule/utils/ \
@@ -204,6 +218,7 @@ Expected: `extensions/molecule/` is empty; `tests/integration/` contains only `_
 - [ ] **Step 5: Verify git status before commit**
 
 Run:
+
 ```bash
 git status -s
 ```
@@ -213,6 +228,7 @@ Expected: only deletions (lines starting with `D`). No `M` or `??` lines.
 - [ ] **Step 6: Commit cleanup**
 
 Run:
+
 ```bash
 git commit -m "$(cat <<'EOF'
 Remove ansible-creator demo scaffold
@@ -240,6 +256,7 @@ Expected: commit succeeds; `git log --oneline | head -1` shows this commit.
 ## Task 2: Update `galaxy.yml` and project metadata
 
 **Files:**
+
 - Modify: `galaxy.yml`
 - Modify: `README.md` (full rewrite)
 - Modify: `meta/runtime.yml` (no change — confirm)
@@ -290,11 +307,13 @@ Note `docs/superpowers` is added to `build_ignore` so spec/plan files don't ship
 - [ ] **Step 2: Verify `meta/runtime.yml` unchanged**
 
 Run:
+
 ```bash
 cat meta/runtime.yml
 ```
 
 Expected:
+
 ```yaml
 ---
 requires_ansible: ">=2.15.0"
@@ -315,10 +334,10 @@ Stop redefining `create.yml`/`destroy.yml`/`prepare.yml` per repo. Install this 
 
 ## Supported backends (v1.0)
 
-| Backend | When to use |
-| --- | --- |
-| `podman` (default) | Containers, fastest CI loop |
-| `kubevirt` | Real VMs in a Kubernetes cluster (requires KubeVirt) |
+| Backend            | When to use                                          |
+| ------------------ | ---------------------------------------------------- |
+| `podman` (default) | Containers, fastest CI loop                          |
+| `kubevirt`         | Real VMs in a Kubernetes cluster (requires KubeVirt) |
 
 ## Installing
 
@@ -412,6 +431,7 @@ GPL v3.0 or later — see [LICENSE](LICENSE).
 - [ ] **Step 4: Quick-validate the YAML files**
 
 Run:
+
 ```bash
 yamllint galaxy.yml meta/runtime.yml
 ```
@@ -421,6 +441,7 @@ Expected: no errors. (Warnings on doc length are tolerable.)
 - [ ] **Step 5: Commit**
 
 Run:
+
 ```bash
 git add galaxy.yml README.md
 git commit -m "$(cat <<'EOF'
@@ -446,6 +467,7 @@ EOF
 ## Task 3: Create the `podman` role — defaults, argument_specs, README
 
 **Files:**
+
 - Create: `roles/podman/defaults/main.yml`
 - Create: `roles/podman/meta/main.yml`
 - Create: `roles/podman/meta/argument_specs.yml`
@@ -494,7 +516,7 @@ dependencies: []
 
 - [ ] **Step 3: `roles/podman/meta/argument_specs.yml`**
 
-Argument spec validates the role *invocation* parameters. We keep this minimal (the role takes `molecule_yml` from outer scope and reads `platforms[].podman.*` itself; argument_specs covers the few overridable role vars).
+Argument spec validates the role _invocation_ parameters. We keep this minimal (the role takes `molecule_yml` from outer scope and reads `platforms[].podman.*` itself; argument_specs covers the few overridable role vars).
 
 ```yaml
 ---
@@ -537,11 +559,11 @@ Molecule provisioner role for podman containers. Not invoked directly — invoke
 
 ## Entry points
 
-| `tasks_from` | What it does |
-| --- | --- |
-| `create` | Creates user-defined podman networks (when set), then creates containers from `molecule_yml.platforms[].podman.*` |
-| `destroy` | Removes those containers and any non-reserved networks |
-| `prepare` | Installs `sudo` inside each container |
+| `tasks_from` | What it does                                                                                                      |
+| ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `create`     | Creates user-defined podman networks (when set), then creates containers from `molecule_yml.platforms[].podman.*` |
+| `destroy`    | Removes those containers and any non-reserved networks                                                            |
+| `prepare`    | Installs `sudo` inside each container                                                                             |
 
 ## Inputs (per-platform, in `molecule.yml`)
 
@@ -549,16 +571,16 @@ Molecule provisioner role for podman containers. Not invoked directly — invoke
 platforms:
   - name: ubuntu-24
     podman:
-      image: docker.io/...:tag         # required
-      command: sleep 1d                # optional
-      privileged: false                # optional, default false
-      volumes: []                      # optional
-      capabilities: []                 # optional
-      podman_network: []               # optional, list or single string
-      env: {}                          # optional
-      tmpfs: []                        # optional
-      exposed_ports: []                # optional
-      published_ports: []              # optional
+      image: docker.io/...:tag # required
+      command: sleep 1d # optional
+      privileged: false # optional, default false
+      volumes: [] # optional
+      capabilities: [] # optional
+      podman_network: [] # optional, list or single string
+      env: {} # optional
+      tmpfs: [] # optional
+      exposed_ports: [] # optional
+      published_ports: [] # optional
 ```
 
 ## Role-level overrides
@@ -569,6 +591,7 @@ See `defaults/main.yml`.
 - [ ] **Step 5: Quick syntax check**
 
 Run:
+
 ```bash
 ansible-lint roles/podman/
 ```
@@ -596,6 +619,7 @@ EOF
 ## Task 4: Implement `roles/podman/tasks/`
 
 **Files:**
+
 - Create: `roles/podman/tasks/main.yml`
 - Create: `roles/podman/tasks/create.yml`
 - Create: `roles/podman/tasks/destroy.yml`
@@ -744,6 +768,7 @@ Shared helper that builds `__mp_podman_networks` from `molecule_yml.platforms[].
 - [ ] **Step 6: Lint**
 
 Run:
+
 ```bash
 ansible-lint roles/podman/
 ```
@@ -755,6 +780,7 @@ If errors: read them and fix before proceeding.
 - [ ] **Step 7: Syntax check the role**
 
 Create a throwaway test playbook:
+
 ```bash
 cat > /tmp/_syntax_check.yml <<'EOF'
 - hosts: localhost
@@ -796,6 +822,7 @@ EOF
 ## Task 5: Create the `kubevirt` role — defaults, argument_specs, README
 
 **Files:**
+
 - Create: `roles/kubevirt/defaults/main.yml`
 - Create: `roles/kubevirt/meta/main.yml`
 - Create: `roles/kubevirt/meta/argument_specs.yml`
@@ -884,16 +911,17 @@ argument_specs:
 Molecule provisioner role for KubeVirt VMs. Not invoked directly — invoked via the collection's top-level `playbooks/{create,destroy,prepare}.yml` dispatchers (which set `PROVISIONER=kubevirt`).
 
 Requires:
+
 - A reachable Kubernetes cluster with KubeVirt installed and a working `KUBECONFIG`.
 - `kubernetes.core` and `community.crypto` collections (declared as deps in `galaxy.yml`).
 
 ## Entry points
 
-| `tasks_from` | What it does |
-| --- | --- |
-| `create` | Generates SSH keypair, creates VirtualMachine + NodePort Service per platform, writes molecule inventory |
-| `destroy` | Deletes VirtualMachine and NodePort Service per platform |
-| `prepare` | `wait_for_connection` against each created host |
+| `tasks_from` | What it does                                                                                             |
+| ------------ | -------------------------------------------------------------------------------------------------------- |
+| `create`     | Generates SSH keypair, creates VirtualMachine + NodePort Service per platform, writes molecule inventory |
+| `destroy`    | Deletes VirtualMachine and NodePort Service per platform                                                 |
+| `prepare`    | `wait_for_connection` against each created host                                                          |
 
 ## Inputs (per-platform, in `molecule.yml`)
 
@@ -901,13 +929,13 @@ Requires:
 platforms:
   - name: ubuntu-24
     kubevirt:
-      image: quay.io/containerdisks/ubuntu:24.04   # required, containerdisk image
-      namespace: molecule                          # required
-      ansible_user: cloud-user                     # required
-      memory: 4Gi                                  # required
-      disk_size: 30Gi                              # required
+      image: quay.io/containerdisks/ubuntu:24.04 # required, containerdisk image
+      namespace: molecule # required
+      ansible_user: cloud-user # required
+      memory: 4Gi # required
+      disk_size: 30Gi # required
       ssh_service:
-        type: NodePort                             # only NodePort supported in v1
+        type: NodePort # only NodePort supported in v1
 ```
 
 ## Role-level overrides
@@ -939,6 +967,7 @@ EOF
 ## Task 6: Implement `roles/kubevirt/tasks/`
 
 **Files:**
+
 - Create: `roles/kubevirt/tasks/main.yml`
 - Create: `roles/kubevirt/tasks/create.yml`
 - Create: `roles/kubevirt/tasks/destroy.yml`
@@ -1043,7 +1072,7 @@ Logic mirrors `david-igou/ansible-collection-devhost/extensions/molecule/provisi
   ansible.builtin.assert:
     that: "'molecule' in groups"
     fail_msg: "Molecule group was not found in inventory groups: {{ groups }}"
-  run_once: true  # noqa: run-once[task]
+  run_once: true # noqa: run-once[task]
 ```
 
 - [ ] **Step 3: `roles/kubevirt/tasks/_create_vm.yml`**
@@ -1194,6 +1223,7 @@ ansible-lint roles/kubevirt/
 ```
 
 Then a syntax check using a stub playbook (no cluster needed for syntax):
+
 ```bash
 cat > /tmp/_kv_syntax.yml <<'EOF'
 - hosts: localhost
@@ -1244,6 +1274,7 @@ EOF
 ## Task 7: Top-level dispatcher playbooks
 
 **Files:**
+
 - Create: `playbooks/create.yml`
 - Create: `playbooks/destroy.yml`
 - Create: `playbooks/prepare.yml`
@@ -1345,6 +1376,7 @@ Expected: clean.
 - [ ] **Step 5: Sanity-check FQCN resolution**
 
 Confirm the playbooks resolve as a collection-shipped namespace:
+
 ```bash
 ansible-playbook --syntax-check \
   "$HOME/ansible_collections/david_igou/molecule_provisioners/playbooks/create.yml"
@@ -1378,6 +1410,7 @@ EOF
 This scenario exercises the full create→prepare→converge→verify→destroy lifecycle against podman. It runs in CI.
 
 **Files:**
+
 - Create: `extensions/molecule/podman/molecule.yml`
 - Create: `extensions/molecule/podman/create.yml`
 - Create: `extensions/molecule/podman/destroy.yml`
@@ -1537,6 +1570,7 @@ EOF
 ## Task 9: Self-test scenario — `extensions/molecule/kubevirt/` (gated)
 
 **Files:**
+
 - Create: `extensions/molecule/kubevirt/molecule.yml`
 - Create: `extensions/molecule/kubevirt/create.yml`
 - Create: `extensions/molecule/kubevirt/destroy.yml`
@@ -1685,6 +1719,7 @@ EOF
 ## Task 10: Conftest gate for kubevirt self-test
 
 **Files:**
+
 - Create: `tests/integration/conftest.py`
 
 - [ ] **Step 1: Write the conftest**
@@ -1761,6 +1796,7 @@ EOF
 ## Task 11: `docs/examples/` — copy-paste starter
 
 **Files:**
+
 - Create: `docs/examples/create.yml`
 - Create: `docs/examples/destroy.yml`
 - Create: `docs/examples/prepare.yml`
@@ -1856,27 +1892,27 @@ scenario:
 # molecule.yml works under either PROVISIONER.
 
 platforms:
-  - name: ubuntu-24                # required (used as instance/host name)
-    podman:                        # required when PROVISIONER=podman
-      image: docker.io/...:tag     # required
-      command: sleep 1d            # optional (default: image's CMD)
-      privileged: false            # optional (default: false)
-      volumes: []                  # optional, list of "src:dst[:opts]"
-      capabilities: []             # optional, e.g. [SYS_ADMIN]
-      podman_network: []           # optional, list or single string
-      env: {}                      # optional
-      tmpfs: []                    # optional
-      exposed_ports: []            # optional
-      published_ports: []          # optional, "host:container[/proto]"
+  - name: ubuntu-24 # required (used as instance/host name)
+    podman: # required when PROVISIONER=podman
+      image: docker.io/...:tag # required
+      command: sleep 1d # optional (default: image's CMD)
+      privileged: false # optional (default: false)
+      volumes: [] # optional, list of "src:dst[:opts]"
+      capabilities: [] # optional, e.g. [SYS_ADMIN]
+      podman_network: [] # optional, list or single string
+      env: {} # optional
+      tmpfs: [] # optional
+      exposed_ports: [] # optional
+      published_ports: [] # optional, "host:container[/proto]"
 
-    kubevirt:                      # required when PROVISIONER=kubevirt
-      image: quay.io/containerdisks/ubuntu:24.04   # required (containerdisk)
-      namespace: molecule          # required
-      ansible_user: cloud-user     # required (cloud-init creates this user)
-      memory: 4Gi                  # required
-      disk_size: 30Gi              # required
+    kubevirt: # required when PROVISIONER=kubevirt
+      image: quay.io/containerdisks/ubuntu:24.04 # required (containerdisk)
+      namespace: molecule # required
+      ansible_user: cloud-user # required (cloud-init creates this user)
+      memory: 4Gi # required
+      disk_size: 30Gi # required
       ssh_service:
-        type: NodePort             # only NodePort supported in v1.0
+        type: NodePort # only NodePort supported in v1.0
 ```
 
 - [ ] **Step 4: Commit**
@@ -1901,6 +1937,7 @@ EOF
 ## Task 12: `docs/MIGRATION.md`
 
 **Files:**
+
 - Create: `docs/MIGRATION.md`
 
 - [ ] **Step 1: Write the migration doc**
@@ -1911,42 +1948,45 @@ EOF
 If your collection currently has `extensions/molecule/provisioners/{podman,kubevirt}/{create,destroy,prepare,requirements}.yml` (the pattern from `david-igou/ansible-collection-devhost`), here's how to switch to using `david_igou.molecule_provisioners`.
 
 ## Before
-
 ```
+
 your-collection/
 └── extensions/molecule/
-    ├── provisioners/
-    │   ├── podman/
-    │   │   ├── create.yml
-    │   │   ├── destroy.yml
-    │   │   ├── prepare.yml
-    │   │   ├── requirements.yml
-    │   │   └── group_vars/...
-    │   └── kubevirt/
-    │       ├── create.yml
-    │       ├── destroy.yml
-    │       ├── prepare.yml
-    │       ├── requirements.yml
-    │       └── group_vars/...
-    └── default/
-        ├── molecule.yml          (points at ../provisioners/${PROVISIONER:-podman}/...)
-        ├── converge.yml
-        └── verify.yml
+├── provisioners/
+│ ├── podman/
+│ │ ├── create.yml
+│ │ ├── destroy.yml
+│ │ ├── prepare.yml
+│ │ ├── requirements.yml
+│ │ └── group_vars/...
+│ └── kubevirt/
+│ ├── create.yml
+│ ├── destroy.yml
+│ ├── prepare.yml
+│ ├── requirements.yml
+│ └── group_vars/...
+└── default/
+├── molecule.yml (points at ../provisioners/${PROVISIONER:-podman}/...)
+├── converge.yml
+└── verify.yml
+
 ```
 
 ## After
 
 ```
+
 your-collection/
-├── requirements.yml              (now lists david_igou.molecule_provisioners)
+├── requirements.yml (now lists david_igou.molecule_provisioners)
 └── extensions/molecule/default/
-    ├── create.yml                (one-liner)
-    ├── destroy.yml               (one-liner)
-    ├── prepare.yml               (one-liner)
-    ├── molecule.yml              (points at create.yml/destroy.yml/prepare.yml)
-    ├── converge.yml
-    └── verify.yml
-```
+├── create.yml (one-liner)
+├── destroy.yml (one-liner)
+├── prepare.yml (one-liner)
+├── molecule.yml (points at create.yml/destroy.yml/prepare.yml)
+├── converge.yml
+└── verify.yml
+
+````
 
 ## Steps
 
@@ -1958,7 +1998,7 @@ In your `requirements.yml`:
 collections:
   - name: david_igou.molecule_provisioners
     version: ">=1.0.0,<2.0.0"
-```
+````
 
 Transitive deps (`containers.podman`, `kubernetes.core`, `community.crypto`) are pulled in automatically by the collection's `galaxy.yml` — you can remove the per-provisioner `requirements.yml` files.
 
@@ -1992,9 +2032,9 @@ For every directory under `extensions/molecule/<scenario>/`:
   provisioner:
     name: ansible
     playbooks:
-      create: create.yml          # was: ../provisioners/${PROVISIONER:-podman}/create.yml
-      destroy: destroy.yml        # was: ../provisioners/${PROVISIONER:-podman}/destroy.yml
-      prepare: prepare.yml        # was: ../provisioners/${PROVISIONER:-podman}/prepare.yml
+      create: create.yml # was: ../provisioners/${PROVISIONER:-podman}/create.yml
+      destroy: destroy.yml # was: ../provisioners/${PROVISIONER:-podman}/destroy.yml
+      prepare: prepare.yml # was: ../provisioners/${PROVISIONER:-podman}/prepare.yml
       converge: converge.yml
       verify: verify.yml
   ```
@@ -2020,7 +2060,8 @@ Both should pass without further changes. If they don't, your platform schema ma
 ## Platform schema differences from the legacy provisioners tree
 
 The collection's platform schema is **identical** to what devhost uses today (multi-keyed `podman:` + `kubevirt:` blocks under each platform). No platform-list edits are required to migrate.
-```
+
+````
 
 - [ ] **Step 2: Commit**
 
@@ -2036,13 +2077,14 @@ collection. Five steps, copy-pasteable commands.
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
 EOF
 )"
-```
+````
 
 ---
 
 ## Task 13: CI integration job
 
 **Files:**
+
 - Modify: `.github/workflows/tests.yml`
 
 - [ ] **Step 1: Read current workflow**
@@ -2098,28 +2140,28 @@ Edit `.github/workflows/tests.yml`. Add this `integration` job before `all_green
 Then add `integration` to the `all_green.needs` list and the `python -c` assertion:
 
 ```yaml
-  all_green:
-    if: ${{ always() }}
-    needs:
-      - changelog
-      - build-import
-      - sanity
-      - unit-galaxy
-      - unit-source
-      - ansible-lint
-      - integration
-    runs-on: ubuntu-latest
-    steps:
-      - run: >-
-          python -c "assert 'failure' not in
-          set([
-          '${{ needs.changelog.result }}',
-          '${{ needs.sanity.result }}',
-          '${{ needs.unit-galaxy.result }}',
-          '${{ needs.ansible-lint.result }}',
-          '${{ needs.unit-source.result }}',
-          '${{ needs.integration.result }}'
-          ])"
+all_green:
+  if: ${{ always() }}
+  needs:
+    - changelog
+    - build-import
+    - sanity
+    - unit-galaxy
+    - unit-source
+    - ansible-lint
+    - integration
+  runs-on: ubuntu-latest
+  steps:
+    - run: >-
+        python -c "assert 'failure' not in
+        set([
+        '${{ needs.changelog.result }}',
+        '${{ needs.sanity.result }}',
+        '${{ needs.unit-galaxy.result }}',
+        '${{ needs.ansible-lint.result }}',
+        '${{ needs.unit-source.result }}',
+        '${{ needs.integration.result }}'
+        ])"
 ```
 
 (Note: also fix the existing missing commas in the python -c expression while you're there — the original has `'${{ needs.unit-galaxy.result }}'` then `'${{ needs.ansible-lint.result }}'` adjacent without a comma, which makes Python concatenate them silently. The version above adds the missing commas.)
@@ -2158,6 +2200,7 @@ EOF
 ## Task 14: Update `CLAUDE.md`
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 
 - [ ] **Step 1: Replace `CLAUDE.md` with the new architecture**
@@ -2197,16 +2240,16 @@ Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) 
 
 ## Common commands
 
-| Task | Command |
-| --- | --- |
-| Install runtime/test deps | `pip install -r requirements.txt -r test-requirements.txt` |
-| Lint everything | `ansible-lint && yamllint .` |
-| Run podman self-test | `pytest tests/integration -v -k podman` |
-| Run a single scenario directly | `cd extensions/molecule/podman && PROVISIONER=podman molecule test` |
+| Task                                   | Command                                                               |
+| -------------------------------------- | --------------------------------------------------------------------- |
+| Install runtime/test deps              | `pip install -r requirements.txt -r test-requirements.txt`            |
+| Lint everything                        | `ansible-lint && yamllint .`                                          |
+| Run podman self-test                   | `pytest tests/integration -v -k podman`                               |
+| Run a single scenario directly         | `cd extensions/molecule/podman && PROVISIONER=podman molecule test`   |
 | Run kubevirt self-test (needs cluster) | `MOLECULE_KUBEVIRT_ENABLED=1 pytest tests/integration -v -k kubevirt` |
-| Ansible sanity | `ansible-test sanity --docker` (run from the symlink path) |
-| Build collection artifact | `ansible-galaxy collection build` |
-| Pre-commit | `pre-commit run --all-files` |
+| Ansible sanity                         | `ansible-test sanity --docker` (run from the symlink path)            |
+| Build collection artifact              | `ansible-galaxy collection build`                                     |
+| Pre-commit                             | `pre-commit run --all-files`                                          |
 
 `pyproject.toml` configures pytest with `-n 2` (xdist parallel). `tests/integration/conftest.py` filters scenarios by env var.
 
@@ -2216,19 +2259,19 @@ The platform schema in `molecule.yml`:
 
 ```yaml
 platforms:
-  - name: <str>                 # required
-    podman:                     # required when PROVISIONER=podman
-      image: <str>              # required
+  - name: <str> # required
+    podman: # required when PROVISIONER=podman
+      image: <str> # required
       # optional: command, privileged, volumes, capabilities,
       # podman_network, env, tmpfs, exposed_ports, published_ports
-    kubevirt:                   # required when PROVISIONER=kubevirt
-      image: <str>              # required (containerdisk)
-      namespace: <str>          # required
-      ansible_user: <str>       # required
-      memory: <str>             # required
-      disk_size: <str>          # required
+    kubevirt: # required when PROVISIONER=kubevirt
+      image: <str> # required (containerdisk)
+      namespace: <str> # required
+      ansible_user: <str> # required
+      memory: <str> # required
+      disk_size: <str> # required
       ssh_service:
-        type: NodePort          # only NodePort in v1
+        type: NodePort # only NodePort in v1
 ```
 
 Breaking changes to the above keys → major version bump. New optional keys → minor.
@@ -2279,6 +2322,7 @@ EOF
 ## Task 15: Add changelog fragment for v1.0.0
 
 **Files:**
+
 - Create: `changelogs/fragments/v1.0.0.yml`
 
 - [ ] **Step 1: Write the fragment**
@@ -2365,6 +2409,7 @@ cd ansible-collection-devhost
 Replace `extensions/molecule/default/{create,destroy,prepare}.yml` with one-line versions (or remove the references and add new ones — follow `docs/MIGRATION.md` from this collection). Update `extensions/molecule/default/molecule.yml` accordingly. Add `david_igou.molecule_provisioners` to `requirements.yml`.
 
 Then:
+
 ```bash
 ansible-galaxy collection install -r requirements.yml
 ansible-galaxy collection install /tmp/david_igou-molecule_provisioners-1.0.0.tar.gz --force

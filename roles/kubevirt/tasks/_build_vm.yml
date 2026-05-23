@@ -1,0 +1,268 @@
+---
+# Pure renderer: assemble __mp_kubevirt_vm for the current host (`item`) from
+# _mp_specs[item]. Called per-host from _create_vm.yml, and from the unit-test
+# harness at tests/unit/kubevirt_render/render_harness.yml.
+#
+# Three layers:
+#   __mp_base     — minimum viable VM skeleton (metadata, cloudinit, default net).
+#   __mp_curated  — first-class fields layered onto the base.
+#   __mp_kubevirt_vm = __mp_curated | combine(vm_overrides, recursive, list_merge=append).
+
+- name: "Build base VM skeleton: {{ item }}"
+  vars:
+    _ns: "{{ _mp_specs[item].namespace | default('molecule') }}"
+    _ssh_user: "{{ _mp_specs[item].ssh_user | default('cloud-user') }}"
+  ansible.builtin.set_fact:
+    __mp_base:
+      apiVersion: kubevirt.io/v1
+      kind: VirtualMachine
+      metadata:
+        name: "{{ item }}"
+        namespace: "{{ _ns }}"
+        labels:
+          kubevirt.io/domain: "{{ item }}"
+      spec:
+        running: true
+        template:
+          metadata:
+            labels:
+              kubevirt.io/domain: "{{ item }}"
+          spec:
+            domain:
+              devices:
+                disks:
+                  - name: cloudinitdisk
+                    disk:
+                      bus: virtio
+                interfaces:
+                  - name: default
+                    masquerade: {}
+            networks:
+              - name: default
+                pod: {}
+            volumes:
+              - name: cloudinitdisk
+                cloudInitNoCloud:
+                  userData: |
+                    #cloud-config
+                    users:
+                      - name: {{ _ssh_user }}
+                        ssh_authorized_keys:
+                          - {{ temporary_ssh_public_key }}
+                        sudo: ALL=(ALL) NOPASSWD:ALL
+                        shell: /bin/bash
+                    chpasswd:
+                      expire: false
+
+- name: "Reset boot-source facts: {{ item }}"
+  ansible.builtin.set_fact:
+    __mp_boot_disk: null
+    __mp_boot_volume: null
+    __mp_data_volume_templates: []
+
+- name: "Dispatch boot_source: {{ item }}"
+  ansible.builtin.set_fact:
+    __mp_boot_disk:
+      name: containerdisk
+      disk:
+        bus: virtio
+    __mp_boot_volume:
+      name: containerdisk
+      containerDisk:
+        image: "{{ _mp_specs[item].boot_source.image }}"
+    __mp_data_volume_templates: []
+  when: _mp_specs[item].boot_source.type == 'container_disk'
+
+- name: "Dispatch boot_source data_volume_url: {{ item }}"
+  vars:
+    _bs: "{{ _mp_specs[item].boot_source }}"
+    _dv_name: "{{ item }}-boot"
+    _http_source:
+      url: "{{ _bs.url }}"
+    _storage_block: >-
+      {{
+        {
+          'resources': {'requests': {'storage': _bs.size}}
+        }
+        | combine(
+            {'storageClassName': _bs.storage_class} if _bs.storage_class is defined else {}
+          )
+      }}
+  ansible.builtin.set_fact:
+    __mp_boot_disk:
+      name: containerdisk
+      disk:
+        bus: virtio
+    __mp_boot_volume:
+      name: containerdisk
+      dataVolume:
+        name: "{{ _dv_name }}"
+    __mp_data_volume_templates:
+      - metadata:
+          name: "{{ _dv_name }}"
+        spec:
+          source:
+            http: "{{ _http_source }}"
+          storage: "{{ _storage_block }}"
+  when: _mp_specs[item].boot_source.type == 'data_volume_url'
+
+- name: "Dispatch boot_source data_volume_pvc: {{ item }}"
+  vars:
+    _bs: "{{ _mp_specs[item].boot_source }}"
+    _dv_name: "{{ item }}-boot"
+    _storage_block: >-
+      {{
+        {
+          'resources': {'requests': {'storage': _bs.size}}
+        }
+        | combine(
+            {'storageClassName': _bs.storage_class} if _bs.storage_class is defined else {}
+          )
+      }}
+  ansible.builtin.set_fact:
+    __mp_boot_disk:
+      name: containerdisk
+      disk:
+        bus: virtio
+    __mp_boot_volume:
+      name: containerdisk
+      dataVolume:
+        name: "{{ _dv_name }}"
+    __mp_data_volume_templates:
+      - metadata:
+          name: "{{ _dv_name }}"
+        spec:
+          source:
+            pvc:
+              name: "{{ _bs.source.name }}"
+              namespace: "{{ _bs.source.namespace }}"
+          storage: "{{ _storage_block }}"
+  when: _mp_specs[item].boot_source.type == 'data_volume_pvc'
+
+- name: "Dispatch boot_source pvc: {{ item }}"
+  vars:
+    _bs: "{{ _mp_specs[item].boot_source }}"
+  ansible.builtin.set_fact:
+    __mp_boot_disk:
+      name: containerdisk
+      disk:
+        bus: virtio
+    __mp_boot_volume:
+      name: containerdisk
+      persistentVolumeClaim:
+        claimName: "{{ _bs.name }}"
+    __mp_data_volume_templates: []
+  when: _mp_specs[item].boot_source.type == 'pvc'
+
+- name: "Compute domain.cpu and resources (skip when instancetype is set): {{ item }}"
+  vars:
+    _spec: "{{ _mp_specs[item] }}"
+    _cpu: "{{ _spec.cpu | default({'cores': 2}) }}"
+    _mem_req: "{{ _spec.memory | default('1Gi') }}"
+    _resources: >-
+      {{
+        {'requests': {'memory': _mem_req}}
+        | combine(
+            {'limits': {'memory': _spec.memory_limit}} if _spec.memory_limit is defined else {}
+          )
+      }}
+  ansible.builtin.set_fact:
+    __mp_compute_patch:
+      spec:
+        template:
+          spec:
+            domain:
+              cpu: "{{ _cpu }}"
+              resources: "{{ _resources }}"
+  when: _mp_specs[item].instancetype is not defined
+
+- name: "Skip compute patch when instancetype is set: {{ item }}"
+  ansible.builtin.set_fact:
+    __mp_compute_patch: {}
+  when: _mp_specs[item].instancetype is defined
+
+- name: "Build instancetype/preference patch: {{ item }}"
+  vars:
+    _spec: "{{ _mp_specs[item] }}"
+    _it_raw: "{{ _spec.instancetype | default('') }}"
+    _pref_raw: "{{ _spec.preference | default('') }}"
+    _it_block: >-
+      {{
+        ({'name': _it_raw} if _it_raw is string else _it_raw)
+      }}
+    _pref_block: >-
+      {{
+        ({'name': _pref_raw} if _pref_raw is string else _pref_raw)
+      }}
+  ansible.builtin.set_fact:
+    __mp_instancetype_patch: >-
+      {{
+        {'spec': {}}
+        | combine({'spec': {'instancetype': _it_block}} if _spec.instancetype is defined else {}, recursive=True)
+        | combine({'spec': {'preference': _pref_block}} if _spec.preference is defined else {}, recursive=True)
+      }}
+
+- name: "Build scheduling patch: {{ item }}"
+  vars:
+    _spec: "{{ _mp_specs[item] }}"
+    _scheduling: >-
+      {{
+        ({'nodeSelector': _spec.node_selector} if _spec.node_selector is defined else {})
+        | combine({'tolerations': _spec.tolerations} if _spec.tolerations is defined else {})
+        | combine({'affinity': _spec.affinity} if _spec.affinity is defined else {})
+      }}
+  ansible.builtin.set_fact:
+    __mp_scheduling_patch:
+      spec:
+        template:
+          spec: "{{ _scheduling }}"
+
+- name: "Build extras patch: {{ item }}"
+  vars:
+    _spec: "{{ _mp_specs[item] }}"
+  ansible.builtin.set_fact:
+    __mp_extras_patch:
+      spec:
+        template:
+          spec:
+            domain:
+              devices:
+                disks: "{{ _spec.extra_disks | default([]) }}"
+                interfaces: "{{ _spec.extra_interfaces | default([]) }}"
+            volumes: "{{ _spec.extra_volumes | default([]) }}"
+            networks: "{{ _spec.extra_networks | default([]) }}"
+
+- name: "Apply boot source + compute + instancetype to base: {{ item }}"
+  vars:
+    _boot_patch:
+      spec:
+        template:
+          spec:
+            domain:
+              devices:
+                disks: "{{ [__mp_boot_disk] }}"
+            volumes: "{{ [__mp_boot_volume] }}"
+  ansible.builtin.set_fact:
+    __mp_curated: >-
+      {{ __mp_base
+         | combine(_boot_patch, recursive=True, list_merge='prepend')
+         | combine(__mp_compute_patch, recursive=True, list_merge='append')
+         | combine(__mp_instancetype_patch, recursive=True, list_merge='append')
+         | combine(__mp_scheduling_patch, recursive=True, list_merge='append')
+         | combine(__mp_extras_patch, recursive=True, list_merge='append') }}
+  when: __mp_boot_disk is not none
+
+- name: "Attach dataVolumeTemplates (if any): {{ item }}"
+  ansible.builtin.set_fact:
+    __mp_curated: >-
+      {{ __mp_curated | combine({'spec': {'dataVolumeTemplates': __mp_data_volume_templates}},
+                                recursive=True, list_merge='append') }}
+  when: __mp_data_volume_templates | length > 0
+
+- name: "Apply vm_overrides escape hatch: {{ item }}"
+  ansible.builtin.set_fact:
+    __mp_kubevirt_vm: >-
+      {{ __mp_curated
+         | combine(_mp_specs[item].vm_overrides | default({}),
+                   recursive=True, list_merge='append') }}
+  when: __mp_boot_disk is not none

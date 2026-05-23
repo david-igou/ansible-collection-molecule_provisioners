@@ -17,17 +17,8 @@
   loop_control:
     label: "{{ item }}"
 
-# An unset ssh_service.type defaults to NodePort everywhere (assert,
-# Service-create when:, etc.) — keep both expressions in sync.
-- name: Validate ssh_service.type per host
-  ansible.builtin.assert:
-    that:
-      - (_mp_specs[item].ssh_service.type | default('NodePort'))
-        in mp_kubevirt_allowed_ssh_service_types
-    fail_msg: >-
-      Host '{{ item }}' has unsupported ssh_service.type
-      '{{ _mp_specs[item].ssh_service.type | default('(missing)') }}'.
-      v1 supports only: {{ mp_kubevirt_allowed_ssh_service_types | join(', ') }}.
+- name: Validate per-host specs
+  ansible.builtin.include_tasks: _validate.yml
   loop: "{{ groups['molecule'] }}"
   loop_control:
     label: "{{ item }}"

@@ -58,60 +58,60 @@ all:
         instance:
           mp:
             docker:
-              image: <str>                       # required
+              image: <str> # required
 
               # container basics
-              command: <str>                     # default omit
-              command_handling: <str>            # 'compatibility' | 'correct'; default 'compatibility'
-              override_command: <bool>           # default true; when true & command unset, force keepalive
-              hostname: <str>                    # default = inventory_hostname (Jinja-substituted at create time, not via mp_docker_role_defaults)
-              privileged: <bool>                 # default false
-              user: <str>                        # default omit
-              tty: <bool>                        # default omit
-              pid_mode: <str>                    # default omit
-              cgroupns_mode: <str>               # default omit
-              runtime: <str>                     # default omit
-              platform: <str>                    # default omit
+              command: <str> # default omit
+              command_handling: <str> # 'compatibility' | 'correct'; default 'compatibility'
+              override_command: <bool> # default true; when true & command unset, force keepalive
+              hostname: <str> # default = inventory_hostname (Jinja-substituted at create time, not via mp_docker_role_defaults)
+              privileged: <bool> # default false
+              user: <str> # default omit
+              tty: <bool> # default omit
+              pid_mode: <str> # default omit
+              cgroupns_mode: <str> # default omit
+              runtime: <str> # default omit
+              platform: <str> # default omit
 
               # security / kernel
-              capabilities: [<str>]              # default []
-              security_opts: [<str>]             # default omit
-              sysctls: {<k>: <v>}                # default omit
-              ulimits: [<str>]                   # default omit
-              devices: [<str>]                   # default omit
+              capabilities: [<str>] # default []
+              security_opts: [<str>] # default omit
+              sysctls: { <k>: <v> } # default omit
+              ulimits: [<str>] # default omit
+              devices: [<str>] # default omit
 
               # storage
-              volumes: [<str>]                   # default []
-              mounts: [<dict>]                   # default omit
-              tmpfs: [<str>]                     # default omit
-              shm_size: <str>                    # default omit
-              keep_volumes: <bool>               # destroy-time; default true
+              volumes: [<str>] # default []
+              mounts: [<dict>] # default omit
+              tmpfs: [<str>] # default omit
+              shm_size: <str> # default omit
+              keep_volumes: <bool> # destroy-time; default true
 
               # networking
-              networks: [{name: <str>, ...}]     # default omit
-              network_mode: <str>                # default omit
-              networks_cli_compatible: <bool>    # default true
-              purge_networks: <bool>             # default omit
-              dns_servers: [<str>]               # default omit
-              etc_hosts: {<host>: <ip>}          # default omit
-              exposed_ports: [<str>]             # default omit
-              published_ports: [<str>]           # default omit
-              links: [<str>]                     # default omit
+              networks: [{ name: <str>, ... }] # default omit
+              network_mode: <str> # default omit
+              networks_cli_compatible: <bool> # default true
+              purge_networks: <bool> # default omit
+              dns_servers: [<str>] # default omit
+              etc_hosts: { <host>: <ip> } # default omit
+              exposed_ports: [<str>] # default omit
+              published_ports: [<str>] # default omit
+              links: [<str>] # default omit
 
               # runtime behavior
-              env: {<k>: <v>}                    # default {}
-              labels: {<k>: <v>}                 # default {}
-              restart_policy: <str>              # default omit
-              restart_retries: <int>             # default omit
-              stop_signal: <str>                 # default omit
-              kill_signal: <str>                 # default omit
+              env: { <k>: <v> } # default {}
+              labels: { <k>: <v> } # default {}
+              restart_policy: <str> # default omit
+              restart_retries: <int> # default omit
+              stop_signal: <str> # default omit
+              kill_signal: <str> # default omit
 
               # resources
-              memory: <str>                      # default omit
-              memory_swap: <str>                 # default omit
+              memory: <str> # default omit
+              memory_swap: <str> # default omit
 
               # destroy
-              force_kill: <bool>                 # destroy-time; default true
+              force_kill: <bool> # destroy-time; default true
 ```
 
 **Merge order** (matches every other role): `mp_docker_role_defaults` <- `mp_defaults.docker` <- `hostvars[item].mp.docker`. Only `image` is required.
@@ -189,9 +189,9 @@ all:
       hosts:
         instance:
           mp:
-            podman:    { image: <existing> }
-            kubevirt:  { image: <existing> }
-            qemu:      { image: <existing>, image_checksum: <existing> }
+            podman: { image: <existing> }
+            kubevirt: { image: <existing> }
+            qemu: { image: <existing>, image_checksum: <existing> }
             docker:
               image: quay.io/centos/centos:stream9
               command: /sbin/init

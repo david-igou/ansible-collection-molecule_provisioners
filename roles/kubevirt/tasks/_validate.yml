@@ -1,0 +1,83 @@
+---
+# Per-host validation. Operates on _mp_specs[item] (populated upstream in
+# create.yml by the merge loop, or by the unit-test harness).
+
+- name: "Assert boot_source is defined: {{ item }}"
+  ansible.builtin.assert:
+    that:
+      - "'boot_source' in _mp_specs[item]"
+      - _mp_specs[item].boot_source is mapping
+      - "'type' in _mp_specs[item].boot_source"
+    fail_msg: >-
+      Host '{{ item }}' is missing `mp.kubevirt.boot_source`. Set it to
+      one of: container_disk, data_volume_url, data_volume_pvc, pvc.
+
+- name: "Assert boot_source.type is supported: {{ item }}"
+  ansible.builtin.assert:
+    that:
+      - _mp_specs[item].boot_source.type in
+        ['container_disk', 'data_volume_url', 'data_volume_pvc', 'pvc']
+    fail_msg: >-
+      Host '{{ item }}' has unsupported boot_source.type
+      '{{ _mp_specs[item].boot_source.type }}'. Supported:
+      container_disk, data_volume_url, data_volume_pvc, pvc.
+
+- name: "Assert container_disk required fields: {{ item }}"
+  ansible.builtin.assert:
+    that:
+      - _mp_specs[item].boot_source.image is defined
+      - _mp_specs[item].boot_source.image | length > 0
+    fail_msg: "Host '{{ item }}' boot_source.type=container_disk requires `image`."
+  when: _mp_specs[item].boot_source.type == 'container_disk'
+
+- name: "Assert data_volume_url required fields: {{ item }}"
+  ansible.builtin.assert:
+    that:
+      - _mp_specs[item].boot_source.url is defined
+      - _mp_specs[item].boot_source.size is defined
+    fail_msg: >-
+      Host '{{ item }}' boot_source.type=data_volume_url requires `url` and `size`.
+  when: _mp_specs[item].boot_source.type == 'data_volume_url'
+
+- name: "Assert data_volume_pvc required fields: {{ item }}"
+  ansible.builtin.assert:
+    that:
+      - _mp_specs[item].boot_source.source is defined
+      - _mp_specs[item].boot_source.source.name is defined
+      - _mp_specs[item].boot_source.source.namespace is defined
+      - _mp_specs[item].boot_source.size is defined
+    fail_msg: >-
+      Host '{{ item }}' boot_source.type=data_volume_pvc requires
+      source.name, source.namespace, and size.
+  when: _mp_specs[item].boot_source.type == 'data_volume_pvc'
+
+- name: "Assert pvc required fields: {{ item }}"
+  ansible.builtin.assert:
+    that:
+      - _mp_specs[item].boot_source.name is defined
+      - _mp_specs[item].boot_source.name | length > 0
+    fail_msg: "Host '{{ item }}' boot_source.type=pvc requires `name` (the PVC name)."
+  when: _mp_specs[item].boot_source.type == 'pvc'
+
+# An unset ssh_service.type defaults to NodePort here AND in create.yml's
+# "Create SSH NodePort Kubernetes service" when-guard. Keep both expressions
+# in sync — if you change the default here, change it there too.
+- name: "Assert ssh_service.type is supported: {{ item }}"
+  ansible.builtin.assert:
+    that:
+      - (_mp_specs[item].ssh_service.type | default('NodePort'))
+        in mp_kubevirt_allowed_ssh_service_types
+    fail_msg: >-
+      Host '{{ item }}' has unsupported ssh_service.type
+      '{{ _mp_specs[item].ssh_service.type | default('(missing)') }}'.
+      Supported: {{ mp_kubevirt_allowed_ssh_service_types | join(', ') }}.
+
+- name: "Warn if instancetype is set alongside cpu/memory_limit: {{ item }}"
+  ansible.builtin.debug:
+    msg: >-
+      Host '{{ item }}' sets both `instancetype` and `cpu`/`memory_limit`.
+      The renderer suppresses domain.cpu and domain.resources when instancetype
+      is set, so the cpu/memory_limit values will be ignored.
+  when:
+    - _mp_specs[item].instancetype is defined
+    - (_mp_specs[item].cpu is defined or _mp_specs[item].memory_limit is defined)

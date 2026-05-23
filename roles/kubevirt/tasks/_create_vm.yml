@@ -1,59 +1,11 @@
 ---
-- name: "Define VirtualMachine: {{ item }}"
+# Per-host: render the VirtualMachine via _build_vm.yml, then apply.
+# This file is included from create.yml in a loop over groups['molecule'].
+
+- name: "Render VirtualMachine spec: {{ item }}"
+  ansible.builtin.include_tasks: _build_vm.yml
+
+- name: "Apply VirtualMachine: {{ item }}"
   kubernetes.core.k8s:
     state: present
-    definition:
-      apiVersion: kubevirt.io/v1
-      kind: VirtualMachine
-      metadata:
-        name: "{{ item }}"
-        namespace: "{{ _mp_specs[item].namespace }}"
-        labels:
-          kubevirt.io/domain: "{{ item }}"
-      spec:
-        running: true
-        template:
-          metadata:
-            labels:
-              kubevirt.io/domain: "{{ item }}"
-          spec:
-            domain:
-              cpu:
-                cores: 2
-              resources:
-                requests:
-                  memory: "{{ _mp_specs[item].memory }}"
-              devices:
-                disks:
-                  - name: containerdisk
-                    disk:
-                      bus: virtio
-                  - name: cloudinitdisk
-                    disk:
-                      bus: virtio
-                interfaces:
-                  - name: default
-                    masquerade: {}
-            networks:
-              - name: default
-                pod: {}
-            volumes:
-              - name: containerdisk
-                containerDisk:
-                  image: "{{ _mp_specs[item].image }}"
-              - name: cloudinitdisk
-                cloudInitNoCloud:
-                  # Use the explicit `users:` list form so we always create the
-                  # named user regardless of the containerdisk image's baked-in
-                  # default_user (Ubuntu images have `ubuntu`, RHEL/CentOS
-                  # images have `cloud-user`, etc.).
-                  userData: |
-                    #cloud-config
-                    users:
-                      - name: {{ _mp_specs[item].ssh_user }}
-                        ssh_authorized_keys:
-                          - {{ temporary_ssh_public_key }}
-                        sudo: ALL=(ALL) NOPASSWD:ALL
-                        shell: /bin/bash
-                    chpasswd:
-                      expire: false
+    definition: "{{ __mp_kubevirt_vm }}"

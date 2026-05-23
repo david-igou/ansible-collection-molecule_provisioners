@@ -1,0 +1,13 @@
+---
+# Harness for unit-testing roles/kubevirt/tasks/_validate.yml.
+- name: Validate host_spec
+  hosts: localhost
+  gather_facts: false
+  vars:
+    item: instance
+    _mp_specs:
+      instance: "{{ host_spec }}"
+    mp_kubevirt_allowed_ssh_service_types: ["NodePort"]
+  tasks:
+    - name: Include the validator
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../roles/kubevirt/tasks/_validate.yml"

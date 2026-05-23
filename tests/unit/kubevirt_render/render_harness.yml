@@ -1,0 +1,31 @@
+---
+# Harness for unit-testing roles/kubevirt/tasks/_build_vm.yml in isolation.
+#
+# Inputs (via --extra-vars):
+#   host_spec    — the per-host merged spec dict (would normally come from
+#                  _mp_specs[item] inside create.yml after the merge loop).
+#   output_path  — where to dump the rendered VM dict as YAML.
+#
+# Replicates the slice of role state _build_vm.yml expects: item, _mp_specs,
+# temporary_ssh_public_key. The renderer uses `default()` filters internally
+# for unset fields (e.g., `memory | default('1Gi')`), so this harness does
+# not need to mirror mp_kubevirt_role_defaults — the renderer is self-
+# contained.
+
+- name: Render VirtualMachine via _build_vm.yml
+  hosts: localhost
+  gather_facts: false
+  vars:
+    item: instance
+    temporary_ssh_public_key: "ssh-ed25519 AAAATESTKEY"
+    _mp_specs:
+      instance: "{{ host_spec }}"
+  tasks:
+    - name: Include the renderer
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../roles/kubevirt/tasks/_build_vm.yml"
+
+    - name: Dump rendered VM to output_path
+      ansible.builtin.copy:
+        dest: "{{ output_path }}"
+        content: "{{ __mp_kubevirt_vm | to_nice_yaml(indent=2) }}"
+        mode: "0644"

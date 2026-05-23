@@ -25,15 +25,101 @@ all:
         instance:
           mp:
             kubevirt:
-              image: quay.io/containerdisks/ubuntu:24.04   # required, containerdisk image
-              namespace: molecule                          # optional, role default 'molecule'
-              ssh_user: cloud-user                         # optional, role default 'cloud-user'
-              memory: 1Gi                                  # optional, role default '1Gi'
+              # Required: boot source (one of container_disk, data_volume_url,
+              # data_volume_pvc, pvc). See "Boot sources" below.
+              boot_source:
+                type: container_disk
+                image: quay.io/containerdisks/ubuntu:24.04
+
+              # Optional
+              namespace: molecule              # role default 'molecule'
+              ssh_user: cloud-user             # role default 'cloud-user'
               ssh_service:
-                type: NodePort                             # optional, only NodePort supported in v1
+                type: NodePort                 # only NodePort in v1
+
+              # Curated compute
+              cpu:
+                cores: 4                       # default 2
+                sockets: 1
+                threads: 1
+              memory: 1Gi                      # → resources.requests.memory
+              memory_limit: 2Gi                # → resources.limits.memory
+
+              # Compute presets (alternative to cpu/memory; suppresses both)
+              instancetype: u1.medium          # str OR {name, kind}
+              preference: fedora               # str OR {name, kind}
+
+              # Scheduling
+              node_selector: {kubernetes.io/arch: amd64}
+              tolerations: []
+              affinity: {}
+
+              # Appended to defaults (containerdisk + cloudinitdisk + default pod net)
+              extra_disks: []
+              extra_volumes: []
+              extra_interfaces: []
+              extra_networks: []
+
+              # Escape hatch — deep-merged into the whole VirtualMachine object
+              # (lists append). Use for anything not surfaced above.
+              vm_overrides: {}
 ```
 
-Shared defaults can be hoisted into `mp_defaults.kubevirt` in `inventory/group_vars/molecule.yml`. Field resolution order: role defaults <- `mp_defaults.kubevirt` <- `hostvars[item].mp.kubevirt`.
+Shared defaults can be hoisted into `mp_defaults.kubevirt` in `inventory/group_vars/molecule.yml`. Field resolution: role defaults ← `mp_defaults.kubevirt` ← `hostvars[item].mp.kubevirt`.
+
+## Boot sources
+
+### `container_disk` — OCI-packaged image
+
+```yaml
+boot_source:
+  type: container_disk
+  image: quay.io/containerdisks/ubuntu:24.04
+```
+
+### `data_volume_url` — CDI import from URL
+
+Requires CDI installed on the cluster.
+
+```yaml
+boot_source:
+  type: data_volume_url
+  url: https://cloud-images.ubuntu.com/.../noble.img
+  size: 10Gi                  # required
+  storage_class: standard     # optional
+```
+
+### `data_volume_pvc` — CDI smart-clone from existing PVC
+
+Requires CDI installed on the cluster.
+
+```yaml
+boot_source:
+  type: data_volume_pvc
+  source: {name: golden-ubuntu, namespace: images}
+  size: 10Gi                  # required
+  storage_class: standard     # optional
+```
+
+### `pvc` — direct mount of existing PVC
+
+No CDI required.
+
+```yaml
+boot_source:
+  type: pvc
+  name: existing-boot-pvc
+```
+
+## Escape hatch and foot-guns
+
+`vm_overrides` is deep-merged into the whole VirtualMachine object with `list_merge='append'`. There are no guardrails — overriding any of the following will break the lifecycle:
+
+- **Don't set `spec.running: false`.** The prepare phase calls `wait_for_connection` against the NodePort SSH service; a stopped VM never becomes reachable.
+- **Don't replace the `cloudinitdisk` volume.** The role injects an SSH public key via cloud-init `users:`. If you must edit it, replicate the block and keep `temporary_ssh_public_key`.
+- **Don't change `metadata.labels.kubevirt.io/domain` or the SSH Service's selector.** The NodePort routes by this label.
+
+When `instancetype` is set, the renderer **omits** `domain.cpu` and `domain.resources` from the rendered spec — KubeVirt rejects conflicting fields. Setting `cpu:`/`memory_limit:` alongside `instancetype:` is silently ignored (a debug message is emitted at validate time).
 
 ## Role-level overrides
 

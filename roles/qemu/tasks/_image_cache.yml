@@ -88,8 +88,8 @@
     - not (item.skipped | default(false))
     - item.stdout == 'application/x-xz'
     - (mp_qemu_image_cache_dir ~ '/'
-       ~ (item.item.key | ansible.builtin.hash('sha256'))
-       ~ '/disk.qcow2') is file
+      ~ (item.item.key | ansible.builtin.hash('sha256'))
+      ~ '/disk.qcow2') is file
 
 - name: Rename non-xz download to disk.qcow2
   ansible.builtin.command:

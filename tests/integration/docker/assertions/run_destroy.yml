@@ -5,8 +5,9 @@
   connection: local
   gather_facts: false
   vars:
-    molecule_ephemeral_directory: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
-                                       | default('/tmp/molecule-fake-ephemeral', true) }}"
+    molecule_ephemeral_directory:
+      "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
+      | default('/tmp/molecule-fake-ephemeral', true) }}"
   tasks:
     - name: Include role defaults
       ansible.builtin.include_vars:

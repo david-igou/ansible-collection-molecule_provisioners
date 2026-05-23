@@ -19,6 +19,7 @@
 ## File Map
 
 **Create:**
+
 - `roles/qemu/defaults/main.yml`
 - `roles/qemu/meta/main.yml`
 - `roles/qemu/tasks/main.yml`
@@ -57,6 +58,7 @@
 - `changelogs/fragments/qemu-backend.yml`
 
 **Modify:**
+
 - `playbooks/group_vars/all.yml` — add `qemu` to `mp_supported_backends`
 - `galaxy.yml` — bump version to `1.1.0`, add `community.libvirt: ">=1.3.0"`
 - `README.md` — add `qemu` row, inventory example, prereqs; remove from "Out of scope"
@@ -71,12 +73,14 @@
 ### Task 1: Wire qemu into the dispatcher's allow-list
 
 **Files:**
+
 - Modify: `playbooks/group_vars/all.yml`
 
 - [ ] **Step 1: Read the current allow-list**
 
 Run: `cat playbooks/group_vars/all.yml`
 Expected:
+
 ```yaml
 ---
 # Loaded by every dispatcher play in playbooks/.
@@ -88,6 +92,7 @@ mp_supported_backends:
 - [ ] **Step 2: Add `qemu` to the list**
 
 Replace the file with:
+
 ```yaml
 ---
 # Loaded by every dispatcher play in playbooks/.
@@ -100,6 +105,7 @@ mp_supported_backends:
 - [ ] **Step 3: Verify dispatcher now accepts `qemu`**
 
 Create a temporary inventory file `/tmp/qemu-dispatch-check.yml`:
+
 ```yaml
 all:
   children:
@@ -129,6 +135,7 @@ git commit -m "feat(dispatcher): accept qemu as a supported backend"
 ### Task 2: Add `community.libvirt` dependency and bump version
 
 **Files:**
+
 - Modify: `galaxy.yml`
 
 - [ ] **Step 1: Bump `version` and add the libvirt dep**
@@ -167,6 +174,7 @@ git commit -m "feat(galaxy): bump to 1.1.0 and add community.libvirt dep"
 ### Task 3: Scaffold the qemu role skeleton
 
 **Files:**
+
 - Create: `roles/qemu/defaults/main.yml`
 - Create: `roles/qemu/meta/main.yml`
 - Create: `roles/qemu/tasks/main.yml`
@@ -251,6 +259,7 @@ dependencies: []
 - [ ] **Step 4: Create empty placeholders for the three entry points**
 
 `roles/qemu/tasks/create.yml`:
+
 ```yaml
 ---
 - name: "Qemu role: create entry point not yet implemented"
@@ -259,6 +268,7 @@ dependencies: []
 ```
 
 `roles/qemu/tasks/destroy.yml`:
+
 ```yaml
 ---
 - name: "Qemu role: destroy entry point not yet implemented"
@@ -267,6 +277,7 @@ dependencies: []
 ```
 
 `roles/qemu/tasks/prepare.yml`:
+
 ```yaml
 ---
 - name: Wait for the host to be reachable
@@ -295,6 +306,7 @@ git commit -m "feat(qemu): scaffold role with placeholders + defaults"
 ### Task 4: Spec-merge include file
 
 **Files:**
+
 - Create: `roles/qemu/tasks/_spec_merge.yml`
 
 - [ ] **Step 1: Create `_spec_merge.yml`**
@@ -326,6 +338,7 @@ git commit -m "feat(qemu): scaffold role with placeholders + defaults"
 - [ ] **Step 2: Write a fixture inventory to unit-test the merge**
 
 Create `tests/integration/qemu/fixtures/valid_minimal.yml`:
+
 ```yaml
 all:
   children:
@@ -352,6 +365,7 @@ all:
 - [ ] **Step 3: Create the assertion playbook**
 
 Create `tests/integration/qemu/assertions/run_validate.yml`:
+
 ```yaml
 ---
 - name: Exercise spec-merge + validation
@@ -373,17 +387,17 @@ Create `tests/integration/qemu/assertions/run_validate.yml`:
       ansible.builtin.assert:
         that:
           - _mp_specs['h-minimal'].image == 'https://example.invalid/disk.qcow2'
-          - _mp_specs['h-minimal'].driver == 'libvirt'         # role default
-          - _mp_specs['h-minimal'].cpus == 2                    # role default
-          - _mp_specs['h-minimal'].ssh_user == 'ubuntu'         # from mp_defaults
-          - _mp_specs['h-minimal'].network.mode == 'slirp'      # role default
+          - _mp_specs['h-minimal'].driver == 'libvirt' # role default
+          - _mp_specs['h-minimal'].cpus == 2 # role default
+          - _mp_specs['h-minimal'].ssh_user == 'ubuntu' # from mp_defaults
+          - _mp_specs['h-minimal'].network.mode == 'slirp' # role default
     - name: Assert h-overrides merged correctly
       ansible.builtin.assert:
         that:
-          - _mp_specs['h-overrides'].cpus == 4                  # host override wins
-          - _mp_specs['h-overrides'].network.mode == 'nat'      # host override wins
-          - _mp_specs['h-overrides'].ssh_user == 'ubuntu'       # mp_defaults still applies
-          - _mp_specs['h-overrides'].driver == 'libvirt'        # role default still applies
+          - _mp_specs['h-overrides'].cpus == 4 # host override wins
+          - _mp_specs['h-overrides'].network.mode == 'nat' # host override wins
+          - _mp_specs['h-overrides'].ssh_user == 'ubuntu' # mp_defaults still applies
+          - _mp_specs['h-overrides'].driver == 'libvirt' # role default still applies
 ```
 
 - [ ] **Step 4: Run the assertion playbook (expect PASS)**
@@ -403,6 +417,7 @@ git commit -m "feat(qemu): per-host spec merge with recursive combine"
 ### Task 5: Fail-fast validation block
 
 **Files:**
+
 - Modify: `roles/qemu/tasks/create.yml`
 - Create: `tests/integration/qemu/fixtures/bad_driver.yml`
 - Create: `tests/integration/qemu/fixtures/process_nat_invalid.yml`
@@ -469,7 +484,6 @@ git commit -m "feat(qemu): per-host spec merge with recursive combine"
     path: "{{ mp_qemu_image_cache_dir }}"
     state: directory
     mode: "0755"
-
 # Subsequent phases (image cache, seed ISO, driver dispatch, runtime inventory)
 # land in later tasks. For now create.yml ends at validation.
 ```
@@ -483,7 +497,7 @@ Update `tests/integration/qemu/assertions/run_validate.yml` to include the valid
 - name: Exercise spec-merge + validation
   hosts: localhost
   connection: local
-  gather_facts: true       # needed for ansible_env.HOME in image_cache_dir
+  gather_facts: true # needed for ansible_env.HOME in image_cache_dir
   tasks:
     - name: Include role defaults
       ansible.builtin.include_vars:
@@ -508,6 +522,7 @@ Expected: `failed=0`.
 - [ ] **Step 3: Create the three negative-test fixtures**
 
 `tests/integration/qemu/fixtures/bad_driver.yml`:
+
 ```yaml
 all:
   children:
@@ -517,13 +532,14 @@ all:
           mp:
             qemu:
               image: https://example.invalid/disk.qcow2
-              driver: vmware    # unsupported
+              driver: vmware # unsupported
   vars:
     mp_backend: qemu
     mp_defaults: {}
 ```
 
 `tests/integration/qemu/fixtures/process_nat_invalid.yml`:
+
 ```yaml
 all:
   children:
@@ -542,6 +558,7 @@ all:
 ```
 
 `tests/integration/qemu/fixtures/missing_image.yml`:
+
 ```yaml
 all:
   children:
@@ -560,19 +577,23 @@ all:
 - [ ] **Step 4: Run each negative fixture, confirm specific failure messages**
 
 For each fixture, run:
+
 ```bash
 ansible-playbook -i tests/integration/qemu/fixtures/bad_driver.yml tests/integration/qemu/assertions/run_validate.yml 2>&1 | tail -10
 ```
+
 Expected: contains `unsupported qemu.driver 'vmware'`.
 
 ```bash
 ansible-playbook -i tests/integration/qemu/fixtures/process_nat_invalid.yml tests/integration/qemu/assertions/run_validate.yml 2>&1 | tail -10
 ```
+
 Expected: contains `driver=process with network.mode=nat, which is not supported`.
 
 ```bash
 ansible-playbook -i tests/integration/qemu/fixtures/missing_image.yml tests/integration/qemu/assertions/run_validate.yml 2>&1 | tail -10
 ```
+
 Expected: contains `is missing qemu.image`.
 
 - [ ] **Step 5: Wire the assertion runs into pytest**
@@ -580,6 +601,7 @@ Expected: contains `is missing qemu.image`.
 Create `tests/integration/qemu/__init__.py` (empty file).
 
 Create `tests/integration/qemu/test_qemu_unit.py`:
+
 ```python
 """Fast, VM-less tests for the qemu role's validation and merge logic."""
 
@@ -648,6 +670,7 @@ git commit -m "feat(qemu): fail-fast validation with negative-test coverage"
 ### Task 6: Image cache include file
 
 **Files:**
+
 - Create: `roles/qemu/tasks/_image_cache.yml`
 - Modify: `roles/qemu/tasks/create.yml`
 - Create: `tests/integration/qemu/assertions/run_image_cache.yml`
@@ -721,6 +744,7 @@ Append to `roles/qemu/tasks/create.yml` (just before the trailing comment block)
 - [ ] **Step 3: Create an assertion playbook using a tiny local file as the "image"**
 
 Create `tests/integration/qemu/assertions/run_image_cache.yml`:
+
 ```yaml
 ---
 - name: Exercise image cache against a local file:// URL
@@ -788,6 +812,7 @@ Create `tests/integration/qemu/assertions/run_image_cache.yml`:
 - [ ] **Step 4: Add the pytest case**
 
 Append to `tests/integration/qemu/test_qemu_unit.py`:
+
 ```python
 def test_image_cache_creates_cached_file() -> None:
     proc = _run("run_image_cache.yml", "valid_minimal.yml")
@@ -811,6 +836,7 @@ git commit -m "feat(qemu): per-URL image cache via get_url with sha256 keying"
 ### Task 7: Cloud-init seed ISO
 
 **Files:**
+
 - Create: `roles/qemu/templates/user-data.j2`
 - Create: `roles/qemu/templates/meta-data.j2`
 - Create: `roles/qemu/tasks/_seed_iso.yml`
@@ -920,6 +946,7 @@ local-hostname: {{ _host }}
 - [ ] **Step 5: Create assertion playbook**
 
 `tests/integration/qemu/assertions/run_seed_iso.yml`:
+
 ```yaml
 ---
 - name: Exercise seed ISO build
@@ -927,8 +954,9 @@ local-hostname: {{ _host }}
   connection: local
   gather_facts: true
   vars:
-    molecule_ephemeral_directory: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
-                                       | default('/tmp/molecule-fake-ephemeral', true) }}"
+    molecule_ephemeral_directory:
+      "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
+      | default('/tmp/molecule-fake-ephemeral', true) }}"
     _fake_image_src: /tmp/qemu-fake-image.qcow2
   tasks:
     - name: Ensure ephemeral dir
@@ -995,6 +1023,7 @@ local-hostname: {{ _host }}
 - [ ] **Step 6: Add the pytest case**
 
 Append to `tests/integration/qemu/test_qemu_unit.py`:
+
 ```python
 def test_seed_iso_is_built_and_contains_user(tmp_path) -> None:
     import os
@@ -1027,6 +1056,7 @@ git commit -m "feat(qemu): NoCloud seed ISO build with cloud-localds and genisoi
 ### Task 8: Overlay creation for the process driver
 
 **Files:**
+
 - Create: `roles/qemu/tasks/_overlay.yml`
 - Modify: `roles/qemu/tasks/create.yml`
 
@@ -1094,6 +1124,7 @@ git commit -m "feat(qemu): qcow2 overlay creation for process driver"
 ### Task 9: Process-driver create
 
 **Files:**
+
 - Create: `roles/qemu/tasks/_create_process.yml`
 - Modify: `roles/qemu/tasks/create.yml`
 
@@ -1189,6 +1220,7 @@ git commit -m "feat(qemu): process-driver launch via qemu-system-x86_64 -daemoni
 ### Task 10: Process-driver destroy
 
 **Files:**
+
 - Create: `roles/qemu/tasks/_destroy_process.yml`
 - Modify: `roles/qemu/tasks/destroy.yml`
 
@@ -1297,6 +1329,7 @@ git commit -m "feat(qemu): process-driver destroy with pid-confirmation and arti
 ### Task 11: Runtime inventory + process-driver end-to-end test
 
 **Files:**
+
 - Create: `roles/qemu/tasks/_runtime_inventory.yml`
 - Modify: `roles/qemu/tasks/create.yml`
 - Create: `tests/integration/qemu/assertions/run_process_e2e.yml`
@@ -1358,6 +1391,7 @@ git commit -m "feat(qemu): process-driver destroy with pid-confirmation and arti
 - [ ] **Step 3: Create the process-driver E2E assertion playbook**
 
 `tests/integration/qemu/assertions/run_process_e2e.yml`:
+
 ```yaml
 ---
 - name: Process-driver E2E (boot a tiny VM under TCG, SSH in, destroy)
@@ -1365,8 +1399,9 @@ git commit -m "feat(qemu): process-driver destroy with pid-confirmation and arti
   connection: local
   gather_facts: true
   vars:
-    molecule_ephemeral_directory: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
-                                       | mandatory }}"
+    molecule_ephemeral_directory:
+      "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
+      | mandatory }}"
   tasks:
     - name: Include role defaults
       ansible.builtin.include_vars:
@@ -1408,6 +1443,7 @@ git commit -m "feat(qemu): process-driver destroy with pid-confirmation and arti
 Use a fixture inventory `tests/integration/qemu/fixtures/process_slirp.yml` that points at a real cloud image URL with a pinned checksum. **Pin a real Ubuntu noble URL + sha256** when first running this — fetch the checksum from `https://cloud-images.ubuntu.com/noble/current/SHA256SUMS` and record it in the fixture.
 
 `tests/integration/qemu/fixtures/process_slirp.yml`:
+
 ```yaml
 all:
   children:
@@ -1435,6 +1471,7 @@ all:
 - [ ] **Step 4: Add the pytest case**
 
 Append to `tests/integration/qemu/test_qemu_unit.py`:
+
 ```python
 @pytest.mark.slow
 def test_process_driver_e2e(tmp_path) -> None:
@@ -1471,6 +1508,7 @@ git commit -m "feat(qemu): runtime inventory write-back + process-driver E2E tes
 ### Task 12: Libvirt overlay (transient pool + virt_volume)
 
 **Files:**
+
 - Modify: `roles/qemu/tasks/_overlay.yml`
 
 - [ ] **Step 1: Add the libvirt branch to `_overlay.yml`**
@@ -1478,6 +1516,7 @@ git commit -m "feat(qemu): runtime inventory write-back + process-driver E2E tes
 Append to the existing `_overlay.yml` (before the "Record overlay path" task — that one stays at the bottom for both drivers):
 
 Replace the file in full with:
+
 ```yaml
 ---
 # Process-driver branch: qemu-img create.
@@ -1519,9 +1558,9 @@ Replace the file in full with:
         </target>
       </pool>
   when: groups['molecule']
-       | map('extract', _mp_specs)
-       | selectattr('driver', '==', 'libvirt')
-       | list | length > 0
+    | map('extract', _mp_specs)
+    | selectattr('driver', '==', 'libvirt')
+    | list | length > 0
   register: __mp_qemu_pool_define
 
 - name: "Build transient storage pool (libvirt driver)"
@@ -1538,9 +1577,9 @@ Replace the file in full with:
     name: "molecule-{{ molecule_ephemeral_directory | basename }}"
     uri: "{{ _mp_specs[groups['molecule'][0]].uri }}"
   when: groups['molecule']
-       | map('extract', _mp_specs)
-       | selectattr('driver', '==', 'libvirt')
-       | list | length > 0
+    | map('extract', _mp_specs)
+    | selectattr('driver', '==', 'libvirt')
+    | list | length > 0
 
 - name: "Create qcow2 volume (libvirt driver) for {{ item }}"
   community.libvirt.virt_volume:
@@ -1605,6 +1644,7 @@ git commit -m "feat(qemu): libvirt-driver overlay via transient pool + virt_volu
 ### Task 13: Libvirt domain XML template + create
 
 **Files:**
+
 - Create: `roles/qemu/templates/domain.xml.j2`
 - Create: `roles/qemu/tasks/_create_libvirt.yml`
 - Modify: `roles/qemu/tasks/create.yml`
@@ -1757,6 +1797,7 @@ git commit -m "feat(qemu): libvirt-driver domain define + start (slirp networkin
 ### Task 14: Libvirt destroy
 
 **Files:**
+
 - Create: `roles/qemu/tasks/_destroy_libvirt.yml`
 - Modify: `roles/qemu/tasks/destroy.yml`
 
@@ -1801,6 +1842,7 @@ git commit -m "feat(qemu): libvirt-driver domain define + start (slirp networkin
 - [ ] **Step 2: Append the libvirt destroy dispatch to `destroy.yml`**
 
 Replace `destroy.yml` with:
+
 ```yaml
 ---
 - name: Merge per-host specs (defensive)
@@ -1876,6 +1918,7 @@ git commit -m "feat(qemu): libvirt-driver destroy with pool/volume/NAT-reservati
 ### Task 15: NAT pre-reservation (libvirt + nat hosts)
 
 **Files:**
+
 - Modify: `roles/qemu/tasks/_create_libvirt.yml`
 
 - [ ] **Step 1: Insert the NAT reservation block at the top of `_create_libvirt.yml`** (after the MAC computation, before slirp ssh-facts setting)
@@ -1912,9 +1955,9 @@ After the "Compute deterministic MAC per host" task and before "Set ssh connecti
   when:
     - __mp_qemu_default_net is defined
     - groups['molecule']
-       | map('extract', _mp_specs)
-       | selectattr('network.mode', 'equalto', 'nat')
-       | list | length > 0
+      | map('extract', _mp_specs)
+      | selectattr('network.mode', 'equalto', 'nat')
+      | list | length > 0
 
 - name: Compute static IP per NAT host (high end of subnet, offset by index)
   ansible.builtin.set_fact:
@@ -1966,6 +2009,7 @@ git commit -m "feat(qemu): NAT mode static IP reservation via virt_net modify"
 ### Task 16: Molecule self-test scenario
 
 **Files:**
+
 - Create: `extensions/molecule/qemu/molecule.yml`
 - Create: `extensions/molecule/qemu/create.yml`
 - Create: `extensions/molecule/qemu/destroy.yml`
@@ -1978,6 +2022,7 @@ git commit -m "feat(qemu): NAT mode static IP reservation via virt_net modify"
 - [ ] **Step 1: Copy `molecule.yml` boilerplate**
 
 `extensions/molecule/qemu/molecule.yml`:
+
 ```yaml
 ---
 ansible:
@@ -2011,6 +2056,7 @@ verifier:
 - [ ] **Step 2: Lifecycle one-liners**
 
 `extensions/molecule/qemu/create.yml`:
+
 ```yaml
 ---
 - name: Provision molecule instances
@@ -2018,6 +2064,7 @@ verifier:
 ```
 
 `extensions/molecule/qemu/destroy.yml`:
+
 ```yaml
 ---
 - name: Tear down molecule instances
@@ -2025,6 +2072,7 @@ verifier:
 ```
 
 `extensions/molecule/qemu/prepare.yml`:
+
 ```yaml
 ---
 - name: Prepare molecule instances
@@ -2034,6 +2082,7 @@ verifier:
 - [ ] **Step 3: Converge + verify**
 
 `extensions/molecule/qemu/converge.yml`:
+
 ```yaml
 ---
 - name: Converge — verify SSH/exec works against every molecule host
@@ -2046,6 +2095,7 @@ verifier:
 ```
 
 `extensions/molecule/qemu/verify.yml`:
+
 ```yaml
 ---
 - name: Verify — every molecule host responds to ping
@@ -2059,6 +2109,7 @@ verifier:
 - [ ] **Step 4: Inventory with all three valid driver × network combos**
 
 `extensions/molecule/qemu/inventory/hosts.yml`:
+
 ```yaml
 all:
   children:
@@ -2087,16 +2138,17 @@ all:
               image: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
               image_checksum: "sha256:REPLACE_AT_IMPL_TIME"
               driver: libvirt
-              uri: qemu:///system   # NAT requires system URI; default network lives there
+              uri: qemu:///system # NAT requires system URI; default network lives there
               network:
                 mode: nat
 ```
 
 `extensions/molecule/qemu/inventory/group_vars/molecule.yml`:
+
 ```yaml
 ---
 mp_backend: "{{ lookup('env', 'PROVISIONER') | default('qemu', true) }}"
-mp_qemu_wait_timeout: 300   # TCG boot is slow
+mp_qemu_wait_timeout: 300 # TCG boot is slow
 
 mp_defaults:
   qemu:
@@ -2122,6 +2174,7 @@ git commit -m "test(qemu): self-test scenario exercising libvirt+slirp, process+
 ### Task 17: GitHub Actions integration-qemu job
 
 **Files:**
+
 - Modify: `.github/workflows/tests.yml`
 
 - [ ] **Step 1: Read current workflow**
@@ -2133,102 +2186,103 @@ Run: `cat .github/workflows/tests.yml`
 Insert this block after the closing of the `integration-kubevirt` job (and before `all_green:`):
 
 ```yaml
-  integration-qemu:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout into the canonical collection path
-        uses: actions/checkout@v4
-        with:
-          path: ansible_collections/david_igou/molecule_provisioners
+integration-qemu:
+  runs-on: ubuntu-latest
+  timeout-minutes: 30
+  steps:
+    - name: Checkout into the canonical collection path
+      uses: actions/checkout@v4
+      with:
+        path: ansible_collections/david_igou/molecule_provisioners
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
 
-      - name: Install qemu, libvirt, cloud-image-utils, and basic networking
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            qemu-system-x86 qemu-utils \
-            libvirt-daemon-system libvirt-clients \
-            cloud-image-utils bridge-utils
-          sudo systemctl enable --now libvirtd
-          sudo virsh net-start default || true
-          sudo virsh net-autostart default
-          sudo usermod -a -G libvirt,kvm "$USER"
+    - name: Install qemu, libvirt, cloud-image-utils, and basic networking
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          qemu-system-x86 qemu-utils \
+          libvirt-daemon-system libvirt-clients \
+          cloud-image-utils bridge-utils
+        sudo systemctl enable --now libvirtd
+        sudo virsh net-start default || true
+        sudo virsh net-autostart default
+        sudo usermod -a -G libvirt,kvm "$USER"
 
-      - name: Install ansible + molecule + pytest plumbing
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        run: |
-          python -m pip install --upgrade pip
-          pip install ansible-core molecule \
-                      pytest pytest-ansible pytest-xdist
+    - name: Install ansible + molecule + pytest plumbing
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      run: |
+        python -m pip install --upgrade pip
+        pip install ansible-core molecule \
+                    pytest pytest-ansible pytest-xdist
 
-      - name: Install collection dependencies
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        run: |
-          ansible-galaxy collection install \
-            containers.podman kubernetes.core community.crypto \
-            'community.libvirt:>=1.3.0'
+    - name: Install collection dependencies
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      run: |
+        ansible-galaxy collection install \
+          containers.podman kubernetes.core community.crypto \
+          'community.libvirt:>=1.3.0'
 
-      - name: Cache base qcow2 images
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/molecule-qemu
-          # NOTE: bump the suffix when the pinned image URL or checksum changes.
-          key: molecule-qemu-images-ubuntu-noble-v1
+    - name: Cache base qcow2 images
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/molecule-qemu
+        # NOTE: bump the suffix when the pinned image URL or checksum changes.
+        key: molecule-qemu-images-ubuntu-noble-v1
 
-      - name: Run qemu scenario (TCG; /dev/kvm is unavailable on hosted runners)
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        env:
-          PROVISIONER: qemu
-          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
-        # `sg libvirt -c` re-execs the shell with the libvirt group active without
-        # requiring a logout/login.
-        run: |
-          sg libvirt -c 'pytest tests/integration -v -k qemu -s -o addopts=""'
+    - name: Run qemu scenario (TCG; /dev/kvm is unavailable on hosted runners)
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      env:
+        PROVISIONER: qemu
+        ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
+      # `sg libvirt -c` re-execs the shell with the libvirt group active without
+      # requiring a logout/login.
+      run: |
+        sg libvirt -c 'pytest tests/integration -v -k qemu -s -o addopts=""'
 
-      - name: Collect libvirt diagnostics on failure
-        if: failure()
-        run: |
-          sudo virsh list --all || true
-          sudo virsh net-list --all || true
-          sudo virsh net-dumpxml default || true
-          sudo journalctl -u libvirtd --no-pager | tail -200 || true
+    - name: Collect libvirt diagnostics on failure
+      if: failure()
+      run: |
+        sudo virsh list --all || true
+        sudo virsh net-list --all || true
+        sudo virsh net-dumpxml default || true
+        sudo journalctl -u libvirtd --no-pager | tail -200 || true
 ```
 
 - [ ] **Step 3: Add `integration-qemu` to `all_green` needs**
 
 Modify the `all_green` job:
+
 ```yaml
-  all_green:
-    if: ${{ always() }}
-    needs:
-      - changelog
-      - build-import
-      - sanity
-      - unit-galaxy
-      - unit-source
-      - ansible-lint
-      - integration-podman
-      - integration-kubevirt
-      - integration-qemu
-    runs-on: ubuntu-latest
-    steps:
-      - run: >-
-          python -c "assert 'failure' not in
-          set([
-          '${{ needs.changelog.result }}',
-          '${{ needs.sanity.result }}',
-          '${{ needs.unit-galaxy.result }}',
-          '${{ needs.ansible-lint.result }}',
-          '${{ needs.unit-source.result }}',
-          '${{ needs.integration-podman.result }}',
-          '${{ needs.integration-kubevirt.result }}',
-          '${{ needs.integration-qemu.result }}'
-          ])"
+all_green:
+  if: ${{ always() }}
+  needs:
+    - changelog
+    - build-import
+    - sanity
+    - unit-galaxy
+    - unit-source
+    - ansible-lint
+    - integration-podman
+    - integration-kubevirt
+    - integration-qemu
+  runs-on: ubuntu-latest
+  steps:
+    - run: >-
+        python -c "assert 'failure' not in
+        set([
+        '${{ needs.changelog.result }}',
+        '${{ needs.sanity.result }}',
+        '${{ needs.unit-galaxy.result }}',
+        '${{ needs.ansible-lint.result }}',
+        '${{ needs.unit-source.result }}',
+        '${{ needs.integration-podman.result }}',
+        '${{ needs.integration-kubevirt.result }}',
+        '${{ needs.integration-qemu.result }}'
+        ])"
 ```
 
 - [ ] **Step 4: Lint the workflow**
@@ -2250,48 +2304,55 @@ git commit -m "ci(qemu): add integration-qemu job with libvirtd + TCG"
 ### Task 18: README updates
 
 **Files:**
+
 - Modify: `README.md`
 
 - [ ] **Step 1: Update "Supported backends" table**
 
 In `README.md`, find the table at line 9-13 and replace with:
+
 ```markdown
-| Backend | When to use |
-| --- | --- |
-| `podman` (default) | Containers, fastest CI loop |
-| `kubevirt` | Real VMs in a Kubernetes cluster (requires KubeVirt) |
-| `qemu` | Real VMs via local libvirtd or direct `qemu-system` process |
+| Backend            | When to use                                                 |
+| ------------------ | ----------------------------------------------------------- |
+| `podman` (default) | Containers, fastest CI loop                                 |
+| `kubevirt`         | Real VMs in a Kubernetes cluster (requires KubeVirt)        |
+| `qemu`             | Real VMs via local libvirtd or direct `qemu-system` process |
 ```
 
 - [ ] **Step 2: Add qemu block to the `inventory/hosts.yml` example**
 
 In the inventory example (lines 68-80), add a `qemu` sibling under `mp:` for the `ubuntu-24` host:
+
 ```yaml
-            qemu:
-              image: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
-              driver: libvirt
-              ssh_user: ubuntu
+qemu:
+  image: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+  driver: libvirt
+  ssh_user: ubuntu
 ```
 
 - [ ] **Step 3: Add qemu block to the `group_vars/molecule.yml` example**
 
 In the defaults example (lines 82-95), add a `qemu` sibling under `mp_defaults`:
+
 ```yaml
-  qemu:
-    cpus: 2
-    memory: 1024
-    ssh_user: cloud-user
-    network:
-      mode: slirp
+qemu:
+  cpus: 2
+  memory: 1024
+  ssh_user: cloud-user
+  network:
+    mode: slirp
 ```
 
 - [ ] **Step 4: Replace the "Out of scope" entry**
 
 Change line 111 from:
+
 ```
 - docker, qemu/libvirt, AWS, Azure, GCP backends
 ```
+
 to:
+
 ```
 - docker, AWS, Azure, GCP backends
 - qemu/libvirt remote URIs and `network.mode: bridge` (planned for a later minor)
@@ -2302,11 +2363,11 @@ to:
 ```markdown
 ## Controller-host prerequisites by backend
 
-| Backend | Required on the molecule controller |
-| --- | --- |
-| `podman` | `podman` |
-| `kubevirt` | `kubectl` + a kubeconfig pointing at a KubeVirt-enabled cluster |
-| `qemu` | `qemu-system-x86_64`, `qemu-img`, `cloud-localds` (or `genisoimage`); plus `libvirtd` reachable at the configured URI for `driver: libvirt` |
+| Backend    | Required on the molecule controller                                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `podman`   | `podman`                                                                                                                                    |
+| `kubevirt` | `kubectl` + a kubeconfig pointing at a KubeVirt-enabled cluster                                                                             |
+| `qemu`     | `qemu-system-x86_64`, `qemu-img`, `cloud-localds` (or `genisoimage`); plus `libvirtd` reachable at the configured URI for `driver: libvirt` |
 ```
 
 - [ ] **Step 6: Commit**
@@ -2321,15 +2382,19 @@ git commit -m "docs: README updates for qemu backend"
 ### Task 19: MIGRATION.md updates
 
 **Files:**
+
 - Modify: `docs/MIGRATION.md`
 
 - [ ] **Step 1: Remove qemu/libvirt from "What this collection does NOT support"**
 
 In `docs/MIGRATION.md` line 143, change:
+
 ```
 - Backends other than podman and kubevirt (no docker, qemu/libvirt, cloud).
 ```
+
 to:
+
 ```
 - Backends other than podman, kubevirt, and qemu (no docker, cloud providers).
 - Remote libvirt URIs (`qemu+ssh://...`); `network.mode: bridge` for the qemu backend.
@@ -2342,15 +2407,15 @@ to:
 
 The `molecule-plugins[libvirt]` driver expressed VMs as `platforms:` entries. This collection moves those fields into `mp.qemu.<field>` per host.
 
-| `molecule-plugins[libvirt]` field | `mp.qemu.<field>` equivalent |
-| --- | --- |
-| `platforms[].box` / `image` | `mp.qemu.image` (URL to qcow2) |
-| `platforms[].vcpus` | `mp.qemu.cpus` (integer) |
-| `platforms[].memory` | `mp.qemu.memory` (integer MiB) |
-| `platforms[].libvirt_user` / `connection` | `mp.qemu.ssh_user` |
-| `platforms[].libvirt_host` | not supported in v1.1 (controller-local only) |
-| `platforms[].networks[].name` | `mp.qemu.network.mode` (`slirp` or `nat`) |
-| `driver.options.connection_uri` | `mp.qemu.uri` (per host) |
+| `molecule-plugins[libvirt]` field         | `mp.qemu.<field>` equivalent                  |
+| ----------------------------------------- | --------------------------------------------- |
+| `platforms[].box` / `image`               | `mp.qemu.image` (URL to qcow2)                |
+| `platforms[].vcpus`                       | `mp.qemu.cpus` (integer)                      |
+| `platforms[].memory`                      | `mp.qemu.memory` (integer MiB)                |
+| `platforms[].libvirt_user` / `connection` | `mp.qemu.ssh_user`                            |
+| `platforms[].libvirt_host`                | not supported in v1.1 (controller-local only) |
+| `platforms[].networks[].name`             | `mp.qemu.network.mode` (`slirp` or `nat`)     |
+| `driver.options.connection_uri`           | `mp.qemu.uri` (per host)                      |
 
 Mode-`bridge` networking is not in v1.1. If you used a bridge previously, either switch to `nat` (libvirt's `default` network) or wait for the bridge add-on.
 ```
@@ -2367,11 +2432,13 @@ git commit -m "docs(migration): add molecule-plugins[libvirt] field map"
 ### Task 20: Changelog fragment + release notes
 
 **Files:**
+
 - Create: `changelogs/fragments/qemu-backend.yml`
 
 - [ ] **Step 1: Create the fragment**
 
 `changelogs/fragments/qemu-backend.yml`:
+
 ```yaml
 ---
 minor_changes:

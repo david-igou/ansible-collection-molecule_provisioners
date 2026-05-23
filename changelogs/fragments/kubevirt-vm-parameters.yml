@@ -1,0 +1,18 @@
+---
+minor_changes:
+  - >-
+    Add curated VirtualMachine parameterization for the ``kubevirt`` backend:
+    discriminated ``boot_source`` (``container_disk``, ``data_volume_url``,
+    ``data_volume_pvc``, ``pvc``), curated compute fields (``cpu``, ``memory``,
+    ``memory_limit``, ``instancetype``, ``preference``), scheduling fields
+    (``node_selector``, ``tolerations``, ``affinity``), extras
+    (``extra_disks``, ``extra_volumes``, ``extra_interfaces``,
+    ``extra_networks``), and a ``vm_overrides`` deep-merge escape hatch. See
+    ``docs/superpowers/specs/2026-05-22-kubevirt-vm-parameters-design.md``.
+bugfixes:
+  - >-
+    kubevirt renderer no longer emits empty ``spec.instancetype`` /
+    ``spec.preference`` blocks when those fields are unset. The previous gate
+    relied on Python ``None`` surviving Jinja templating, which only holds in
+    ansible-core 2.19+; on the supported floor (2.15+) it leaked an empty
+    ``{'name': ''}`` into the VM spec.
