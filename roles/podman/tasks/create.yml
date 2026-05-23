@@ -10,13 +10,13 @@
 
 - name: Create podman network(s)
   containers.podman.podman_network:
-    name: "{{ item }}"
+    name: "{{ item.name }}"
+    subnet: "{{ item.subnet | default(omit) }}"
+    gateway: "{{ item.gateway | default(omit) }}"
     state: present
-  loop: "{{ __mp_podman_networks | default([]) | unique }}"
-  when:
-    - item not in mp_podman_reserved_networks
-    - item is not match('^ns:')
-    - item is not match('^container:')
+  loop: "{{ __mp_podman_networks }}"
+  loop_control:
+    label: "{{ item.name }}"
 
 # Launch all containers simultaneously (poll: 0), then wait for each below.
 # A failure during the wait leaves still-running async jobs in flight;
@@ -33,7 +33,7 @@
     cap_add: "{{ _mp_specs[item].capabilities | default(omit) }}"
     expose: "{{ _mp_specs[item].exposed_ports | default(omit) }}"
     publish: "{{ _mp_specs[item].published_ports | default(omit) }}"
-    network: "{{ _mp_specs[item].podman_network | default(omit) }}"
+    network: "{{ _mp_specs[item].podman_network | map(attribute='name') | list | default(omit, true) }}"
     env: "{{ _mp_specs[item].env | default({}) }}"
     tmpfs: "{{ _mp_specs[item].tmpfs | default(omit) }}"
     cgroupns: "{{ _mp_specs[item].cgroupns | default(omit) }}"

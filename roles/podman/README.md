@@ -25,7 +25,7 @@ all:
               privileged: false                # optional, role default false
               volumes: []                      # optional
               capabilities: []                 # optional
-              podman_network: []               # optional, list or single string
+              podman_network: []               # optional, str | list[str] | list[{name, subnet?, gateway?}]
               env: {}                          # optional
               tmpfs: []                        # optional
               exposed_ports: []                # optional
@@ -45,6 +45,16 @@ all:
               restart_policy: <str>            # optional — 'no', 'on-failure', 'always', 'unless-stopped'
               restart_retries: <int>           # optional — paired with restart_policy=on-failure
 ```
+
+### Network shape
+
+`podman_network` accepts three shapes:
+
+- A single string: `podman_network: my-net` → joins a pre-existing network named `my-net`.
+- A list of strings: `podman_network: [a, b]` → joins both networks (creates them if missing).
+- A list of dicts: `podman_network: [{name: my-net, subnet: 10.89.0.0/24, gateway: 10.89.0.1}]` → creates `my-net` with the given subnet on first apply, then joins.
+
+Names listed in `mp_podman_reserved_networks` (default: `bridge`, `none`, `host`, `slirp4netns`, `ns`, `private`) and pseudo-references prefixed with `ns:` or `container:` are skipped during network create/destroy.
 
 Shared defaults can be hoisted into `mp_defaults.podman` in `inventory/group_vars/molecule.yml` (overrides role defaults; per-host fields override mp_defaults). Field resolution order in the role: role defaults <- `mp_defaults.podman` <- `hostvars[item].mp.podman`.
 

@@ -17,3 +17,27 @@
   loop: "{{ groups['molecule'] }}"
   loop_control:
     label: "{{ item }}"
+
+# Normalize podman_network to a list-of-dicts: [{name, subnet?, gateway?}, ...].
+# Accepts: undefined, single string, list of strings, list of dicts (assume all-strings
+# or all-dicts — no mixing).
+- name: Normalize podman_network shape per host
+  ansible.builtin.set_fact:
+    _mp_specs: >-
+      {{ _mp_specs | combine({
+           item: _mp_specs[item] | combine({
+             'podman_network': _mp_podman_network_normalized
+           })
+         }, recursive=True) }}
+  vars:
+    _raw: "{{ _mp_specs[item].podman_network | default([]) }}"
+    _as_list: "{{ [_raw] if (_raw is string) else (_raw if _raw else []) }}"
+    _mp_podman_network_normalized: >-
+      {{ _as_list
+         | map('community.general.dict_kv', 'name')
+         | list
+         if (_as_list and _as_list[0] is string)
+         else _as_list | list }}
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"

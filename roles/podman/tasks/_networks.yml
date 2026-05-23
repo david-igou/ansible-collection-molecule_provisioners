@@ -1,4 +1,7 @@
 ---
+# Build __mp_podman_networks: deduped list-of-dicts of non-reserved networks
+# referenced by any host in groups['molecule']. Shared by create.yml + destroy.yml.
+# Each entry: {name, subnet?, gateway?}.
 - name: Initialize podman network list
   ansible.builtin.set_fact:
     __mp_podman_networks: []
@@ -6,14 +9,20 @@
 - name: Collect networks from per-host podman_network
   ansible.builtin.set_fact:
     __mp_podman_networks: >-
-      {{ __mp_podman_networks +
-         (_mp_specs[item].podman_network
-          if (_mp_specs[item].podman_network is sequence
-              and _mp_specs[item].podman_network is not string)
-          else [_mp_specs[item].podman_network]) }}
+      {{ __mp_podman_networks + _mp_specs[item].podman_network }}
   loop: "{{ groups['molecule'] }}"
   loop_control:
     label: "{{ item }}"
   when:
     - _mp_specs[item].podman_network is defined
-    - _mp_specs[item].podman_network
+    - _mp_specs[item].podman_network | length > 0
+
+- name: "Deduplicate by network name and drop reserved + ns:/container: refs"
+  ansible.builtin.set_fact:
+    __mp_podman_networks: >-
+      {{ (__mp_podman_networks
+            | rejectattr('name', 'in', mp_podman_reserved_networks)
+            | rejectattr('name', 'match', '^ns:')
+            | rejectattr('name', 'match', '^container:')
+            | list)
+         | unique(attribute='name') }}

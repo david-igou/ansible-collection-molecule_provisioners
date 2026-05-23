@@ -31,10 +31,8 @@
 
 - name: Delete podman network(s)
   containers.podman.podman_network:
-    name: "{{ item }}"
+    name: "{{ item.name }}"
     state: absent
-  loop: "{{ __mp_podman_networks | default([]) | unique }}"
-  when:
-    - item not in mp_podman_reserved_networks
-    - item is not match('^ns:')
-    - item is not match('^container:')
+  loop: "{{ __mp_podman_networks }}"
+  loop_control:
+    label: "{{ item.name }}"

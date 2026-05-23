@@ -4,11 +4,15 @@
 # molecule.yml platforms[].podman.*
 
 # Reserved network names that must NOT be (re)created/deleted as standalone networks.
+# 'ns' and 'private' are podman-specific (network namespace modes); 'slirp4netns'
+# is the rootless default.
 mp_podman_reserved_networks:
   - bridge
   - none
   - host
   - slirp4netns
+  - ns
+  - private
 
 # Async timing for create/destroy bulk operations.
 # Note: retries * delay should equal (or exceed) async_timeout; otherwise

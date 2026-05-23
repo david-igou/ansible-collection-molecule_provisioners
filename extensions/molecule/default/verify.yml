@@ -112,3 +112,17 @@
         that:
           - (_ctr.HostConfig.PidMode | default('')) | length > 0
         fail_msg: "Expected HostConfig.PidMode to be set; got '{{ _ctr.HostConfig.PidMode | default('<unset>') }}'."
+
+    - name: Inspect the mp-test-net network
+      containers.podman.podman_network_info:
+        name: mp-test-net
+      register: __mp_verify_net
+
+    - name: Assert network subnet matches request
+      ansible.builtin.assert:
+        that:
+          - __mp_verify_net.networks | length == 1
+          - __mp_verify_net.networks[0].subnets[0].subnet == "10.89.0.0/24"
+        fail_msg: >-
+          Expected mp-test-net to carry subnet 10.89.0.0/24;
+          got {{ __mp_verify_net.networks | default([]) }}.
