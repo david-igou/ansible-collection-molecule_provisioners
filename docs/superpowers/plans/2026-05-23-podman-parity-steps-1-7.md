@@ -118,10 +118,10 @@ In `extensions/molecule/default/verify.yml`, replace the file contents with:
 In `extensions/molecule/default/inventory/hosts.yml`, replace the `podman:` block under `instance:` with:
 
 ```yaml
-            podman:
-              image: docker.io/geerlingguy/docker-fedora41-ansible:latest
-              systemd: always
-              cgroupns: host
+podman:
+  image: docker.io/geerlingguy/docker-fedora41-ansible:latest
+  systemd: always
+  cgroupns: host
 ```
 
 - [ ] **Step 1.2: Run the scenario — expect FAIL during `prepare`**
@@ -136,8 +136,8 @@ Side check: `podman ps -a --filter name=instance --format '{{.Names}} {{.Status}
 In `roles/podman/tasks/create.yml`, find the `Create molecule instance(s)` task (lines ~36-50). Add two lines inside the `containers.podman.podman_container:` mapping (alphabetical placement, after `expose:`/`publish:` is fine; ordering does not affect behavior):
 
 ```yaml
-    cgroupns: "{{ _mp_specs[item].cgroupns | default(omit) }}"
-    systemd: "{{ _mp_specs[item].systemd | default(omit) }}"
+cgroupns: "{{ _mp_specs[item].cgroupns | default(omit) }}"
+systemd: "{{ _mp_specs[item].systemd | default(omit) }}"
 ```
 
 - [ ] **Step 1.4: Document the new fields in `mp_podman_role_defaults` and argument_specs**
@@ -157,25 +157,25 @@ Replace lines 21-24 with:
 mp_podman_role_defaults:
 ```
 
-In `roles/podman/meta/argument_specs.yml`, the role defaults dict is described generically and doesn't enumerate every field. No change needed for this step — argument_specs documents role-level vars (mp_podman_role_defaults, mp_podman_async_*), not the per-host schema (which lives in README + CLAUDE.md). Skip.
+In `roles/podman/meta/argument_specs.yml`, the role defaults dict is described generically and doesn't enumerate every field. No change needed for this step — argument*specs documents role-level vars (mp_podman_role_defaults, mp_podman_async*\*), not the per-host schema (which lives in README + CLAUDE.md). Skip.
 
 - [ ] **Step 1.5: Update `README.md` and `CLAUDE.md`**
 
 In `roles/podman/README.md`, in the `## Inputs (per-host, in inventory)` YAML block, after the `published_ports: []` line add:
 
 ```yaml
-              systemd: always               # optional — 'always' | 'true' | 'false' | leave unset
-              cgroupns: host                # optional — 'host' | 'private'
+systemd: always # optional — 'always' | 'true' | 'false' | leave unset
+cgroupns: host # optional — 'host' | 'private'
 ```
 
 In `CLAUDE.md`, in the §"Public contract" `podman:` comment listing optional fields (lines 67-70), update the comment to:
 
 ```yaml
-            podman: # required when mp_backend == podman
-              image: <str> # required
-              # optional: command, privileged, volumes, capabilities,
-              # podman_network, env, tmpfs, exposed_ports, published_ports,
-              # systemd, cgroupns
+podman: # required when mp_backend == podman
+  image: <str> # required
+  # optional: command, privileged, volumes, capabilities,
+  # podman_network, env, tmpfs, exposed_ports, published_ports,
+  # systemd, cgroupns
 ```
 
 - [ ] **Step 1.6: Add commented example to docs/examples**
@@ -183,9 +183,9 @@ In `CLAUDE.md`, in the §"Public contract" `podman:` comment listing optional fi
 In `docs/examples/inventory/hosts.yml`, append to the `podman:` block under `ubuntu-24:`:
 
 ```yaml
-              # Systemd-friendly knobs (uncomment when running an init-based image):
-              # systemd: always
-              # cgroupns: host
+# Systemd-friendly knobs (uncomment when running an init-based image):
+# systemd: always
+# cgroupns: host
 ```
 
 - [ ] **Step 1.7: Re-run scenario — expect PASS end-to-end**
@@ -331,59 +331,59 @@ Wire eleven `containers.podman.podman_container` parameters that the role curren
 In `extensions/molecule/default/verify.yml`, after the existing `Assert cgroup namespace mode propagated` task, append:
 
 ```yaml
-    - name: Assert hostname propagated
-      ansible.builtin.assert:
-        that:
-          - _ctr.Config.Hostname == "mp-instance"
-        fail_msg: "Expected Hostname=mp-instance; got '{{ _ctr.Config.Hostname }}'."
+- name: Assert hostname propagated
+  ansible.builtin.assert:
+    that:
+      - _ctr.Config.Hostname == "mp-instance"
+    fail_msg: "Expected Hostname=mp-instance; got '{{ _ctr.Config.Hostname }}'."
 
-    - name: Assert TTY propagated
-      ansible.builtin.assert:
-        that:
-          - _ctr.Config.Tty | bool
-        fail_msg: "Expected Tty=true; got {{ _ctr.Config.Tty }}."
+- name: Assert TTY propagated
+  ansible.builtin.assert:
+    that:
+      - _ctr.Config.Tty | bool
+    fail_msg: "Expected Tty=true; got {{ _ctr.Config.Tty }}."
 
-    - name: Assert etc_hosts entry present
-      ansible.builtin.assert:
-        that:
-          - "'mp-extra-host:10.0.0.42' in (_ctr.HostConfig.ExtraHosts | default([]))"
-        fail_msg: "Expected ExtraHosts to contain mp-extra-host:10.0.0.42; got {{ _ctr.HostConfig.ExtraHosts | default('<unset>') }}."
+- name: Assert etc_hosts entry present
+  ansible.builtin.assert:
+    that:
+      - "'mp-extra-host:10.0.0.42' in (_ctr.HostConfig.ExtraHosts | default([]))"
+    fail_msg: "Expected ExtraHosts to contain mp-extra-host:10.0.0.42; got {{ _ctr.HostConfig.ExtraHosts | default('<unset>') }}."
 
-    - name: Assert DNS server propagated
-      ansible.builtin.assert:
-        that:
-          - "'1.1.1.1' in (_ctr.HostConfig.Dns | default([]))"
-        fail_msg: "Expected HostConfig.Dns to include 1.1.1.1; got {{ _ctr.HostConfig.Dns | default('<unset>') }}."
+- name: Assert DNS server propagated
+  ansible.builtin.assert:
+    that:
+      - "'1.1.1.1' in (_ctr.HostConfig.Dns | default([]))"
+    fail_msg: "Expected HostConfig.Dns to include 1.1.1.1; got {{ _ctr.HostConfig.Dns | default('<unset>') }}."
 
-    - name: Assert security_opt propagated
-      ansible.builtin.assert:
-        that:
-          - "'seccomp=unconfined' in (_ctr.HostConfig.SecurityOpt | default([]))"
-        fail_msg: "Expected SecurityOpt to include seccomp=unconfined; got {{ _ctr.HostConfig.SecurityOpt | default('<unset>') }}."
+- name: Assert security_opt propagated
+  ansible.builtin.assert:
+    that:
+      - "'seccomp=unconfined' in (_ctr.HostConfig.SecurityOpt | default([]))"
+    fail_msg: "Expected SecurityOpt to include seccomp=unconfined; got {{ _ctr.HostConfig.SecurityOpt | default('<unset>') }}."
 
-    - name: Assert ulimits propagated (nofile soft cap)
-      ansible.builtin.assert:
-        that:
-          # podman normalizes `nofile=1024:2048` → Name: RLIMIT_NOFILE
-          - (_ctr.HostConfig.Ulimits | default([])) | selectattr('Name', 'equalto', 'RLIMIT_NOFILE') | list | length > 0
-          - ((_ctr.HostConfig.Ulimits | default([])) | selectattr('Name', 'equalto', 'RLIMIT_NOFILE') | list | first).Soft | int == 1024
-        fail_msg: "Expected Ulimits to include RLIMIT_NOFILE with Soft=1024; got {{ _ctr.HostConfig.Ulimits | default('<unset>') }}."
+- name: Assert ulimits propagated (nofile soft cap)
+  ansible.builtin.assert:
+    that:
+      # podman normalizes `nofile=1024:2048` → Name: RLIMIT_NOFILE
+      - (_ctr.HostConfig.Ulimits | default([])) | selectattr('Name', 'equalto', 'RLIMIT_NOFILE') | list | length > 0
+      - ((_ctr.HostConfig.Ulimits | default([])) | selectattr('Name', 'equalto', 'RLIMIT_NOFILE') | list | first).Soft | int == 1024
+    fail_msg: "Expected Ulimits to include RLIMIT_NOFILE with Soft=1024; got {{ _ctr.HostConfig.Ulimits | default('<unset>') }}."
 
-    - name: Assert restart_policy propagated
-      ansible.builtin.assert:
-        that:
-          - _ctr.HostConfig.RestartPolicy.Name == "on-failure"
-          - (_ctr.HostConfig.RestartPolicy.MaximumRetryCount | int) == 3
-        fail_msg: >-
-          Expected RestartPolicy.Name=on-failure, MaximumRetryCount=3;
-          got name='{{ _ctr.HostConfig.RestartPolicy.Name }}',
-          retries={{ _ctr.HostConfig.RestartPolicy.MaximumRetryCount }}.
+- name: Assert restart_policy propagated
+  ansible.builtin.assert:
+    that:
+      - _ctr.HostConfig.RestartPolicy.Name == "on-failure"
+      - (_ctr.HostConfig.RestartPolicy.MaximumRetryCount | int) == 3
+    fail_msg: >-
+      Expected RestartPolicy.Name=on-failure, MaximumRetryCount=3;
+      got name='{{ _ctr.HostConfig.RestartPolicy.Name }}',
+      retries={{ _ctr.HostConfig.RestartPolicy.MaximumRetryCount }}.
 
-    - name: Assert pid_mode propagated
-      ansible.builtin.assert:
-        that:
-          - (_ctr.HostConfig.PidMode | default('')) | length > 0
-        fail_msg: "Expected HostConfig.PidMode to be set; got '{{ _ctr.HostConfig.PidMode | default('<unset>') }}'."
+- name: Assert pid_mode propagated
+  ansible.builtin.assert:
+    that:
+      - (_ctr.HostConfig.PidMode | default('')) | length > 0
+    fail_msg: "Expected HostConfig.PidMode to be set; got '{{ _ctr.HostConfig.PidMode | default('<unset>') }}'."
 ```
 
 Note: `devices` and `ip` are excluded from the verify assertions in this task — `devices` requires the parent container to share `/dev` (it does not in this devcontainer), and `ip` is only meaningful with a user-created network carrying a subnet, which arrives in Task 4. Both are wired through the role schema so the module accepts them, but verification waits.
@@ -393,24 +393,24 @@ Note: `devices` and `ip` are excluded from the verify assertions in this task �
 In `extensions/molecule/default/inventory/hosts.yml`, replace the `podman:` block under `instance:` with:
 
 ```yaml
-            podman:
-              image: docker.io/geerlingguy/docker-fedora41-ansible:latest
-              systemd: always
-              cgroupns: host
-              hostname: mp-instance
-              tty: true
-              detach: true
-              etc_hosts:
-                mp-extra-host: 10.0.0.42
-              dns_servers:
-                - 1.1.1.1
-              security_opts:
-                - seccomp=unconfined
-              ulimits:
-                - nofile=1024:2048
-              pid_mode: private
-              restart_policy: on-failure
-              restart_retries: 3
+podman:
+  image: docker.io/geerlingguy/docker-fedora41-ansible:latest
+  systemd: always
+  cgroupns: host
+  hostname: mp-instance
+  tty: true
+  detach: true
+  etc_hosts:
+    mp-extra-host: 10.0.0.42
+  dns_servers:
+    - 1.1.1.1
+  security_opts:
+    - seccomp=unconfined
+  ulimits:
+    - nofile=1024:2048
+  pid_mode: private
+  restart_policy: on-failure
+  restart_retries: 3
 ```
 
 - [ ] **Step 3.3: Run scenario — verify expected to FAIL on the new asserts**
@@ -423,34 +423,34 @@ Expected: lifecycle still completes; verify play fails on the first new assertio
 In `roles/podman/tasks/create.yml`, in the `Create molecule instance(s)` task's `containers.podman.podman_container:` mapping, expand the field list to:
 
 ```yaml
-  containers.podman.podman_container:
-    name: "{{ item }}"
-    image: "{{ _mp_specs[item].image }}"
-    state: started
-    recreate: false
-    command: "{{ _mp_specs[item].command | default(omit) }}"
-    privileged: "{{ _mp_specs[item].privileged | default(false) }}"
-    volume: "{{ _mp_specs[item].volumes | default(omit) }}"
-    cap_add: "{{ _mp_specs[item].capabilities | default(omit) }}"
-    expose: "{{ _mp_specs[item].exposed_ports | default(omit) }}"
-    publish: "{{ _mp_specs[item].published_ports | default(omit) }}"
-    network: "{{ _mp_specs[item].podman_network | default(omit) }}"
-    env: "{{ _mp_specs[item].env | default({}) }}"
-    tmpfs: "{{ _mp_specs[item].tmpfs | default(omit) }}"
-    cgroupns: "{{ _mp_specs[item].cgroupns | default(omit) }}"
-    systemd: "{{ _mp_specs[item].systemd | default(omit) }}"
-    hostname: "{{ _mp_specs[item].hostname | default(omit) }}"
-    tty: "{{ _mp_specs[item].tty | default(omit) }}"
-    detach: "{{ _mp_specs[item].detach | default(omit) }}"
-    etc_hosts: "{{ _mp_specs[item].etc_hosts | default(omit) }}"
-    dns: "{{ _mp_specs[item].dns_servers | default(omit) }}"
-    pid: "{{ _mp_specs[item].pid_mode | default(omit) }}"
-    security_opt: "{{ _mp_specs[item].security_opts | default(omit) }}"
-    device: "{{ _mp_specs[item].devices | default(omit) }}"
-    ulimit: "{{ _mp_specs[item].ulimits | default(omit) }}"
-    ip: "{{ _mp_specs[item].ip | default(omit) }}"
-    restart_policy: "{{ _mp_specs[item].restart_policy | default(omit) }}"
-    restart_policy_attempts: "{{ _mp_specs[item].restart_retries | default(omit) }}"
+containers.podman.podman_container:
+  name: "{{ item }}"
+  image: "{{ _mp_specs[item].image }}"
+  state: started
+  recreate: false
+  command: "{{ _mp_specs[item].command | default(omit) }}"
+  privileged: "{{ _mp_specs[item].privileged | default(false) }}"
+  volume: "{{ _mp_specs[item].volumes | default(omit) }}"
+  cap_add: "{{ _mp_specs[item].capabilities | default(omit) }}"
+  expose: "{{ _mp_specs[item].exposed_ports | default(omit) }}"
+  publish: "{{ _mp_specs[item].published_ports | default(omit) }}"
+  network: "{{ _mp_specs[item].podman_network | default(omit) }}"
+  env: "{{ _mp_specs[item].env | default({}) }}"
+  tmpfs: "{{ _mp_specs[item].tmpfs | default(omit) }}"
+  cgroupns: "{{ _mp_specs[item].cgroupns | default(omit) }}"
+  systemd: "{{ _mp_specs[item].systemd | default(omit) }}"
+  hostname: "{{ _mp_specs[item].hostname | default(omit) }}"
+  tty: "{{ _mp_specs[item].tty | default(omit) }}"
+  detach: "{{ _mp_specs[item].detach | default(omit) }}"
+  etc_hosts: "{{ _mp_specs[item].etc_hosts | default(omit) }}"
+  dns: "{{ _mp_specs[item].dns_servers | default(omit) }}"
+  pid: "{{ _mp_specs[item].pid_mode | default(omit) }}"
+  security_opt: "{{ _mp_specs[item].security_opts | default(omit) }}"
+  device: "{{ _mp_specs[item].devices | default(omit) }}"
+  ulimit: "{{ _mp_specs[item].ulimits | default(omit) }}"
+  ip: "{{ _mp_specs[item].ip | default(omit) }}"
+  restart_policy: "{{ _mp_specs[item].restart_policy | default(omit) }}"
+  restart_policy_attempts: "{{ _mp_specs[item].restart_retries | default(omit) }}"
 ```
 
 Module-param mapping notes:
@@ -481,42 +481,42 @@ all:
         instance:
           mp:
             podman:
-              image: docker.io/...:tag         # required
-              command: /sbin/init              # optional, role default '/sbin/init'
-              privileged: false                # optional, role default false
-              volumes: []                      # optional
-              capabilities: []                 # optional
-              podman_network: []               # optional, list or single string
-              env: {}                          # optional
-              tmpfs: []                        # optional
-              exposed_ports: []                # optional
-              published_ports: []              # optional
-              systemd: always                  # optional — 'always' | 'true' | 'false'
-              cgroupns: host                   # optional — 'host' | 'private'
-              hostname: <str>                  # optional
-              tty: true                        # optional
-              detach: true                     # optional (default behavior)
-              etc_hosts: {}                    # optional — dict of host:ip
-              dns_servers: []                  # optional — list of DNS server IPs
-              pid_mode: <str>                  # optional — 'host', 'container:<id>', 'private'
-              security_opts: []                # optional — e.g. ['seccomp=unconfined']
-              devices: []                      # optional — list of '/host:/ctr[:rwm]' mappings
-              ulimits: []                      # optional — e.g. ['nofile=1024:2048']
-              ip: <str>                        # optional — only with a network that has a subnet
-              restart_policy: <str>            # optional — 'no', 'on-failure', 'always', 'unless-stopped'
-              restart_retries: <int>           # optional — paired with restart_policy=on-failure
+              image: docker.io/...:tag # required
+              command: /sbin/init # optional, role default '/sbin/init'
+              privileged: false # optional, role default false
+              volumes: [] # optional
+              capabilities: [] # optional
+              podman_network: [] # optional, list or single string
+              env: {} # optional
+              tmpfs: [] # optional
+              exposed_ports: [] # optional
+              published_ports: [] # optional
+              systemd: always # optional — 'always' | 'true' | 'false'
+              cgroupns: host # optional — 'host' | 'private'
+              hostname: <str> # optional
+              tty: true # optional
+              detach: true # optional (default behavior)
+              etc_hosts: {} # optional — dict of host:ip
+              dns_servers: [] # optional — list of DNS server IPs
+              pid_mode: <str> # optional — 'host', 'container:<id>', 'private'
+              security_opts: [] # optional — e.g. ['seccomp=unconfined']
+              devices: [] # optional — list of '/host:/ctr[:rwm]' mappings
+              ulimits: [] # optional — e.g. ['nofile=1024:2048']
+              ip: <str> # optional — only with a network that has a subnet
+              restart_policy: <str> # optional — 'no', 'on-failure', 'always', 'unless-stopped'
+              restart_retries: <int> # optional — paired with restart_policy=on-failure
 ```
 
 In `CLAUDE.md`, in §"Public contract", update the `podman:` block to:
 
 ```yaml
-            podman: # required when mp_backend == podman
-              image: <str> # required
-              # optional: command, privileged, volumes, capabilities,
-              # podman_network, env, tmpfs, exposed_ports, published_ports,
-              # systemd, cgroupns, hostname, tty, detach, etc_hosts, dns_servers,
-              # pid_mode, security_opts, devices, ulimits, ip, restart_policy,
-              # restart_retries
+podman: # required when mp_backend == podman
+  image: <str> # required
+  # optional: command, privileged, volumes, capabilities,
+  # podman_network, env, tmpfs, exposed_ports, published_ports,
+  # systemd, cgroupns, hostname, tty, detach, etc_hosts, dns_servers,
+  # pid_mode, security_opts, devices, ulimits, ip, restart_policy,
+  # restart_retries
 ```
 
 - [ ] **Step 3.7: Add commented examples to docs/examples**
@@ -524,22 +524,22 @@ In `CLAUDE.md`, in §"Public contract", update the `podman:` block to:
 In `docs/examples/inventory/hosts.yml`, replace the `podman:` block under `ubuntu-24:` with:
 
 ```yaml
-            podman:
-              image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
-              # Systemd-friendly knobs:
-              # systemd: always
-              # cgroupns: host
-              # Common per-host knobs:
-              # hostname: my-host
-              # tty: true
-              # etc_hosts:
-              #   my-extra-host: 10.0.0.42
-              # dns_servers: [1.1.1.1]
-              # security_opts: [seccomp=unconfined]
-              # ulimits: [nofile=1024:2048]
-              # pid_mode: private
-              # restart_policy: on-failure
-              # restart_retries: 3
+podman:
+  image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
+  # Systemd-friendly knobs:
+  # systemd: always
+  # cgroupns: host
+  # Common per-host knobs:
+  # hostname: my-host
+  # tty: true
+  # etc_hosts:
+  #   my-extra-host: 10.0.0.42
+  # dns_servers: [1.1.1.1]
+  # security_opts: [seccomp=unconfined]
+  # ulimits: [nofile=1024:2048]
+  # pid_mode: private
+  # restart_policy: on-failure
+  # restart_retries: 3
 ```
 
 - [ ] **Step 3.8: Lint**
@@ -581,19 +581,19 @@ Widen the `podman_network` field to accept a list-of-dicts so consumers can requ
 In `extensions/molecule/default/verify.yml`, after the Task 3 assertions, append:
 
 ```yaml
-    - name: Inspect the mp-test-net network
-      containers.podman.podman_network_info:
-        name: mp-test-net
-      register: __mp_verify_net
+- name: Inspect the mp-test-net network
+  containers.podman.podman_network_info:
+    name: mp-test-net
+  register: __mp_verify_net
 
-    - name: Assert network subnet matches request
-      ansible.builtin.assert:
-        that:
-          - __mp_verify_net.networks | length == 1
-          - __mp_verify_net.networks[0].subnets[0].subnet == "10.89.0.0/24"
-        fail_msg: >-
-          Expected mp-test-net to carry subnet 10.89.0.0/24;
-          got {{ __mp_verify_net.networks | default([]) }}.
+- name: Assert network subnet matches request
+  ansible.builtin.assert:
+    that:
+      - __mp_verify_net.networks | length == 1
+      - __mp_verify_net.networks[0].subnets[0].subnet == "10.89.0.0/24"
+    fail_msg: >-
+      Expected mp-test-net to carry subnet 10.89.0.0/24;
+      got {{ __mp_verify_net.networks | default([]) }}.
 ```
 
 - [ ] **Step 4.2: Extend test inventory to request a custom-subnet network**
@@ -601,10 +601,10 @@ In `extensions/molecule/default/verify.yml`, after the Task 3 assertions, append
 In `extensions/molecule/default/inventory/hosts.yml`, append to the `podman:` block under `instance:` (after `restart_retries: 3`):
 
 ```yaml
-              podman_network:
-                - name: mp-test-net
-                  subnet: 10.89.0.0/24
-                  gateway: 10.89.0.1
+podman_network:
+  - name: mp-test-net
+    subnet: 10.89.0.0/24
+    gateway: 10.89.0.1
 ```
 
 - [ ] **Step 4.3: Run scenario — verify expected to FAIL on subnet assertion**
@@ -648,7 +648,7 @@ In `roles/podman/tasks/_spec_merge.yml`, after the existing `Merge per-host spec
 In `galaxy.yml`, find the `dependencies:` block. If `community.general` is not present, add:
 
 ```yaml
-  community.general: ">=8.0.0"
+community.general: ">=8.0.0"
 ```
 
 Note: if `community.general` is already pinned, leave it alone — just verify by running `grep -n community.general galaxy.yml`.
@@ -707,7 +707,7 @@ In `roles/podman/tasks/create.yml`, replace the `Create podman network(s)` task 
 Also update the `network:` line inside the `Create molecule instance(s)` task to extract names only:
 
 ```yaml
-    network: "{{ _mp_specs[item].podman_network | map(attribute='name') | list | default(omit, true) }}"
+network: "{{ _mp_specs[item].podman_network | map(attribute='name') | list | default(omit, true) }}"
 ```
 
 (`| default(omit, true)` — the second positional `true` makes `omit` apply when the value is falsy/empty, not just undefined.)
@@ -753,13 +753,12 @@ Expected: exit 0; subnet verify passes; existing assertions still pass.
 In `roles/podman/README.md`, replace the `podman_network: []` line in the schema block with:
 
 ```yaml
-              podman_network: []               # optional, str | list[str] | list[{name, subnet?, gateway?}]
+podman_network: [] # optional, str | list[str] | list[{name, subnet?, gateway?}]
 ```
 
 And add immediately below the schema block:
 
 ```markdown
-
 ### Network shape
 
 `podman_network` accepts three shapes:
@@ -776,11 +775,11 @@ In `CLAUDE.md`, no schema change needed — the `podman_network` field is alread
 In `docs/examples/inventory/hosts.yml`, replace the network commented-example with:
 
 ```yaml
-              # Network with a custom subnet:
-              # podman_network:
-              #   - name: my-net
-              #     subnet: 10.89.0.0/24
-              #     gateway: 10.89.0.1
+# Network with a custom subnet:
+# podman_network:
+#   - name: my-net
+#     subnet: 10.89.0.0/24
+#     gateway: 10.89.0.1
 ```
 
 - [ ] **Step 4.12: Lint**
@@ -821,14 +820,14 @@ Introduce a shared `cmd_args` builder so podman-CLI flags (Group B: `cgroup_mana
 In `extensions/molecule/default/verify.yml`, after the network subnet block, append:
 
 ```yaml
-    - name: Assert extra_opts --memory took effect
-      ansible.builtin.assert:
-        that:
-          # 128 MiB = 134217728 bytes; podman_container_info reports Memory in bytes.
-          - (_ctr.HostConfig.Memory | int) == 134217728
-        fail_msg: >-
-          Expected HostConfig.Memory=134217728 (128m from extra_opts);
-          got {{ _ctr.HostConfig.Memory | default('<unset>') }}.
+- name: Assert extra_opts --memory took effect
+  ansible.builtin.assert:
+    that:
+      # 128 MiB = 134217728 bytes; podman_container_info reports Memory in bytes.
+      - (_ctr.HostConfig.Memory | int) == 134217728
+    fail_msg: >-
+      Expected HostConfig.Memory=134217728 (128m from extra_opts);
+      got {{ _ctr.HostConfig.Memory | default('<unset>') }}.
 ```
 
 - [ ] **Step 5.2: Add `extra_opts` to test inventory**
@@ -836,8 +835,8 @@ In `extensions/molecule/default/verify.yml`, after the network subnet block, app
 In `extensions/molecule/default/inventory/hosts.yml`, append to the `podman:` block under `instance:` (after the network block):
 
 ```yaml
-              extra_opts:
-                - --memory=128m
+extra_opts:
+  - --memory=128m
 ```
 
 - [ ] **Step 5.3: Run scenario — verify expected to FAIL on memory assertion**
@@ -891,7 +890,7 @@ In `roles/podman/tasks/create.yml`, after the `Validate per-host specs` include 
 Then add this line to the `Create molecule instance(s)` task's module mapping (place after `restart_policy_attempts:`):
 
 ```yaml
-    cmd_args: "{{ __mp_podman_cmd_args[item] | default([]) }}"
+cmd_args: "{{ __mp_podman_cmd_args[item] | default([]) }}"
 ```
 
 - [ ] **Step 5.6: Re-run scenario — expect PASS**
@@ -904,30 +903,30 @@ Expected: exit 0; memory assertion passes.
 In `roles/podman/README.md`, in the schema block, append before the closing brace:
 
 ```yaml
-              cgroup_manager: <str>            # optional — 'systemd' | 'cgroupfs' (CLI flag)
-              storage_opt: []                  # optional — list of '--storage-opt=' values
-              storage_driver: <str>            # optional — '--storage-driver=' value
-              extra_opts: []                   # optional — raw `podman` CLI flags appended last
+cgroup_manager: <str> # optional — 'systemd' | 'cgroupfs' (CLI flag)
+storage_opt: [] # optional — list of '--storage-opt=' values
+storage_driver: <str> # optional — '--storage-driver=' value
+extra_opts: [] # optional — raw `podman` CLI flags appended last
 ```
 
 In `CLAUDE.md`, in §"Public contract" `podman:` block, extend the comment list to:
 
 ```yaml
-              # optional: command, privileged, volumes, capabilities,
-              # podman_network, env, tmpfs, exposed_ports, published_ports,
-              # systemd, cgroupns, hostname, tty, detach, etc_hosts, dns_servers,
-              # pid_mode, security_opts, devices, ulimits, ip, restart_policy,
-              # restart_retries, cgroup_manager, storage_opt, storage_driver,
-              # extra_opts
+# optional: command, privileged, volumes, capabilities,
+# podman_network, env, tmpfs, exposed_ports, published_ports,
+# systemd, cgroupns, hostname, tty, detach, etc_hosts, dns_servers,
+# pid_mode, security_opts, devices, ulimits, ip, restart_policy,
+# restart_retries, cgroup_manager, storage_opt, storage_driver,
+# extra_opts
 ```
 
 In `docs/examples/inventory/hosts.yml`, append:
 
 ```yaml
-              # CLI-level escape hatch (appended to `podman run` flags):
-              # extra_opts:
-              #   - --memory=512m
-              #   - --cpus=2
+# CLI-level escape hatch (appended to `podman run` flags):
+# extra_opts:
+#   - --memory=512m
+#   - --cpus=2
 ```
 
 - [ ] **Step 5.8: Lint**
@@ -965,11 +964,11 @@ Thread an `mp_podman_executable` variable through every `containers.podman.podma
 Use a side effect of the env var: when `MOLECULE_PODMAN_EXECUTABLE=podman` is set, the role's `executable:` parameter should also be `podman` (i.e., default behavior). The verify can't directly observe this, so the test instead just asserts the role variable resolves correctly via a `debug`+`assert` pre-check inside verify. In `extensions/molecule/default/verify.yml`, after the cmd_args assertion, append:
 
 ```yaml
-    - name: Assert mp_podman_executable resolves to the env var default
-      ansible.builtin.assert:
-        that:
-          - (lookup('env', 'MOLECULE_PODMAN_EXECUTABLE') | default('podman', true)) | length > 0
-        fail_msg: "MOLECULE_PODMAN_EXECUTABLE lookup returned empty."
+- name: Assert mp_podman_executable resolves to the env var default
+  ansible.builtin.assert:
+    that:
+      - (lookup('env', 'MOLECULE_PODMAN_EXECUTABLE') | default('podman', true)) | length > 0
+    fail_msg: "MOLECULE_PODMAN_EXECUTABLE lookup returned empty."
 ```
 
 This is a weak test (it asserts the lookup mechanism, not propagation). To really verify propagation: set `MOLECULE_PODMAN_EXECUTABLE` to a wrapper script that records its invocation, then assert the recording happened. That's overkill for the v1 of this knob. Defer to CI on a real runner for a stronger test; here we just confirm the lookup pipeline.
@@ -979,7 +978,6 @@ This is a weak test (it asserts the lookup mechanism, not propagation). To reall
 In `roles/podman/defaults/main.yml`, after the `mp_podman_async_delay: 24` line, append:
 
 ```yaml
-
 # Operator override: swap `podman` for `podman-remote` (or similar) via env var.
 # Threaded through every containers.podman.podman_* module call.
 mp_podman_executable: "{{ lookup('env', 'MOLECULE_PODMAN_EXECUTABLE') | default('podman', true) }}"
@@ -1002,12 +1000,12 @@ In `roles/podman/tasks/destroy.yml`, add the same `executable:` line to:
 In `roles/podman/meta/argument_specs.yml`, under both `create` and `destroy` `options:`, add:
 
 ```yaml
-      mp_podman_executable:
-        type: str
-        default: podman
-        description: >-
-          Path or name of the podman executable. Picked up from
-          MOLECULE_PODMAN_EXECUTABLE env var by default.
+mp_podman_executable:
+  type: str
+  default: podman
+  description: >-
+    Path or name of the podman executable. Picked up from
+    MOLECULE_PODMAN_EXECUTABLE env var by default.
 ```
 
 - [ ] **Step 6.5: Re-run scenario — expect PASS**
@@ -1053,13 +1051,13 @@ Three small, independent pieces:
 In `extensions/molecule/default/verify.yml`, after the executable assertion, append:
 
 ```yaml
-    - name: Assert owner=molecule label propagated
-      ansible.builtin.assert:
-        that:
-          - (_ctr.Config.Labels | default({})).owner | default('') == "molecule"
-        fail_msg: >-
-          Expected Config.Labels.owner=molecule;
-          got {{ _ctr.Config.Labels | default({}) }}.
+- name: Assert owner=molecule label propagated
+  ansible.builtin.assert:
+    that:
+      - (_ctr.Config.Labels | default({})).owner | default('') == "molecule"
+    fail_msg: >-
+      Expected Config.Labels.owner=molecule;
+      got {{ _ctr.Config.Labels | default({}) }}.
 ```
 
 - [ ] **Step 7.2: Run scenario — verify expected to FAIL on label assertion**
@@ -1072,7 +1070,7 @@ Expected: verify fails on the new label assertion.
 In `roles/podman/tasks/create.yml`, in the `Create molecule instance(s)` task, after the `cmd_args:` line, add:
 
 ```yaml
-    label: "{{ ({'owner': 'molecule'} | combine(_mp_specs[item].labels | default({}))) }}"
+label: "{{ ({'owner': 'molecule'} | combine(_mp_specs[item].labels | default({}))) }}"
 ```
 
 (Putting the role's reserved label first means a consumer setting `mp.podman.labels.owner` would override it — which is intentional; documented as the consumer's responsibility.)
@@ -1120,7 +1118,6 @@ Create `playbooks/reset.yml` with:
 In `roles/podman/tasks/_validate.yml`, after the `Validate image is set per host` task, append:
 
 ```yaml
-
 - name: Warn on ansible-core older than 2.16 (mirrors upstream sanity_checks)
   ansible.builtin.assert:
     that:
@@ -1159,8 +1156,7 @@ Expected output:
 
 In `roles/podman/README.md`, after the `## Role-level overrides` section, append:
 
-```markdown
-
+````markdown
 ## Resetting state
 
 `playbooks/reset.yml` (exposed as `david_igou.molecule_provisioners.reset`) removes every podman container labeled `owner=molecule`. Useful when a molecule run was interrupted and left containers behind.
@@ -1168,15 +1164,17 @@ In `roles/podman/README.md`, after the `## Role-level overrides` section, append
 ```bash
 ansible-playbook david_igou.molecule_provisioners.reset
 ```
+````
 
 The label is applied automatically by the role's create phase; user-supplied `mp.podman.labels.owner` overrides it.
-```
+
+````
 
 In `CLAUDE.md`, under §"Architecture (one-paragraph version)" → "Key files", add a bullet:
 
 ```markdown
 - `playbooks/reset.yml` — standalone purge playbook; removes containers labeled `owner=molecule`. Reachable as `david_igou.molecule_provisioners.reset`.
-```
+````
 
 - [ ] **Step 7.10: Lint**
 
@@ -1274,15 +1272,15 @@ PR body should link issue #24, mention that it closes #19, and call out the expl
 
 Spec coverage check against the issue's "Suggested implementation order":
 
-| Order | Issue says | This plan does |
-|---|---|---|
-| 1 | Land #19 first | Task 1 |
-| 2 | Refactor _spec_merge / _validate | Task 2 |
-| 3 | Group A | Task 3 |
-| 4 | Group D | Task 4 |
-| 5 | Groups B + C | Task 5 |
-| 6 | Group G | Task 6 |
-| 7 | Group I (partial) | Task 7 |
+| Order | Issue says                         | This plan does |
+| ----- | ---------------------------------- | -------------- |
+| 1     | Land #19 first                     | Task 1         |
+| 2     | Refactor \_spec_merge / \_validate | Task 2         |
+| 3     | Group A                            | Task 3         |
+| 4     | Group D                            | Task 4         |
+| 5     | Groups B + C                       | Task 5         |
+| 6     | Group G                            | Task 6         |
+| 7     | Group I (partial)                  | Task 7         |
 
 Type/identifier consistency:
 
