@@ -1,21 +1,9 @@
 ---
-# Compute per-host merged specs.
-# Order: role defaults <- mp_defaults.podman <- hostvars[item].mp.podman.
-- name: Initialize podman spec map
-  ansible.builtin.set_fact:
-    _mp_specs: {}
+- name: Merge per-host specs
+  ansible.builtin.include_tasks: _spec_merge.yml
 
-- name: Merge per-host specs with mp_defaults and role defaults
-  ansible.builtin.set_fact:
-    _mp_specs: >-
-      {{ _mp_specs | combine({
-           item: mp_podman_role_defaults
-                 | combine(mp_defaults['podman'] | default({}))
-                 | combine(hostvars[item].mp['podman'])
-         }) }}
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
+- name: Validate per-host specs
+  ansible.builtin.include_tasks: _validate.yml
 
 - name: Build podman network list
   ansible.builtin.import_tasks: _networks.yml
