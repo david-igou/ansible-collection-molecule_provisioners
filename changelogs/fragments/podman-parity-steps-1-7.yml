@@ -1,0 +1,30 @@
+---
+minor_changes:
+  - >-
+    podman role: expose ``systemd`` and ``cgroupns`` per-host fields (closes
+    #19) and add Group A schema fields from the parity catalogue in #24:
+    ``hostname``, ``tty``, ``detach``, ``etc_hosts``, ``dns_servers``,
+    ``pid_mode``, ``security_opts``, ``devices``, ``ulimits``, ``ip``,
+    ``restart_policy``, ``restart_retries``.
+  - >-
+    podman role: widen ``podman_network`` to accept ``str``, ``list[str]``, or
+    ``list[dict]`` (``{name, subnet?, gateway?}``). Reserved-network list now
+    also includes ``ns`` and ``private``.
+  - >-
+    podman role: new ``extra_opts`` catch-all and curated ``cgroup_manager``,
+    ``storage_opt``, ``storage_driver`` fields, all assembled into the
+    ``cmd_args`` passed to ``containers.podman.podman_container``.
+  - >-
+    podman role: honor the ``MOLECULE_PODMAN_EXECUTABLE`` env var via the new
+    ``mp_podman_executable`` role variable; threaded through every
+    ``containers.podman.podman_*`` module call.
+  - >-
+    podman role: containers are now labeled ``owner=molecule`` (overridable via
+    ``mp.podman.labels.owner``). New ``david_igou.molecule_provisioners.reset``
+    playbook purges anything carrying that label. Pre-flight assertion catches
+    ``ansible-core`` older than the collection's 2.15 floor.
+  - >-
+    podman role: ``_spec_merge.yml`` / ``_validate.yml`` extracted to mirror the
+    docker role layout; switches to recursive ``combine`` so
+    ``mp_defaults.podman.<dict>`` and per-host overrides compose instead of
+    last-write-wins.

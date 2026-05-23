@@ -1,34 +1,26 @@
 ---
-# Compute per-host merged specs.
-# Order: role defaults <- mp_defaults.podman <- hostvars[item].mp.podman.
-- name: Initialize podman spec map
-  ansible.builtin.set_fact:
-    _mp_specs: {}
+- name: Merge per-host specs
+  ansible.builtin.include_tasks: _spec_merge.yml
 
-- name: Merge per-host specs with mp_defaults and role defaults
-  ansible.builtin.set_fact:
-    _mp_specs: >-
-      {{ _mp_specs | combine({
-           item: mp_podman_role_defaults
-                 | combine(mp_defaults['podman'] | default({}))
-                 | combine(hostvars[item].mp['podman'])
-         }) }}
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
+- name: Validate per-host specs
+  ansible.builtin.include_tasks: _validate.yml
+
+- name: Assemble per-host cmd_args
+  ansible.builtin.include_tasks: _cmd_args.yml
 
 - name: Build podman network list
   ansible.builtin.import_tasks: _networks.yml
 
 - name: Create podman network(s)
   containers.podman.podman_network:
-    name: "{{ item }}"
+    name: "{{ item.name }}"
+    executable: "{{ mp_podman_executable }}"
+    subnet: "{{ item.subnet | default(omit) }}"
+    gateway: "{{ item.gateway | default(omit) }}"
     state: present
-  loop: "{{ __mp_podman_networks | default([]) | unique }}"
-  when:
-    - item not in mp_podman_reserved_networks
-    - item is not match('^ns:')
-    - item is not match('^container:')
+  loop: "{{ __mp_podman_networks }}"
+  loop_control:
+    label: "{{ item.name }}"
 
 # Launch all containers simultaneously (poll: 0), then wait for each below.
 # A failure during the wait leaves still-running async jobs in flight;
@@ -36,6 +28,7 @@
 - name: Create molecule instance(s)
   containers.podman.podman_container:
     name: "{{ item }}"
+    executable: "{{ mp_podman_executable }}"
     image: "{{ _mp_specs[item].image }}"
     state: started
     recreate: false
@@ -45,9 +38,34 @@
     cap_add: "{{ _mp_specs[item].capabilities | default(omit) }}"
     expose: "{{ _mp_specs[item].exposed_ports | default(omit) }}"
     publish: "{{ _mp_specs[item].published_ports | default(omit) }}"
-    network: "{{ _mp_specs[item].podman_network | default(omit) }}"
+    network: "{{ _mp_specs[item].podman_network | map(attribute='name') | list | default(omit, true) }}"
     env: "{{ _mp_specs[item].env | default({}) }}"
     tmpfs: "{{ _mp_specs[item].tmpfs | default(omit) }}"
+    cgroupns: "{{ _mp_specs[item].cgroupns | default(omit) }}"
+    systemd: "{{ _mp_specs[item].systemd | default(omit) }}"
+    hostname: "{{ _mp_specs[item].hostname | default(omit) }}"
+    tty: "{{ _mp_specs[item].tty | default(omit) }}"
+    detach: "{{ _mp_specs[item].detach | default(omit) }}"
+    etc_hosts: "{{ _mp_specs[item].etc_hosts | default(omit) }}"
+    dns: "{{ _mp_specs[item].dns_servers | default(omit) }}"
+    pid: "{{ _mp_specs[item].pid_mode | default(omit) }}"
+    security_opt: "{{ _mp_specs[item].security_opts | default(omit) }}"
+    device: "{{ _mp_specs[item].devices | default(omit) }}"
+    ulimit: "{{ _mp_specs[item].ulimits | default(omit) }}"
+    ip: "{{ _mp_specs[item].ip | default(omit) }}"
+    # podman_container has no separate `restart_policy_attempts` (unlike docker_container);
+    # podman encodes the retry count into the policy string: `on-failure:N`. Compose here
+    # so consumers keep the docker-style restart_policy + restart_retries vocabulary.
+    restart_policy: >-
+      {{
+        omit if _mp_specs[item].restart_policy is not defined
+        else (_mp_specs[item].restart_policy ~ ':' ~ _mp_specs[item].restart_retries
+              if (_mp_specs[item].restart_policy == 'on-failure'
+                  and _mp_specs[item].restart_retries is defined)
+              else _mp_specs[item].restart_policy)
+      }}
+    cmd_args: "{{ __mp_podman_cmd_args[item] | default([]) }}"
+    label: "{{ ({'owner': 'molecule'} | combine(_mp_specs[item].labels | default({}))) }}"
   register: __mp_podman_create
   loop: "{{ groups['molecule'] }}"
   loop_control:

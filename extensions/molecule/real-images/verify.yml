@@ -1,0 +1,108 @@
+---
+- name: Verify — every molecule host responds to ping
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Ping each host
+      ansible.builtin.ping:
+
+- name: Verify — podman containers configured correctly
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    # Source the backend from PROVISIONER (matches inventory/group_vars/molecule.yml)
+    # rather than groups['molecule'][0] — `hosts: localhost` may not have the
+    # molecule group populated yet, and an undefined groups lookup would error.
+    _mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
+  tasks:
+    - name: Skip non-podman backends
+      ansible.builtin.meta: end_play
+      when: _mp_backend != 'podman'
+
+    - name: Inspect centos-stream10 container
+      containers.podman.podman_container_info:
+        name: centos-stream10
+      register: __ci_centos
+
+    - name: Set centos container fact for readability
+      ansible.builtin.set_fact:
+        _c: "{{ __ci_centos.containers[0] }}"
+
+    - name: Assert centos host — hostname, tty, restart policy, ulimits, pid_mode, labels
+      ansible.builtin.assert:
+        that:
+          - _c.Config.Hostname == "c10-test"
+          - _c.Config.Tty | bool
+          - _c.HostConfig.RestartPolicy.Name == "on-failure"
+          - (_c.HostConfig.RestartPolicy.MaximumRetryCount | int) == 2
+          - (_c.Config.Labels | default({})).owner | default('') == "molecule"
+          - (_c.Config.Labels | default({})).project | default('') == "real-images"
+          - (_c.Config.Labels | default({})).role | default('') == "server"
+          - (_c.HostConfig.PidMode | default('')) | length > 0
+          - >-
+            (_c.HostConfig.Ulimits | default([]))
+            | selectattr('Name', 'equalto', 'RLIMIT_NOFILE')
+            | list | length > 0
+        fail_msg: >-
+          centos-stream10 misconfigured. Hostname={{ _c.Config.Hostname }},
+          Tty={{ _c.Config.Tty }},
+          RestartPolicy={{ _c.HostConfig.RestartPolicy }},
+          Labels={{ _c.Config.Labels | default({}) }},
+          PidMode='{{ _c.HostConfig.PidMode | default('<unset>') }}',
+          Ulimits={{ _c.HostConfig.Ulimits | default([]) }}.
+
+    - name: Inspect ubuntu-2604 container
+      containers.podman.podman_container_info:
+        name: ubuntu-2604
+      register: __ci_ubuntu
+
+    - name: Set ubuntu container fact for readability
+      ansible.builtin.set_fact:
+        _u: "{{ __ci_ubuntu.containers[0] }}"
+
+    - name: Assert ubuntu host — hostname, etc_hosts, DNS, security_opt, memory, labels
+      ansible.builtin.assert:
+        that:
+          - _u.Config.Hostname == "u2604-test"
+          - "'test-peer:10.91.0.10' in (_u.HostConfig.ExtraHosts | default([]))"
+          - "'9.9.9.9' in (_u.HostConfig.Dns | default([]))"
+          - "'8.8.8.8' in (_u.HostConfig.Dns | default([]))"
+          - "'seccomp=unconfined' in (_u.HostConfig.SecurityOpt | default([]))"
+          # 256 MiB == 268435456 bytes; --memory=256m flows via extra_opts.
+          - (_u.HostConfig.Memory | int) == 268435456
+          - (_u.Config.Labels | default({})).owner | default('') == "molecule"
+          - (_u.Config.Labels | default({})).project | default('') == "real-images"
+          - (_u.Config.Labels | default({})).role | default('') == "client"
+        fail_msg: >-
+          ubuntu-2604 misconfigured. Hostname={{ _u.Config.Hostname }},
+          ExtraHosts={{ _u.HostConfig.ExtraHosts | default([]) }},
+          Dns={{ _u.HostConfig.Dns | default([]) }},
+          SecurityOpt={{ _u.HostConfig.SecurityOpt | default([]) }},
+          Memory={{ _u.HostConfig.Memory | default('<unset>') }},
+          Labels={{ _u.Config.Labels | default({}) }}.
+
+    - name: Inspect the shared network
+      containers.podman.podman_network_info:
+        name: mp-real-images-net
+      register: __net
+
+    - name: Assert network exists with the expected subnet
+      ansible.builtin.assert:
+        that:
+          - (__net.networks | default([])) | length == 1
+          - __net.networks[0].subnets[0].subnet == "10.91.0.0/24"
+        fail_msg: >-
+          Expected mp-real-images-net to carry subnet 10.91.0.0/24;
+          got {{ __net.networks | default([]) }}.
+
+    - name: Assert both containers are attached to mp-real-images-net
+      ansible.builtin.assert:
+        that:
+          - "'mp-real-images-net' in (_c.NetworkSettings.Networks | default({}))"
+          - "'mp-real-images-net' in (_u.NetworkSettings.Networks | default({}))"
+        fail_msg: >-
+          Both containers must list mp-real-images-net under
+          NetworkSettings.Networks. centos={{ _c.NetworkSettings.Networks
+          | default({}) | list }}, ubuntu={{ _u.NetworkSettings.Networks
+          | default({}) | list }}.

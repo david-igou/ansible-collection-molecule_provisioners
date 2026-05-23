@@ -24,6 +24,7 @@ Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) 
 ### Key files
 
 - `playbooks/{create,destroy,prepare}.yml` — dispatcher entry points; the `import_playbook` targets that consumers reference by FQCN.
+- `playbooks/reset.yml` — standalone purge playbook; removes containers labeled `owner=molecule`. Reachable as `david_igou.molecule_provisioners.reset`.
 - `playbooks/group_vars/all.yml` — declares `mp_supported_backends`.
 - `roles/podman/tasks/{create,destroy,prepare,_networks}.yml` — podman lifecycle. `_networks.yml` is shared between create and destroy.
 - `roles/kubevirt/tasks/{create,destroy,prepare,_create_vm,_create_vm_dictionary,_build_vm,_validate}.yml` — kubevirt lifecycle. `_create_vm*.yml` are per-host helpers included in a loop over `groups['molecule']`.
@@ -67,7 +68,11 @@ all:
             podman: # required when mp_backend == podman
               image: <str> # required
               # optional: command, privileged, volumes, capabilities,
-              # podman_network, env, tmpfs, exposed_ports, published_ports
+              # podman_network, env, tmpfs, exposed_ports, published_ports,
+              # systemd, cgroupns, hostname, tty, detach, etc_hosts, dns_servers,
+              # pid_mode, security_opts, devices, ulimits, ip, restart_policy,
+              # restart_retries, cgroup_manager, storage_opt, storage_driver,
+              # extra_opts, labels
             kubevirt: # required when mp_backend == kubevirt
               boot_source: # required: discriminated union
                 type: container_disk #   container_disk | data_volume_url | data_volume_pvc | pvc

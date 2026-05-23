@@ -2,6 +2,7 @@
 - name: Destroy molecule instance(s)
   containers.podman.podman_container:
     name: "{{ item }}"
+    executable: "{{ mp_podman_executable }}"
     state: absent
   register: __mp_podman_destroy
   loop: "{{ groups['molecule'] }}"
@@ -22,33 +23,18 @@
     label: "{{ item.item }}"
 
 # Network cleanup needs the merged specs to know which networks were created.
-# Defensive merge — a host may not have an mp.podman block on destroy if
-# the consumer added it after a partial create, and destroy is idempotent.
-- name: Initialize podman spec map
-  ansible.builtin.set_fact:
-    _mp_specs: {}
-
-- name: Merge per-host specs with mp_defaults and role defaults
-  ansible.builtin.set_fact:
-    _mp_specs: >-
-      {{ _mp_specs | combine({
-           item: mp_podman_role_defaults
-                 | combine(mp_defaults['podman'] | default({}))
-                 | combine((hostvars[item].mp | default({}))['podman'] | default({}))
-         }) }}
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
+# Defensive merge — destroy is idempotent against half-failed creates.
+- name: Merge per-host specs (defensive)
+  ansible.builtin.include_tasks: _spec_merge.yml
 
 - name: Build podman network list
   ansible.builtin.import_tasks: _networks.yml
 
 - name: Delete podman network(s)
   containers.podman.podman_network:
-    name: "{{ item }}"
+    name: "{{ item.name }}"
+    executable: "{{ mp_podman_executable }}"
     state: absent
-  loop: "{{ __mp_podman_networks | default([]) | unique }}"
-  when:
-    - item not in mp_podman_reserved_networks
-    - item is not match('^ns:')
-    - item is not match('^container:')
+  loop: "{{ __mp_podman_networks }}"
+  loop_control:
+    label: "{{ item.name }}"

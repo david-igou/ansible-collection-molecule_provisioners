@@ -4,11 +4,15 @@
 # molecule.yml platforms[].podman.*
 
 # Reserved network names that must NOT be (re)created/deleted as standalone networks.
+# 'ns' and 'private' are podman-specific (network namespace modes); 'slirp4netns'
+# is the rootless default.
 mp_podman_reserved_networks:
   - bridge
   - none
   - host
   - slirp4netns
+  - ns
+  - private
 
 # Async timing for create/destroy bulk operations.
 # Note: retries * delay should equal (or exceed) async_timeout; otherwise
@@ -17,10 +21,15 @@ mp_podman_async_timeout: 7200
 mp_podman_async_retries: 300
 mp_podman_async_delay: 24
 
+# Operator override: swap `podman` for `podman-remote` (or similar) via env var.
+# Threaded through every containers.podman.podman_* module call.
+mp_podman_executable: "{{ lookup('env', 'MOLECULE_PODMAN_EXECUTABLE') | default('podman', true) }}"
+
 # Per-host field defaults. Layered as: this dict <- mp_defaults.podman <- hostvars[item].mp.podman.
 # Only `image` is required. Fields whose role default is "omit" (podman_network,
-# tmpfs, exposed_ports, published_ports) are intentionally absent — the role's
-# module calls use `| default(omit)` to handle their absence correctly.
+# tmpfs, exposed_ports, published_ports, systemd, cgroupns) are intentionally absent
+# — the role's module calls use `| default(omit)` so the podman_container module's
+# own defaults apply.
 mp_podman_role_defaults:
   command: /sbin/init
   privileged: false
