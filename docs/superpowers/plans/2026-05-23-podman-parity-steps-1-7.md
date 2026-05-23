@@ -12,17 +12,17 @@
 
 ## Pre-flight (one-time, before starting Task 1)
 
-- [ ] **Step P1: Confirm baseline scenario passes**
+> **Important baseline note:** `PROVISIONER=podman pytest tests/integration -v -k default` currently FAILS at the prepare phase in this devcontainer. The scenario's `mp_defaults.podman.command: /sbin/init` + `privileged: true` requires the container to run as a systemd-init host, but the role today does not pass `--systemd=always` to `podman run`, so the container's PID 1 exits immediately and the prepare phase can't reach it. **This is exactly the bug Task 1 (issue #19) closes** — the new `systemd: always` / `cgroupns: host` fields restore a working lifecycle. Treat the baseline as broken; do not chase the prepare failure separately.
 
-Run: `cd /workspace/ansible-collection-molecule_provisioners/extensions/molecule/default && PROVISIONER=podman molecule test`
-Expected: `PLAY RECAP` shows `instance : ok=N changed=M failed=0` and `unreachable=0` for every play; exit code 0.
-
-If this fails, stop and debug. Do NOT proceed with task work on a broken baseline.
-
-- [ ] **Step P2: Confirm baseline lint is clean**
+- [ ] **Step P1: Confirm baseline lint is clean**
 
 Run: `cd /workspace/ansible-collection-molecule_provisioners && ansible-lint roles/podman/ && yamllint .`
 Expected: `Passed: 0 failure(s), 0 warning(s)` from ansible-lint; yamllint silent (exit 0).
+
+- [ ] **Step P2: Confirm scenario invocation path**
+
+Run: `cd /workspace/ansible-collection-molecule_provisioners && PROVISIONER=podman pytest tests/integration -v -k default 2>&1 | tail -20`
+Expected: pytest reaches the `create` phase successfully, then fails at `prepare` (CRITICAL: Ansible return code was 4). This confirms the test wrapper works and confirms the baseline issue described above. Task 1 will produce a passing run.
 
 ## File Structure
 
@@ -124,12 +124,12 @@ In `extensions/molecule/default/inventory/hosts.yml`, replace the `podman:` bloc
               cgroupns: host
 ```
 
-- [ ] **Step 1.2: Run the scenario — verify expected to FAIL**
+- [ ] **Step 1.2: Run the scenario — expect FAIL during `prepare`**
 
-Run: `cd /workspace/ansible-collection-molecule_provisioners/extensions/molecule/default && PROVISIONER=podman molecule test 2>&1 | tail -60`
-Expected: the verify play fails on `Assert systemd mode propagated` (because `create.yml` doesn't pass the new fields to the module yet). Lifecycle should still create+destroy cleanly.
+Run: `cd /workspace/ansible-collection-molecule_provisioners && PROVISIONER=podman pytest tests/integration -v -k default 2>&1 | tail -20`
+Expected: `create` succeeds, then `prepare` fails (return code 4) because PID 1 (`/sbin/init`) exits before ansible can connect — the role does not yet pass `systemd: always` through to `podman_container`. This matches the pre-existing broken baseline; you have not made it worse. The new verify assertions never get a chance to run yet.
 
-If the failure is anywhere other than the new asserts, stop and investigate — the inventory change shouldn't break create/destroy.
+Side check: `podman ps -a --filter name=instance --format '{{.Names}} {{.Status}}'` will show `instance Exited (255)`. Remove with `podman rm -f instance` if molecule's destroy left it behind.
 
 - [ ] **Step 1.3: Wire `systemd` and `cgroupns` through `create.yml`**
 
@@ -188,10 +188,10 @@ In `docs/examples/inventory/hosts.yml`, append to the `podman:` block under `ubu
               # cgroupns: host
 ```
 
-- [ ] **Step 1.7: Re-run scenario — expect PASS**
+- [ ] **Step 1.7: Re-run scenario — expect PASS end-to-end**
 
-Run: `cd /workspace/ansible-collection-molecule_provisioners/extensions/molecule/default && PROVISIONER=podman molecule test 2>&1 | tail -30`
-Expected: full lifecycle (`create → prepare → converge → verify → destroy`) returns exit 0; verify play passes both new assertions.
+Run: `cd /workspace/ansible-collection-molecule_provisioners && PROVISIONER=podman pytest tests/integration -v -k default 2>&1 | tail -20`
+Expected: `tests/integration/test_integration.py::test_integration[extensions-default] PASSED`. Full lifecycle (`create → prepare → converge → verify → destroy`) returns exit 0; verify play passes both new assertions. This is the first run since the baseline broke that completes cleanly — Task 1 unblocks every later task.
 
 - [ ] **Step 1.8: Lint**
 
@@ -295,7 +295,7 @@ In `roles/podman/tasks/destroy.yml`, replace lines 24-41 (the comment + `Initial
 
 - [ ] **Step 2.5: Re-run scenario — should still PASS**
 
-Run: `cd /workspace/ansible-collection-molecule_provisioners/extensions/molecule/default && PROVISIONER=podman molecule test 2>&1 | tail -30`
+Run: `cd /workspace/ansible-collection-molecule_provisioners && PROVISIONER=podman pytest tests/integration -v -k default 2>&1 | tail -30`
 Expected: exit 0, verify play passes (no new assertions; this is a refactor).
 
 - [ ] **Step 2.6: Lint**
@@ -415,7 +415,7 @@ In `extensions/molecule/default/inventory/hosts.yml`, replace the `podman:` bloc
 
 - [ ] **Step 3.3: Run scenario — verify expected to FAIL on the new asserts**
 
-Run: `cd /workspace/ansible-collection-molecule_provisioners/extensions/molecule/default && PROVISIONER=podman molecule test 2>&1 | tail -60`
+Run: `cd /workspace/ansible-collection-molecule_provisioners && PROVISIONER=podman pytest tests/integration -v -k default 2>&1 | tail -60`
 Expected: lifecycle still completes; verify play fails on the first new assertion (`Assert hostname propagated`) because the role drops the new fields.
 
 - [ ] **Step 3.4: Wire Group A fields into `create.yml`**
@@ -466,7 +466,7 @@ The public-facing names match docker role / molecule-plugins vocabulary; the mod
 
 - [ ] **Step 3.5: Re-run scenario — expect PASS on all new asserts**
 
-Run: `cd /workspace/ansible-collection-molecule_provisioners/extensions/molecule/default && PROVISIONER=podman molecule test 2>&1 | tail -30`
+Run: `cd /workspace/ansible-collection-molecule_provisioners && PROVISIONER=podman pytest tests/integration -v -k default 2>&1 | tail -30`
 Expected: exit 0; verify play passes all Group A assertions plus the carried-over Task 1 assertions.
 
 - [ ] **Step 3.6: Document Group A in README and CLAUDE.md**
@@ -609,7 +609,7 @@ In `extensions/molecule/default/inventory/hosts.yml`, append to the `podman:` bl
 
 - [ ] **Step 4.3: Run scenario — verify expected to FAIL on subnet assertion**
 
-Run: `cd /workspace/ansible-collection-molecule_provisioners/extensions/molecule/default && PROVISIONER=podman molecule test 2>&1 | tail -60`
+Run: `cd /workspace/ansible-collection-molecule_provisioners && PROVISIONER=podman pytest tests/integration -v -k default 2>&1 | tail -60`
 Expected: the run fails — either at network create (because `_networks.yml` currently expects strings, not dicts) or at the subnet assertion. Either failure proves the test is wired.
 
 - [ ] **Step 4.4: Normalize networks in `_spec_merge.yml`**
@@ -745,7 +745,7 @@ mp_podman_reserved_networks:
 
 - [ ] **Step 4.10: Re-run scenario — expect PASS**
 
-Run: `cd /workspace/ansible-collection-molecule_provisioners/extensions/molecule/default && PROVISIONER=podman molecule test 2>&1 | tail -30`
+Run: `cd /workspace/ansible-collection-molecule_provisioners && PROVISIONER=podman pytest tests/integration -v -k default 2>&1 | tail -30`
 Expected: exit 0; subnet verify passes; existing assertions still pass.
 
 - [ ] **Step 4.11: Document the widened schema in README + CLAUDE.md + examples**
@@ -842,7 +842,7 @@ In `extensions/molecule/default/inventory/hosts.yml`, append to the `podman:` bl
 
 - [ ] **Step 5.3: Run scenario — verify expected to FAIL on memory assertion**
 
-Run: `cd /workspace/ansible-collection-molecule_provisioners/extensions/molecule/default && PROVISIONER=podman molecule test 2>&1 | tail -30`
+Run: `cd /workspace/ansible-collection-molecule_provisioners && PROVISIONER=podman pytest tests/integration -v -k default 2>&1 | tail -30`
 Expected: lifecycle completes; verify fails on the `--memory` assertion.
 
 - [ ] **Step 5.4: Create `_cmd_args.yml`**
@@ -896,7 +896,7 @@ Then add this line to the `Create molecule instance(s)` task's module mapping (p
 
 - [ ] **Step 5.6: Re-run scenario — expect PASS**
 
-Run: `cd /workspace/ansible-collection-molecule_provisioners/extensions/molecule/default && PROVISIONER=podman molecule test 2>&1 | tail -30`
+Run: `cd /workspace/ansible-collection-molecule_provisioners && PROVISIONER=podman pytest tests/integration -v -k default 2>&1 | tail -30`
 Expected: exit 0; memory assertion passes.
 
 - [ ] **Step 5.7: Document `cgroup_manager`, `storage_opt`, `storage_driver`, `extra_opts`**
@@ -1012,7 +1012,7 @@ In `roles/podman/meta/argument_specs.yml`, under both `create` and `destroy` `op
 
 - [ ] **Step 6.5: Re-run scenario — expect PASS**
 
-Run: `cd /workspace/ansible-collection-molecule_provisioners/extensions/molecule/default && PROVISIONER=podman molecule test 2>&1 | tail -30`
+Run: `cd /workspace/ansible-collection-molecule_provisioners && PROVISIONER=podman pytest tests/integration -v -k default 2>&1 | tail -30`
 Expected: exit 0; lookup-pipeline assertion passes.
 
 - [ ] **Step 6.6: Lint**
@@ -1064,7 +1064,7 @@ In `extensions/molecule/default/verify.yml`, after the executable assertion, app
 
 - [ ] **Step 7.2: Run scenario — verify expected to FAIL on label assertion**
 
-Run: `cd /workspace/ansible-collection-molecule_provisioners/extensions/molecule/default && PROVISIONER=podman molecule test 2>&1 | tail -30`
+Run: `cd /workspace/ansible-collection-molecule_provisioners && PROVISIONER=podman pytest tests/integration -v -k default 2>&1 | tail -30`
 Expected: verify fails on the new label assertion.
 
 - [ ] **Step 7.3: Add `label:` and merge user-provided labels in `create.yml`**
@@ -1079,7 +1079,7 @@ In `roles/podman/tasks/create.yml`, in the `Create molecule instance(s)` task, a
 
 - [ ] **Step 7.4: Re-run scenario — expect PASS**
 
-Run: `cd /workspace/ansible-collection-molecule_provisioners/extensions/molecule/default && PROVISIONER=podman molecule test 2>&1 | tail -30`
+Run: `cd /workspace/ansible-collection-molecule_provisioners && PROVISIONER=podman pytest tests/integration -v -k default 2>&1 | tail -30`
 Expected: exit 0; label assertion passes.
 
 - [ ] **Step 7.5: Create `playbooks/reset.yml`**
@@ -1135,7 +1135,7 @@ In `roles/podman/tasks/_validate.yml`, after the `Validate image is set per host
 
 - [ ] **Step 7.7: Re-run scenario — expect PASS**
 
-Run: `cd /workspace/ansible-collection-molecule_provisioners/extensions/molecule/default && PROVISIONER=podman molecule test 2>&1 | tail -30`
+Run: `cd /workspace/ansible-collection-molecule_provisioners && PROVISIONER=podman pytest tests/integration -v -k default 2>&1 | tail -30`
 Expected: exit 0.
 
 - [ ] **Step 7.8: Smoke-test `reset.yml` against a stray labeled container**
