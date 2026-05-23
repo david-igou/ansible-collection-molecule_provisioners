@@ -5,6 +5,9 @@
 - name: Validate per-host specs
   ansible.builtin.include_tasks: _validate.yml
 
+- name: Assemble per-host cmd_args
+  ansible.builtin.include_tasks: _cmd_args.yml
+
 - name: Build podman network list
   ansible.builtin.import_tasks: _networks.yml
 
@@ -59,6 +62,7 @@
                   and _mp_specs[item].restart_retries is defined)
               else _mp_specs[item].restart_policy)
       }}
+    cmd_args: "{{ __mp_podman_cmd_args[item] | default([]) }}"
   register: __mp_podman_create
   loop: "{{ groups['molecule'] }}"
   loop_control:

@@ -44,6 +44,10 @@ all:
               ip: <str>                        # optional — only with a network that has a subnet
               restart_policy: <str>            # optional — 'no', 'on-failure', 'always', 'unless-stopped'
               restart_retries: <int>           # optional — paired with restart_policy=on-failure
+              cgroup_manager: <str>            # optional — 'systemd' | 'cgroupfs' (CLI flag)
+              storage_opt: []                  # optional — list of '--storage-opt=' values
+              storage_driver: <str>            # optional — '--storage-driver=' value
+              extra_opts: []                   # optional — raw `podman` CLI flags appended last
 ```
 
 ### Network shape

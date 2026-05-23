@@ -1,0 +1,27 @@
+---
+# Assemble __mp_podman_cmd_args[host] from the per-host podman-CLI flags and
+# the extra_opts catch-all. Run after _spec_merge.yml.
+- name: Initialize per-host cmd_args map
+  ansible.builtin.set_fact:
+    __mp_podman_cmd_args: {}
+
+- name: Build cmd_args per host
+  ansible.builtin.set_fact:
+    __mp_podman_cmd_args: >-
+      {{ __mp_podman_cmd_args | combine({
+           item: (
+             (['--cgroup-manager=' ~ _mp_specs[item].cgroup_manager]
+               if (_mp_specs[item].cgroup_manager | default(none)) is not none
+               else [])
+             + ((_mp_specs[item].storage_opt | default([]))
+                | map('regex_replace', '^(.*)$', '--storage-opt=\\1')
+                | list)
+             + (['--storage-driver=' ~ _mp_specs[item].storage_driver]
+                if (_mp_specs[item].storage_driver | default(none)) is not none
+                else [])
+             + (_mp_specs[item].extra_opts | default([]))
+           )
+         }) }}
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
