@@ -141,3 +141,11 @@
         that:
           - (lookup('env', 'MOLECULE_PODMAN_EXECUTABLE') | default('podman', true)) | length > 0
         fail_msg: "MOLECULE_PODMAN_EXECUTABLE lookup returned empty."
+
+    - name: Assert owner=molecule label propagated
+      ansible.builtin.assert:
+        that:
+          - (_ctr.Config.Labels | default({})).owner | default('') == "molecule"
+        fail_msg: >-
+          Expected Config.Labels.owner=molecule;
+          got {{ _ctr.Config.Labels | default({}) }}.

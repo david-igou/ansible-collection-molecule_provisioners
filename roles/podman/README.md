@@ -65,3 +65,13 @@ Shared defaults can be hoisted into `mp_defaults.podman` in `inventory/group_var
 ## Role-level overrides
 
 See `defaults/main.yml` (`mp_podman_role_defaults`, `mp_podman_async_*`, `mp_podman_reserved_networks`).
+
+## Resetting state
+
+`playbooks/reset.yml` (exposed as `david_igou.molecule_provisioners.reset`) removes every podman container labeled `owner=molecule`. Useful when a molecule run was interrupted and left containers behind.
+
+````bash
+ansible-playbook david_igou.molecule_provisioners.reset
+````
+
+The label is applied automatically by the role's create phase; user-supplied `mp.podman.labels.owner` overrides it.

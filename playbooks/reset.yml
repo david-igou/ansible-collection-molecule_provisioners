@@ -1,0 +1,26 @@
+---
+- name: Molecule provisioner — reset (purge owner=molecule containers/networks)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    mp_podman_executable: "{{ lookup('env', 'MOLECULE_PODMAN_EXECUTABLE') | default('podman', true) }}"
+  tasks:
+    - name: List containers labeled owner=molecule
+      containers.podman.podman_container_info:
+        executable: "{{ mp_podman_executable }}"
+      register: __mp_reset_ci
+
+    - name: Remove containers labeled owner=molecule
+      containers.podman.podman_container:
+        name: "{{ item.Name }}"
+        state: absent
+        executable: "{{ mp_podman_executable }}"
+      loop: >-
+        {{ __mp_reset_ci.containers
+           | selectattr('Config.Labels', 'defined')
+           | selectattr('Config.Labels.owner', 'defined')
+           | selectattr('Config.Labels.owner', 'equalto', 'molecule')
+           | list }}
+      loop_control:
+        label: "{{ item.Name }}"

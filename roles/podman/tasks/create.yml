@@ -65,6 +65,7 @@
               else _mp_specs[item].restart_policy)
       }}
     cmd_args: "{{ __mp_podman_cmd_args[item] | default([]) }}"
+    label: "{{ ({'owner': 'molecule'} | combine(_mp_specs[item].labels | default({}))) }}"
   register: __mp_podman_create
   loop: "{{ groups['molecule'] }}"
   loop_control:

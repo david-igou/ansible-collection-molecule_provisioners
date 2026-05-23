@@ -11,3 +11,12 @@
   loop: "{{ groups['molecule'] }}"
   loop_control:
     label: "{{ item }}"
+
+- name: Warn on ansible-core older than 2.15 (mirrors upstream sanity_checks)
+  ansible.builtin.assert:
+    that:
+      - (ansible_version.major, ansible_version.minor) >= (2, 15)
+    fail_msg: >-
+      david_igou.molecule_provisioners.podman requires ansible-core >= 2.15;
+      detected {{ ansible_version.full }}.
+  run_once: true
