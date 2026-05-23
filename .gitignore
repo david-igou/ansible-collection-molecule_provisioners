@@ -168,3 +168,10 @@ cython_debug/
 
 # Claude Code working state
 .claude/
+
+# Collection build artifacts
+*.tar.gz
+
+# pytest-ansible / Makefile-materialized collection trees
+collections/
+.build/
