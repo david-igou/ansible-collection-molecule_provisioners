@@ -51,6 +51,7 @@ CLAUDE.md                           — MODIFY: Public-contract kubevirt block
 Lays down the testing scaffolding before any real renderer logic. The stub returns the bare minimum VM skeleton and one passing test proves the harness round-trips correctly.
 
 **Files:**
+
 - Create: `roles/kubevirt/tasks/_build_vm.yml`
 - Create: `tests/unit/kubevirt_render/__init__.py` (empty)
 - Create: `tests/unit/kubevirt_render/render_harness.yml`
@@ -241,6 +242,7 @@ git commit -m "test(kubevirt): scaffold renderer unit-test harness"
 Adds the containerdisk boot source plus the always-present cloudinit volume/disk and the default pod-network interface. This is the part that today is hardcoded in `_create_vm.yml`.
 
 **Files:**
+
 - Modify: `roles/kubevirt/tasks/_build_vm.yml`
 - Modify: `tests/unit/kubevirt_render/test_boot_sources.py`
 
@@ -407,6 +409,7 @@ git commit -m "feat(kubevirt): renderer boot_source=container_disk"
 Adds CDI-import boot from a URL. Renders a `dataVolumeTemplates` entry and references it from the VM's boot volume.
 
 **Files:**
+
 - Modify: `roles/kubevirt/tasks/_build_vm.yml`
 - Modify: `tests/unit/kubevirt_render/test_boot_sources.py`
 
@@ -522,6 +525,7 @@ git commit -m "feat(kubevirt): renderer boot_source=data_volume_url (CDI import)
 Adds CDI smart-clone from an existing PVC.
 
 **Files:**
+
 - Modify: `roles/kubevirt/tasks/_build_vm.yml`
 - Modify: `tests/unit/kubevirt_render/test_boot_sources.py`
 
@@ -610,6 +614,7 @@ git commit -m "feat(kubevirt): renderer boot_source=data_volume_pvc (CDI clone)"
 Adds direct mount of a pre-existing PVC (no CDI required).
 
 **Files:**
+
 - Modify: `roles/kubevirt/tasks/_build_vm.yml`
 - Modify: `tests/unit/kubevirt_render/test_boot_sources.py`
 
@@ -675,6 +680,7 @@ git commit -m "feat(kubevirt): renderer boot_source=pvc (direct PVC mount)"
 Adds the curated compute knobs. CPU defaults to `{cores: 2}` to match today's behavior. `memory` (a string, role-default `'1Gi'`) renders as `requests.memory`. `memory_limit` is optional and renders as `limits.memory`.
 
 **Files:**
+
 - Modify: `roles/kubevirt/tasks/_build_vm.yml`
 - Create: `tests/unit/kubevirt_render/test_compute.py`
 
@@ -796,6 +802,7 @@ git commit -m "feat(kubevirt): renderer cpu/memory/memory_limit curated fields"
 When `instancetype` is set, the renderer omits `domain.cpu` and `domain.resources` from the rendered VM (KubeVirt rejects conflicting fields). Both string and `{name, kind}` forms are accepted; string is sugar for `{name: <str>}`.
 
 **Files:**
+
 - Modify: `roles/kubevirt/tasks/_build_vm.yml`
 - Modify: `tests/unit/kubevirt_render/test_compute.py`
 
@@ -936,6 +943,7 @@ git commit -m "feat(kubevirt): renderer instancetype/preference with cpu+resourc
 All three are optional; pass through verbatim into `spec.template.spec.{nodeSelector,tolerations,affinity}`.
 
 **Files:**
+
 - Modify: `roles/kubevirt/tasks/_build_vm.yml`
 - Create: `tests/unit/kubevirt_render/test_scheduling.py`
 
@@ -1019,12 +1027,12 @@ In `_build_vm.yml`, ADD a new task block AFTER the instancetype-patch block:
 UPDATE the `Apply ... to base` block to also merge `__mp_scheduling_patch`:
 
 ```yaml
-    __mp_curated: >-
-      {{ __mp_base
-         | combine(_boot_patch, recursive=True, list_merge='prepend')
-         | combine(__mp_compute_patch, recursive=True, list_merge='append')
-         | combine(__mp_instancetype_patch, recursive=True, list_merge='append')
-         | combine(__mp_scheduling_patch, recursive=True, list_merge='append') }}
+__mp_curated: >-
+  {{ __mp_base
+     | combine(_boot_patch, recursive=True, list_merge='prepend')
+     | combine(__mp_compute_patch, recursive=True, list_merge='append')
+     | combine(__mp_instancetype_patch, recursive=True, list_merge='append')
+     | combine(__mp_scheduling_patch, recursive=True, list_merge='append') }}
 ```
 
 ### Step 4: Run tests to verify they pass
@@ -1046,6 +1054,7 @@ git commit -m "feat(kubevirt): renderer scheduling (nodeSelector/tolerations/aff
 All four are appended to the corresponding lists in the rendered spec. Default: empty list.
 
 **Files:**
+
 - Modify: `roles/kubevirt/tasks/_build_vm.yml`
 - Create: `tests/unit/kubevirt_render/test_extras.py`
 
@@ -1132,13 +1141,13 @@ In `_build_vm.yml`, ADD a new task block AFTER the scheduling-patch block:
 UPDATE the `Apply ... to base` block to also merge `__mp_extras_patch` (which **must** come AFTER the boot-source patch so the extras land after the boot/cloudinit entries):
 
 ```yaml
-    __mp_curated: >-
-      {{ __mp_base
-         | combine(_boot_patch, recursive=True, list_merge='prepend')
-         | combine(__mp_compute_patch, recursive=True, list_merge='append')
-         | combine(__mp_instancetype_patch, recursive=True, list_merge='append')
-         | combine(__mp_scheduling_patch, recursive=True, list_merge='append')
-         | combine(__mp_extras_patch, recursive=True, list_merge='append') }}
+__mp_curated: >-
+  {{ __mp_base
+     | combine(_boot_patch, recursive=True, list_merge='prepend')
+     | combine(__mp_compute_patch, recursive=True, list_merge='append')
+     | combine(__mp_instancetype_patch, recursive=True, list_merge='append')
+     | combine(__mp_scheduling_patch, recursive=True, list_merge='append')
+     | combine(__mp_extras_patch, recursive=True, list_merge='append') }}
 ```
 
 ### Step 4: Run tests to verify they pass
@@ -1160,6 +1169,7 @@ git commit -m "feat(kubevirt): renderer extra_disks/volumes/interfaces/networks 
 Deep-merge `vm_overrides` into the rendered VM. List-append semantics.
 
 **Files:**
+
 - Modify: `roles/kubevirt/tasks/_build_vm.yml`
 - Create: `tests/unit/kubevirt_render/test_vm_overrides.py`
 
@@ -1261,6 +1271,7 @@ git commit -m "feat(kubevirt): renderer vm_overrides escape hatch (deep-merge, l
 Validation is a separate file (mirrors `roles/docker/tasks/_validate.yml`) so it can be tested in isolation. Tests use a `validate_harness.yml` that wraps just the validate include.
 
 **Files:**
+
 - Create: `roles/kubevirt/tasks/_validate.yml`
 - Create: `tests/unit/kubevirt_render/validate_harness.yml`
 - Create: `tests/unit/kubevirt_render/test_validate.py`
@@ -1374,7 +1385,7 @@ Create `roles/kubevirt/tasks/_validate.yml`:
   ansible.builtin.assert:
     that:
       - _mp_specs[item].boot_source.type in
-          ['container_disk', 'data_volume_url', 'data_volume_pvc', 'pvc']
+        ['container_disk', 'data_volume_url', 'data_volume_pvc', 'pvc']
     fail_msg: >-
       Host '{{ item }}' has unsupported boot_source.type
       '{{ _mp_specs[item].boot_source.type }}'. Supported:
@@ -1474,6 +1485,7 @@ git commit -m "feat(kubevirt): per-host validation in _validate.yml (boot_source
 Replaces the hardcoded k8s manifest with a call to `_build_vm.yml` + a single k8s apply of the rendered dict.
 
 **Files:**
+
 - Modify: `roles/kubevirt/tasks/_create_vm.yml`
 
 ### Step 1: Inspect current contents
@@ -1517,6 +1529,7 @@ git commit -m "refactor(kubevirt): _create_vm.yml uses the new renderer"
 The self-test inventory still uses the bare `image:` shortcut, which Task 11's validation now rejects. Update it to the new schema and run the integration test end-to-end.
 
 **Files:**
+
 - Modify: `extensions/molecule/default/inventory/hosts.yml`
 
 ### Step 1: Update the kubevirt block
@@ -1524,23 +1537,23 @@ The self-test inventory still uses the bare `image:` shortcut, which Task 11's v
 Edit `extensions/molecule/default/inventory/hosts.yml`. CHANGE the `kubevirt:` block from:
 
 ```yaml
-            kubevirt:
-              image: quay.io/kubevirt/fedora-cloud-container-disk-demo:latest
+kubevirt:
+  image: quay.io/kubevirt/fedora-cloud-container-disk-demo:latest
 ```
 
 to:
 
 ```yaml
-            kubevirt:
-              boot_source:
-                type: container_disk
-                image: quay.io/kubevirt/fedora-cloud-container-disk-demo:latest
-              cpu:
-                cores: 2
-              vm_overrides:
-                metadata:
-                  labels:
-                    test.molecule_provisioners/exercise: vm_overrides
+kubevirt:
+  boot_source:
+    type: container_disk
+    image: quay.io/kubevirt/fedora-cloud-container-disk-demo:latest
+  cpu:
+    cores: 2
+  vm_overrides:
+    metadata:
+      labels:
+        test.molecule_provisioners/exercise: vm_overrides
 ```
 
 ### Step 2: Run the kubevirt self-test
@@ -1577,6 +1590,7 @@ git commit -m "test(kubevirt): self-test inventory uses boot_source + cpu + vm_o
 Final pass to align documentation with the new schema. Each doc change is its own file edit; all committed together.
 
 **Files:**
+
 - Modify: `roles/kubevirt/README.md`
 - Modify: `docs/examples/inventory/hosts.yml`
 - Modify: `docs/MIGRATION.md`
@@ -1605,25 +1619,25 @@ all:
                 image: quay.io/containerdisks/ubuntu:24.04
 
               # Optional
-              namespace: molecule              # role default 'molecule'
-              ssh_user: cloud-user             # role default 'cloud-user'
+              namespace: molecule # role default 'molecule'
+              ssh_user: cloud-user # role default 'cloud-user'
               ssh_service:
-                type: NodePort                 # only NodePort in v1
+                type: NodePort # only NodePort in v1
 
               # Curated compute
               cpu:
-                cores: 4                       # default 2
+                cores: 4 # default 2
                 sockets: 1
                 threads: 1
-              memory: 1Gi                      # → resources.requests.memory
-              memory_limit: 2Gi                # → resources.limits.memory
+              memory: 1Gi # → resources.requests.memory
+              memory_limit: 2Gi # → resources.limits.memory
 
               # Compute presets (alternative to cpu/memory; suppresses both)
-              instancetype: u1.medium          # str OR {name, kind}
-              preference: fedora               # str OR {name, kind}
+              instancetype: u1.medium # str OR {name, kind}
+              preference: fedora # str OR {name, kind}
 
               # Scheduling
-              node_selector: {kubernetes.io/arch: amd64}
+              node_selector: { kubernetes.io/arch: amd64 }
               tolerations: []
               affinity: {}
 
@@ -1658,8 +1672,8 @@ Requires CDI installed on the cluster.
 boot_source:
   type: data_volume_url
   url: https://cloud-images.ubuntu.com/.../noble.img
-  size: 10Gi                  # required
-  storage_class: standard     # optional
+  size: 10Gi # required
+  storage_class: standard # optional
 ```
 
 ### `data_volume_pvc` — CDI smart-clone from existing PVC
@@ -1669,9 +1683,9 @@ Requires CDI installed on the cluster.
 ```yaml
 boot_source:
   type: data_volume_pvc
-  source: {name: golden-ubuntu, namespace: images}
-  size: 10Gi                  # required
-  storage_class: standard     # optional
+  source: { name: golden-ubuntu, namespace: images }
+  size: 10Gi # required
+  storage_class: standard # optional
 ```
 
 ### `pvc` — direct mount of existing PVC
@@ -1708,27 +1722,26 @@ Only `ssh_service.type: NodePort` is supported. The role asserts this on create.
 Edit `docs/examples/inventory/hosts.yml`. CHANGE the `kubevirt:` block from:
 
 ```yaml
-            kubevirt:
-              image: quay.io/containerdisks/ubuntu:24.04
-              ssh_user: ubuntu
+kubevirt:
+  image: quay.io/containerdisks/ubuntu:24.04
+  ssh_user: ubuntu
 ```
 
 to:
 
 ```yaml
-            kubevirt:
-              boot_source:
-                type: container_disk
-                image: quay.io/containerdisks/ubuntu:24.04
-              ssh_user: ubuntu
+kubevirt:
+  boot_source:
+    type: container_disk
+    image: quay.io/containerdisks/ubuntu:24.04
+  ssh_user: ubuntu
 ```
 
 ### Step 3: Add a migration section to `docs/MIGRATION.md`
 
 Append to `docs/MIGRATION.md`:
 
-```markdown
-
+````markdown
 ## KubeVirt schema: `image:` → `boot_source:`
 
 The bare `image:` shortcut was removed. Rewrite per-host blocks:
@@ -1740,6 +1753,7 @@ mp:
   kubevirt:
     image: quay.io/containerdisks/ubuntu:24.04
 ```
+````
 
 ### After
 
@@ -1753,7 +1767,8 @@ mp:
 
 Three additional boot-source modes are now available: `data_volume_url`,
 `data_volume_pvc`, `pvc`. See `roles/kubevirt/README.md#boot-sources`.
-```
+
+````
 
 ### Step 4: Expand `argument_specs.yml`
 
@@ -1779,35 +1794,35 @@ Edit `roles/kubevirt/meta/argument_specs.yml`. REPLACE the `create:` block conte
         type: list
         elements: str
         description: Allowlist for ssh_service.type. v1 supports NodePort only.
-```
+````
 
 ### Step 5: Update the Public-contract block in `CLAUDE.md`
 
 In `CLAUDE.md`, find the `kubevirt:` block under "Public contract (the thing we don't break without a major bump)" and REPLACE it with:
 
 ```yaml
-            kubevirt:                         # required when mp_backend == kubevirt
-              boot_source:                    # required: discriminated union
-                type: container_disk          #   container_disk | data_volume_url | data_volume_pvc | pvc
-                image: <str>                  #   per-type fields; see roles/kubevirt/README.md
-              namespace: <str>                # optional, role default 'molecule'
-              ssh_user: <str>                 # optional, role default 'cloud-user'
-              ssh_service:
-                type: NodePort                # optional, only NodePort in v1
-              # Optional curated knobs:
-              cpu: {cores, sockets, threads, model}
-              memory: <str>                   # role default '1Gi' → requests.memory
-              memory_limit: <str>             # → limits.memory
-              instancetype: <str-or-dict>     # str OR {name, kind}; suppresses cpu/resources
-              preference: <str-or-dict>
-              node_selector: <dict>
-              tolerations: <list>
-              affinity: <dict>
-              extra_disks: <list>             # appended to [containerdisk, cloudinitdisk]
-              extra_volumes: <list>           # appended to [containerdisk, cloudinitdisk]
-              extra_interfaces: <list>        # appended after default masquerade
-              extra_networks: <list>          # appended after default pod
-              vm_overrides: <dict>            # escape hatch: deep-merge into whole VM, lists append
+kubevirt: # required when mp_backend == kubevirt
+  boot_source: # required: discriminated union
+    type: container_disk #   container_disk | data_volume_url | data_volume_pvc | pvc
+    image: <str> #   per-type fields; see roles/kubevirt/README.md
+  namespace: <str> # optional, role default 'molecule'
+  ssh_user: <str> # optional, role default 'cloud-user'
+  ssh_service:
+    type: NodePort # optional, only NodePort in v1
+  # Optional curated knobs:
+  cpu: { cores, sockets, threads, model }
+  memory: <str> # role default '1Gi' → requests.memory
+  memory_limit: <str> # → limits.memory
+  instancetype: <str-or-dict> # str OR {name, kind}; suppresses cpu/resources
+  preference: <str-or-dict>
+  node_selector: <dict>
+  tolerations: <list>
+  affinity: <dict>
+  extra_disks: <list> # appended to [containerdisk, cloudinitdisk]
+  extra_volumes: <list> # appended to [containerdisk, cloudinitdisk]
+  extra_interfaces: <list> # appended after default masquerade
+  extra_networks: <list> # appended after default pod
+  vm_overrides: <dict> # escape hatch: deep-merge into whole VM, lists append
 ```
 
 ### Step 6: Run pre-commit to catch formatting drift

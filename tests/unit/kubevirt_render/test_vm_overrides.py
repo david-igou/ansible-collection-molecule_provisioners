@@ -28,10 +28,10 @@ def test_overrides_termination_grace_period(render_vm) -> None:
         _base(
             {
                 "vm_overrides": {
-                    "spec": {"template": {"spec": {"terminationGracePeriodSeconds": 60}}}
+                    "spec": {"template": {"spec": {"terminationGracePeriodSeconds": 60}}},
                 },
-            }
-        )
+            },
+        ),
     )
     assert vm["spec"]["template"]["spec"]["terminationGracePeriodSeconds"] == 60
 
@@ -45,8 +45,8 @@ def test_overrides_tolerations_list_append(render_vm) -> None:
             {
                 "tolerations": [curated_tol],
                 "vm_overrides": {"spec": {"template": {"spec": {"tolerations": [override_tol]}}}},
-            }
-        )
+            },
+        ),
     )
     tols = vm["spec"]["template"]["spec"]["tolerations"]
     assert curated_tol in tols
@@ -63,14 +63,14 @@ def test_overrides_firmware(render_vm) -> None:
                         "template": {
                             "spec": {
                                 "domain": {
-                                    "firmware": {"bootloader": {"efi": {"secureBoot": False}}}
-                                }
-                            }
-                        }
-                    }
+                                    "firmware": {"bootloader": {"efi": {"secureBoot": False}}},
+                                },
+                            },
+                        },
+                    },
                 },
-            }
-        )
+            },
+        ),
     )
     fw = vm["spec"]["template"]["spec"]["domain"]["firmware"]
     assert fw["bootloader"]["efi"]["secureBoot"] is False

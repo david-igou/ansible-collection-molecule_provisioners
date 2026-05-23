@@ -19,7 +19,7 @@ def test_cpu_defaults_to_two_cores(render_vm) -> None:
 def test_cpu_full(render_vm) -> None:
     """All cpu sub-keys pass through verbatim."""
     vm = render_vm(
-        _base({"cpu": {"cores": 4, "sockets": 2, "threads": 1, "model": "host-passthrough"}})
+        _base({"cpu": {"cores": 4, "sockets": 2, "threads": 1, "model": "host-passthrough"}}),
     )
     assert vm["spec"]["template"]["spec"]["domain"]["cpu"] == {
         "cores": 4,
@@ -62,7 +62,7 @@ def test_instancetype_string_shortcut(render_vm) -> None:
 def test_instancetype_full_form(render_vm) -> None:
     """instancetype as {name, kind} passes through verbatim."""
     vm = render_vm(
-        _base({"instancetype": {"name": "u1.medium", "kind": "VirtualMachineInstancetype"}})
+        _base({"instancetype": {"name": "u1.medium", "kind": "VirtualMachineInstancetype"}}),
     )
     assert vm["spec"]["instancetype"] == {
         "name": "u1.medium",

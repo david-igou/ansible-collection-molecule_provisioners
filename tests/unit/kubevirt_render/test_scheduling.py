@@ -36,10 +36,10 @@ def test_affinity_passthrough(render_vm) -> None:
         "nodeAffinity": {
             "requiredDuringSchedulingIgnoredDuringExecution": {
                 "nodeSelectorTerms": [
-                    {"matchExpressions": [{"key": "k", "operator": "In", "values": ["v"]}]}
-                ]
-            }
-        }
+                    {"matchExpressions": [{"key": "k", "operator": "In", "values": ["v"]}]},
+                ],
+            },
+        },
     }
     vm = render_vm(_base({"affinity": aff}))
     assert vm["spec"]["template"]["spec"]["affinity"] == aff

@@ -16,6 +16,7 @@ from pathlib import Path
 
 import yaml
 
+
 ROLE_DEFAULTS_PATH = (
     Path(__file__).parent / ".." / ".." / ".." / "roles" / "kubevirt" / "defaults" / "main.yml"
 ).resolve()

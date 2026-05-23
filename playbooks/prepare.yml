@@ -9,7 +9,7 @@
           - "'molecule' in groups"
           - groups['molecule'] | length > 0
         fail_msg: "Inventory must define a 'molecule' group with at least one host."
-      run_once: true  # noqa: run-once[task]
+      run_once: true # noqa: run-once[task]
 
     - name: Validate backend
       ansible.builtin.assert:

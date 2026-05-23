@@ -6,7 +6,7 @@ from __future__ import annotations
 def test_renders_virtualmachine_kind(render_vm) -> None:
     """The renderer produces a kubevirt.io/v1 VirtualMachine object."""
     vm = render_vm(
-        {"boot_source": {"type": "container_disk", "image": "quay.io/example/img:latest"}}
+        {"boot_source": {"type": "container_disk", "image": "quay.io/example/img:latest"}},
     )
     assert vm["kind"] == "VirtualMachine"
     assert vm["apiVersion"] == "kubevirt.io/v1"
@@ -19,7 +19,7 @@ def test_container_disk_volume_and_disk(render_vm) -> None:
     vm = render_vm(
         {
             "boot_source": {"type": "container_disk", "image": "quay.io/example/fedora.img"},
-        }
+        },
     )
     spec = vm["spec"]["template"]["spec"]
 
@@ -42,7 +42,7 @@ def test_container_disk_default_pod_network(render_vm) -> None:
     vm = render_vm(
         {
             "boot_source": {"type": "container_disk", "image": "quay.io/x"},
-        }
+        },
     )
     spec = vm["spec"]["template"]["spec"]
 
@@ -57,7 +57,7 @@ def test_container_disk_default_ssh_user_baked_into_cloudinit(render_vm) -> None
     vm = render_vm(
         {
             "boot_source": {"type": "container_disk", "image": "quay.io/x"},
-        }
+        },
     )
     user_data = vm["spec"]["template"]["spec"]["volumes"]
     cidisk = next(v for v in user_data if v["name"] == "cloudinitdisk")
@@ -70,7 +70,7 @@ def test_container_disk_custom_ssh_user(render_vm) -> None:
         {
             "boot_source": {"type": "container_disk", "image": "quay.io/x"},
             "ssh_user": "ubuntu",
-        }
+        },
     )
     cidisk = next(
         v for v in vm["spec"]["template"]["spec"]["volumes"] if v["name"] == "cloudinitdisk"
@@ -89,7 +89,7 @@ def test_data_volume_url_renders_template(render_vm) -> None:
                 "size": "10Gi",
                 "storage_class": "standard",
             },
-        }
+        },
     )
     templates = vm["spec"]["dataVolumeTemplates"]
     assert len(templates) == 1
@@ -110,7 +110,7 @@ def test_data_volume_url_boot_volume_references_template(render_vm) -> None:
                 "url": "https://x/img",
                 "size": "10Gi",
             },
-        }
+        },
     )
     volumes = vm["spec"]["template"]["spec"]["volumes"]
     boot = next(v for v in volumes if v["name"] == "containerdisk")
@@ -123,7 +123,7 @@ def test_data_volume_url_omits_storage_class_when_unset(render_vm) -> None:
     vm = render_vm(
         {
             "boot_source": {"type": "data_volume_url", "url": "https://x", "size": "10Gi"},
-        }
+        },
     )
     dv = vm["spec"]["dataVolumeTemplates"][0]
     assert "storageClassName" not in dv["spec"]["storage"]
@@ -139,7 +139,7 @@ def test_data_volume_pvc_renders_clone_template(render_vm) -> None:
                 "source": {"name": "golden", "namespace": "images"},
                 "size": "20Gi",
             },
-        }
+        },
     )
     dv = vm["spec"]["dataVolumeTemplates"][0]
     assert dv["spec"]["source"]["pvc"] == {"name": "golden", "namespace": "images"}
@@ -161,7 +161,7 @@ def test_data_volume_pvc_omits_storage_class_when_unset(render_vm) -> None:
                 "source": {"name": "golden", "namespace": "images"},
                 "size": "20Gi",
             },
-        }
+        },
     )
     dv = vm["spec"]["dataVolumeTemplates"][0]
     assert "storageClassName" not in dv["spec"]["storage"]
@@ -173,7 +173,7 @@ def test_pvc_direct_mount(render_vm) -> None:
     vm = render_vm(
         {
             "boot_source": {"type": "pvc", "name": "existing-boot-pvc"},
-        }
+        },
     )
     assert "dataVolumeTemplates" not in vm["spec"]
     boot = next(

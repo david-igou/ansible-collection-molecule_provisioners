@@ -22,8 +22,8 @@ def test_extra_volumes_appended(render_vm) -> None:
         _base(
             {
                 "extra_volumes": [{"name": "scratch", "emptyDisk": {"capacity": "5Gi"}}],
-            }
-        )
+            },
+        ),
     )
     names = [v["name"] for v in vm["spec"]["template"]["spec"]["volumes"]]
     assert names == ["containerdisk", "cloudinitdisk", "scratch"]
@@ -35,8 +35,8 @@ def test_extra_interfaces_and_networks_appended(render_vm) -> None:
             {
                 "extra_interfaces": [{"name": "bridge0", "bridge": {}}],
                 "extra_networks": [{"name": "bridge0", "multus": {"networkName": "my-net"}}],
-            }
-        )
+            },
+        ),
     )
     spec = vm["spec"]["template"]["spec"]
     ifaces = [i["name"] for i in spec["domain"]["devices"]["interfaces"]]

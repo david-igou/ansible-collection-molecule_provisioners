@@ -6,8 +6,9 @@
   vars:
     _fake_image_src: /tmp/qemu-fake-image.qcow2
     _fake_image_url: "file:///tmp/qemu-fake-image.qcow2"
-    molecule_ephemeral_directory: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
-                                       | default('/tmp/molecule-fake-ephemeral-imgcache', true) }}"
+    molecule_ephemeral_directory:
+      "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY')
+      | default('/tmp/molecule-fake-ephemeral-imgcache', true) }}"
   tasks:
     - name: Ensure ephemeral dir
       ansible.builtin.file:

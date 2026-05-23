@@ -15,6 +15,7 @@
 ## File map
 
 **Delete:**
+
 - `roles/qemu/tasks/_create_libvirt.yml`
 - `roles/qemu/tasks/_destroy_libvirt.yml`
 - `roles/qemu/templates/domain.xml.j2`
@@ -24,6 +25,7 @@
 - `extensions/molecule/qemu/` — the entire directory. Qemu plugs into the existing `extensions/molecule/default/` scenario like podman and kubevirt do; no separate scenario.
 
 **Rewrite (significant):**
+
 - `roles/qemu/tasks/create.yml` — drop libvirt dispatch + KVM-detection-for-libvirt; keep image-cache → seed-ISO → overlay → process-launch → runtime-inventory flow.
 - `roles/qemu/tasks/destroy.yml` — drop libvirt dispatch + NAT-reservation-removal + pool teardown; keep process-destroy + cidata cleanup.
 - `roles/qemu/tasks/_overlay.yml` — keep only the process-driver `qemu-img create` + optional `qemu-img resize`; delete the libvirt transient-pool + virt_volume sections.
@@ -33,7 +35,7 @@
 - `roles/qemu/defaults/main.yml` — drop `mp_qemu_allowed_drivers`, `mp_qemu_allowed_network_modes`, the `driver`/`uri`/`network` keys inside `mp_qemu_role_defaults`.
 - `roles/qemu/tasks/_spec_merge.yml` — unchanged structurally, but the merge defaults are smaller.
 - `tests/integration/qemu/test_qemu_unit.py` — drop `test_bad_driver_fails_with_message`, `test_process_nat_combo_fails_with_message`; keep merge/validation/image-cache/seed-iso/destroy/process-E2E tests (validation test fixtures get adjusted).
-- `tests/integration/qemu/fixtures/process_slirp.yml` — drop `driver:` and `network:` keys; rename file to `process.yml` for clarity. *(All references in test_qemu_unit.py and assertions/* are updated.)*
+- `tests/integration/qemu/fixtures/process_slirp.yml` — drop `driver:` and `network:` keys; rename file to `process.yml` for clarity. _(All references in test_qemu_unit.py and assertions/_ are updated.)\*
 - `tests/integration/qemu/fixtures/valid_minimal.yml`, `valid_local_image.yml`, `missing_image.yml` — drop any `driver` / `network.mode` keys; `valid_minimal.yml`'s `h-overrides` host loses its `network.mode: nat` override (replace with a different override, e.g. `cpus: 4`).
 - `tests/integration/qemu/assertions/run_validate.yml` — drop assertions that reference removed driver/network keys.
 - `extensions/molecule/default/inventory/hosts.yml` — add a `mp.qemu:` block to the `instance` host (alongside the existing `mp.podman:` and `mp.kubevirt:` blocks).
@@ -47,6 +49,7 @@
 - `docs/superpowers/plans/2026-05-21-qemu-backend.md` — prepend a `> **SUPERSEDED**` note pointing here; do not edit the body (it stands as the historical trail).
 
 **Untouched:**
+
 - `roles/qemu/tasks/_image_cache.yml`, `_seed_iso.yml`, `_seed_iso_host.yml`, `_runtime_inventory.yml`, `main.yml`, `prepare.yml` — driver-agnostic.
 - `roles/qemu/templates/user-data.j2`, `meta-data.j2` — driver-agnostic.
 - `playbooks/{create,destroy,prepare}.yml`, `playbooks/group_vars/all.yml` — dispatcher already shape-correct (it just reads `mp_backend`).
@@ -81,6 +84,7 @@ Expected: `david_igou.molecule_provisioners 1.1.0` and `community.crypto 3.x` li
 ### Task 1: Delete libvirt-only role files
 
 **Files:**
+
 - Delete: `roles/qemu/tasks/_create_libvirt.yml`
 - Delete: `roles/qemu/tasks/_destroy_libvirt.yml`
 - Delete: `roles/qemu/templates/domain.xml.j2`
@@ -104,6 +108,7 @@ git commit -m "refactor(qemu): drop libvirt-driver task and template files"
 ### Task 2: Strip create.yml of libvirt + KVM-detection-for-libvirt
 
 **Files:**
+
 - Modify: `roles/qemu/tasks/create.yml`
 
 The current file (around 50 lines) routes through validation → image cache → seed ISO → overlay → KVM detection → process create → libvirt create → runtime inventory. Once libvirt is gone, KVM detection (`_mp_qemu_kvm_ok`) is still consumed by `_create_process.yml` (as `_accel: "{{ 'kvm:tcg' if _mp_qemu_kvm_ok else 'tcg' }}"`), so it stays. Just drop the libvirt phase.
@@ -173,6 +178,7 @@ git commit -m "refactor(qemu): drop libvirt-driver branch from create.yml"
 ### Task 3: Strip destroy.yml of libvirt + NAT + pool teardown
 
 **Files:**
+
 - Modify: `roles/qemu/tasks/destroy.yml`
 
 Current file: spec merge → process destroy (when driver==process) → libvirt destroy (when driver==libvirt) → NAT static reservation removal → pool teardown → cidata cleanup. Drop everything but spec merge → process destroy → cidata cleanup.
@@ -210,9 +216,10 @@ git commit -m "refactor(qemu): drop libvirt + NAT + pool teardown from destroy.y
 
 ---
 
-### Task 4: Strip _overlay.yml of libvirt sections
+### Task 4: Strip \_overlay.yml of libvirt sections
 
 **Files:**
+
 - Modify: `roles/qemu/tasks/_overlay.yml`
 
 Current file: process-overlay (`qemu-img create`) + optional resize + libvirt transient pool + virt_volume + libvirt resize + record overlay path. Drop libvirt sections, keep process overlay + resize + path record.
@@ -268,9 +275,10 @@ git commit -m "refactor(qemu): drop libvirt pool/volume branches from _overlay.y
 
 ---
 
-### Task 5: Drop driver/network conditionals from _create_process.yml + _destroy_process.yml
+### Task 5: Drop driver/network conditionals from \_create_process.yml + \_destroy_process.yml
 
 **Files:**
+
 - Modify: `roles/qemu/tasks/_create_process.yml`
 - Modify: `roles/qemu/tasks/_destroy_process.yml`
 
@@ -329,9 +337,10 @@ git commit -m "refactor(qemu): drop driver-conditional guards from process tasks
 
 ---
 
-### Task 6: Shrink _validate.yml + defaults/main.yml
+### Task 6: Shrink \_validate.yml + defaults/main.yml
 
 **Files:**
+
 - Modify: `roles/qemu/tasks/_validate.yml`
 - Modify: `roles/qemu/defaults/main.yml`
 
@@ -400,6 +409,7 @@ git commit -m "refactor(qemu): collapse schema validation + defaults to process+
 ### Task 7: Drop obsolete fixtures and assertions
 
 **Files:**
+
 - Delete: `tests/integration/qemu/fixtures/bad_driver.yml`
 - Delete: `tests/integration/qemu/fixtures/process_nat_invalid.yml`
 - Modify: `tests/integration/qemu/fixtures/valid_minimal.yml`
@@ -522,6 +532,7 @@ git commit -m "test(qemu): drop driver/network fixtures, rename process_slirp ->
 ### Task 8: Rewrite test_qemu_unit.py
 
 **Files:**
+
 - Modify: `tests/integration/qemu/test_qemu_unit.py`
 
 Drop `test_bad_driver_fails_with_message` and `test_process_nat_combo_fails_with_message`. Rename `test_process_driver_e2e` to use the renamed fixture `process.yml`. (`test_libvirt_driver_e2e` was reset out of history in the pre-flight step.)
@@ -634,6 +645,7 @@ git commit -m "test(qemu): drop libvirt + driver-validation unit tests; rename f
 ### Task 9: Fold qemu into the existing `default` scenario; drop the qemu-specific scenario
 
 **Files:**
+
 - Delete: `extensions/molecule/qemu/` (entire directory)
 - Modify: `extensions/molecule/default/inventory/hosts.yml`
 - Modify: `extensions/molecule/default/inventory/group_vars/molecule.yml`
@@ -678,7 +690,7 @@ Replace `extensions/molecule/default/inventory/group_vars/molecule.yml` with:
 mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
 # Bump from the role default of 180s — TCG emulation in CI takes longer for VMs to boot.
 mp_kubevirt_wait_timeout: 300
-mp_qemu_wait_timeout: 300   # TCG boot under qemu is similarly slow on hosted runners.
+mp_qemu_wait_timeout: 300 # TCG boot under qemu is similarly slow on hosted runners.
 
 mp_defaults:
   podman:
@@ -716,6 +728,7 @@ git commit -m "test(qemu): fold into the existing default scenario alongside pod
 ### Task 10: Simplify the `integration-qemu` CI job
 
 **Files:**
+
 - Modify: `.github/workflows/tests.yml`
 
 - [ ] **Step 1: Edit the `integration-qemu` job block**
@@ -723,52 +736,52 @@ git commit -m "test(qemu): fold into the existing default scenario alongside pod
 Locate the `integration-qemu:` job in `.github/workflows/tests.yml` (currently around line 158-221). Replace the body with the slimmed version below (everything between `integration-qemu:` and the next job's `:` line):
 
 ```yaml
-  integration-qemu:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout into the canonical collection path
-        uses: actions/checkout@v4
-        with:
-          path: ansible_collections/david_igou/molecule_provisioners
+integration-qemu:
+  runs-on: ubuntu-latest
+  timeout-minutes: 30
+  steps:
+    - name: Checkout into the canonical collection path
+      uses: actions/checkout@v4
+      with:
+        path: ansible_collections/david_igou/molecule_provisioners
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
 
-      - name: Install qemu + cloud-image-utils
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils
+    - name: Install qemu + cloud-image-utils
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils
 
-      - name: Install ansible + molecule + pytest plumbing
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        run: |
-          python -m pip install --upgrade pip
-          pip install ansible-core molecule \
-                      pytest pytest-ansible pytest-xdist
+    - name: Install ansible + molecule + pytest plumbing
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      run: |
+        python -m pip install --upgrade pip
+        pip install ansible-core molecule \
+                    pytest pytest-ansible pytest-xdist
 
-      - name: Install collection dependencies
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        run: |
-          ansible-galaxy collection install \
-            containers.podman kubernetes.core community.crypto
+    - name: Install collection dependencies
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      run: |
+        ansible-galaxy collection install \
+          containers.podman kubernetes.core community.crypto
 
-      - name: Cache base qcow2 images
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/molecule-qemu
-          # NOTE: bump the suffix when the pinned image URL or checksum changes.
-          key: molecule-qemu-images-ubuntu-noble-v1
+    - name: Cache base qcow2 images
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/molecule-qemu
+        # NOTE: bump the suffix when the pinned image URL or checksum changes.
+        key: molecule-qemu-images-ubuntu-noble-v1
 
-      - name: Run default scenario under PROVISIONER=qemu (TCG; /dev/kvm is unavailable on hosted runners)
-        working-directory: ansible_collections/david_igou/molecule_provisioners
-        env:
-          PROVISIONER: qemu
-          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
-        run: |
-          pytest tests/integration -v -k default -s -o addopts=""
+    - name: Run default scenario under PROVISIONER=qemu (TCG; /dev/kvm is unavailable on hosted runners)
+      working-directory: ansible_collections/david_igou/molecule_provisioners
+      env:
+        PROVISIONER: qemu
+        ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
+      run: |
+        pytest tests/integration -v -k default -s -o addopts=""
 ```
 
 (Deletes the libvirt/bridge apt-get list, the `virsh net-start`/`net-autostart`/`usermod` lines, the `community.libvirt:>=1.3.0` install, the `sg libvirt -c` wrapper, and the failure-time libvirt diagnostics block.)
@@ -787,6 +800,7 @@ git commit -m "ci(qemu): drop libvirt apparatus from integration-qemu job"
 ### Task 11: Drop community.libvirt from galaxy.yml and update description
 
 **Files:**
+
 - Modify: `galaxy.yml`
 
 - [ ] **Step 1: Edit the `dependencies` and `description`**
@@ -835,6 +849,7 @@ git commit -m "build(qemu): drop community.libvirt dep now that libvirt driver i
 ### Task 12: Rewrite the changelog fragment
 
 **Files:**
+
 - Modify: `changelogs/fragments/qemu-backend.yml`
 
 - [ ] **Step 1: Replace the file**
@@ -867,6 +882,7 @@ git commit -m "changelog: rewrite qemu fragment for process+slirp-only v1.1"
 ### Task 13: README updates
 
 **Files:**
+
 - Modify: `README.md`
 
 - [ ] **Step 1: Update the "Supported backends" row for qemu**
@@ -888,18 +904,18 @@ Change to:
 Locate the `qemu:` block in the hosts.yml snippet:
 
 ```yaml
-            qemu:
-              image: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
-              driver: libvirt
-              ssh_user: ubuntu
+qemu:
+  image: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+  driver: libvirt
+  ssh_user: ubuntu
 ```
 
 Change to:
 
 ```yaml
-            qemu:
-              image: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
-              ssh_user: ubuntu
+qemu:
+  image: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+  ssh_user: ubuntu
 ```
 
 - [ ] **Step 3: Update the `mp_defaults.qemu` block**
@@ -907,21 +923,21 @@ Change to:
 Locate:
 
 ```yaml
-  qemu:
-    cpus: 2
-    memory: 1024
-    ssh_user: cloud-user
-    network:
-      mode: slirp
+qemu:
+  cpus: 2
+  memory: 1024
+  ssh_user: cloud-user
+  network:
+    mode: slirp
 ```
 
 Change to:
 
 ```yaml
-  qemu:
-    cpus: 2
-    memory: 1024
-    ssh_user: cloud-user
+qemu:
+  cpus: 2
+  memory: 1024
+  ssh_user: cloud-user
 ```
 
 - [ ] **Step 4: Update the controller-host prereqs row**
@@ -966,6 +982,7 @@ git commit -m "docs(qemu): README reflects process+slirp-only v1.1 surface"
 ### Task 14: MIGRATION.md updates
 
 **Files:**
+
 - Modify: `docs/MIGRATION.md`
 
 - [ ] **Step 1: Delete the `## Migrating from molecule-plugins[libvirt]` section**
@@ -998,6 +1015,7 @@ git commit -m "docs(qemu): drop molecule-plugins[libvirt] migration section"
 ### Task 15: Rewrite the design spec
 
 **Files:**
+
 - Modify: `docs/superpowers/specs/2026-05-21-qemu-backend-design.md`
 
 The spec currently runs ~272 lines covering both drivers + NAT. Replace the whole body (keep only the front-matter title/status/date/release line) with the process-only design.
@@ -1032,29 +1050,30 @@ Shared concerns — base-image download + cache, qcow2 overlay, NoCloud cloud-in
 - **Remote URIs, bridge networking, Windows guests, non-cloud-init images.** Same as before — not in v1.1.
 
 ## Architecture
+```
 
-```
 roles/qemu/
-├── defaults/main.yml             mp_qemu_role_defaults + image cache dir + SLIRP port base
-├── meta/main.yml                 role metadata
+├── defaults/main.yml mp_qemu_role_defaults + image cache dir + SLIRP port base
+├── meta/main.yml role metadata
 ├── tasks/
-│   ├── main.yml                  tasks_from dispatcher (mirrors other roles)
-│   ├── create.yml                merge → validate → cache → seed → overlay → KVM detect → launch → write inventory
-│   ├── destroy.yml               merge → process destroy (per host) → cidata cleanup
-│   ├── prepare.yml               wait_for_connection (mirrors kubevirt's prepare)
-│   ├── _spec_merge.yml           3-level merge: role_defaults <- mp_defaults.qemu <- hostvars[item].mp.qemu
-│   ├── _validate.yml             one assertion: `image` is set non-empty per host
-│   ├── _image_cache.yml          get_url base qcow2 into XDG cache, keyed by sha256(url)
-│   ├── _overlay.yml              qemu-img create -f qcow2 -b <base>; optional qemu-img resize
-│   ├── _seed_iso.yml             render NoCloud user-data + meta-data, build seed.iso via cloud-localds | genisoimage
-│   ├── _seed_iso_host.yml        per-host helper for _seed_iso.yml
-│   ├── _create_process.yml       build qemu-system argv, launch with --daemonize --pidfile, record pid + ssh facts
-│   ├── _destroy_process.yml      slurp pidfile → kill -TERM → wait_for absent → file absent on artifacts
-│   └── _runtime_inventory.yml    build __mp_qemu_runtime_hosts; write molecule_runtime.yml
+│ ├── main.yml tasks_from dispatcher (mirrors other roles)
+│ ├── create.yml merge → validate → cache → seed → overlay → KVM detect → launch → write inventory
+│ ├── destroy.yml merge → process destroy (per host) → cidata cleanup
+│ ├── prepare.yml wait_for_connection (mirrors kubevirt's prepare)
+│ ├── \_spec_merge.yml 3-level merge: role_defaults <- mp_defaults.qemu <- hostvars[item].mp.qemu
+│ ├── \_validate.yml one assertion: `image` is set non-empty per host
+│ ├── \_image_cache.yml get_url base qcow2 into XDG cache, keyed by sha256(url)
+│ ├── \_overlay.yml qemu-img create -f qcow2 -b <base>; optional qemu-img resize
+│ ├── \_seed_iso.yml render NoCloud user-data + meta-data, build seed.iso via cloud-localds | genisoimage
+│ ├── \_seed_iso_host.yml per-host helper for \_seed_iso.yml
+│ ├── \_create_process.yml build qemu-system argv, launch with --daemonize --pidfile, record pid + ssh facts
+│ ├── \_destroy_process.yml slurp pidfile → kill -TERM → wait_for absent → file absent on artifacts
+│ └── \_runtime_inventory.yml build \_\_mp_qemu_runtime_hosts; write molecule_runtime.yml
 └── templates/
-    ├── user-data.j2              cloud-init NoCloud user-data
-    └── meta-data.j2              cloud-init NoCloud meta-data
-```
+├── user-data.j2 cloud-init NoCloud user-data
+└── meta-data.j2 cloud-init NoCloud meta-data
+
+````
 
 **Dispatcher delta**: `playbooks/group_vars/all.yml` adds `qemu` to `mp_supported_backends`. The dispatcher's per-host validation (`hostvars[item].mp[_mp_backend] is defined`) is already shape-correct — no changes to `playbooks/{create,destroy,prepare}.yml`.
 
@@ -1086,7 +1105,7 @@ all:
               ssh_user: ubuntu                   # default 'cloud-user'
               host_port: 2222                    # per-host SLIRP host-side port; default = base + host index
               extra_args: []                     # appended to qemu-system argv
-```
+````
 
 **`inventory/group_vars/molecule.yml` — backend selector + defaults**:
 
@@ -1109,8 +1128,8 @@ mp_qemu_role_defaults:
   ssh_user: cloud-user
 
 mp_qemu_image_cache_dir: "{{ (lookup('env', 'XDG_CACHE_HOME')
-                              | default(lookup('env', 'HOME') ~ '/.cache', true))
-                             ~ '/molecule-qemu' }}"
+  | default(lookup('env', 'HOME') ~ '/.cache', true))
+  ~ '/molecule-qemu' }}"
 mp_qemu_ssh_key_path: "{{ molecule_ephemeral_directory }}/identity_file"
 mp_qemu_wait_timeout: 180
 mp_qemu_slirp_port_base: 2222
@@ -1186,6 +1205,7 @@ Switching backends: `PROVISIONER=podman pytest tests/integration -v -k default`,
 **`verify.yml`**: `ansible.builtin.ping` each molecule host.
 
 **CI job** (`.github/workflows/tests.yml` → `integration-qemu`):
+
 - Runs on `ubuntu-latest`. Installs `qemu-system-x86_64`, `qemu-utils`, `cloud-image-utils`.
 - `/dev/kvm` is **not** available on GitHub-hosted runners — the job exercises the TCG branch.
 - `actions/cache@v4` keyed on the Ubuntu cloud image's pinned sha256 maps to `~/.cache/molecule-qemu/`; subsequent runs skip the ~600 MB download.
@@ -1213,7 +1233,8 @@ Deferred to future minor versions:
 - **QMP action plugin for graceful shutdown.** v1.1 uses `kill -TERM` + `wait_for`.
 - **Non-cloud-init images.** Cloud-init is assumed.
 - **Windows / non-Linux guests.**
-```
+
+````
 
 - [ ] **Step 2: Prepend SUPERSEDED note to the original plan**
 
@@ -1224,7 +1245,7 @@ Add the following at the very top of `docs/superpowers/plans/2026-05-21-qemu-bac
 
 ---
 
-```
+````
 
 - [ ] **Step 3: Delete the now-obsolete libvirt-fixes plan**
 
@@ -1340,7 +1361,7 @@ rm /tmp/david_igou-molecule_provisioners-1.1.0.tar.gz
 
 1. **Spec coverage:**
    - Drop libvirt files → Task 1.
-   - Strip libvirt branches from create/destroy/_overlay → Tasks 2, 3, 4.
+   - Strip libvirt branches from create/destroy/\_overlay → Tasks 2, 3, 4.
    - Drop driver-conditional guards → Task 5.
    - Shrink validation + defaults → Task 6.
    - Strip libvirt-related tests + rename fixture → Tasks 7, 8.

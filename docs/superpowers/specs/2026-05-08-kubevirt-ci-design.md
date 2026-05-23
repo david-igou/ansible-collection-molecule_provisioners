@@ -41,6 +41,7 @@ Structurally identical to the existing `extensions/molecule/kubevirt/` (same rol
 ### Why a separate scenario, not parameterization
 
 The existing `kubevirt/` scenario targets developer-provisioned clusters with realistic ubuntu/centos images sized for hardware-accelerated VMs. Forcing it to also serve as CI fixture would either:
+
 - Conflate local-cluster expectations with CI-image emulation tradeoffs, or
 - Require runtime envsubst of platform fields, complicating the scenario for both audiences.
 

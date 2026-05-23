@@ -107,26 +107,26 @@ Each platform entry is multi-keyed; the active backend's key is required, the ot
 
 ```yaml
 platforms:
-  - name: ubuntu-24                   # required (instance/host name)
-    podman:                           # required when PROVISIONER=podman
-      image: docker.io/...:latest     # required
-      command: sleep 1d               # optional
-      privileged: false               # optional, default false
-      volumes: []                     # optional
-      capabilities: []                # optional
-      podman_network: []              # optional, list or string
-      env: {}                         # optional
-      tmpfs: []                       # optional
-      exposed_ports: []               # optional
-      published_ports: []             # optional
-    kubevirt:                         # required when PROVISIONER=kubevirt
-      image: quay.io/...              # required (containerdisk image)
-      namespace: molecule             # required
-      ansible_user: cloud-user        # required
-      memory: 4Gi                     # required
-      disk_size: 30Gi                 # required
+  - name: ubuntu-24 # required (instance/host name)
+    podman: # required when PROVISIONER=podman
+      image: docker.io/...:latest # required
+      command: sleep 1d # optional
+      privileged: false # optional, default false
+      volumes: [] # optional
+      capabilities: [] # optional
+      podman_network: [] # optional, list or string
+      env: {} # optional
+      tmpfs: [] # optional
+      exposed_ports: [] # optional
+      published_ports: [] # optional
+    kubevirt: # required when PROVISIONER=kubevirt
+      image: quay.io/... # required (containerdisk image)
+      namespace: molecule # required
+      ansible_user: cloud-user # required
+      memory: 4Gi # required
+      disk_size: 30Gi # required
       ssh_service:
-        type: NodePort                # only NodePort supported in v1
+        type: NodePort # only NodePort supported in v1
 ```
 
 ### Backend selection
@@ -181,15 +181,15 @@ molecule destroy
 
 ## Error handling & validation
 
-| Failure | Where | Behavior |
-| --- | --- | --- |
-| `$PROVISIONER` not in `{podman, kubevirt}` | dispatcher, first task | `assert` fails with explicit message |
-| Platform missing the active provisioner's key | dispatcher, second task | `assert` fails listing the offending names |
-| `kubevirt.ssh_service.type` ≠ `NodePort` | kubevirt role, create task | `assert` fails: "v1 supports only ssh_service.type=NodePort" |
-| Required kubevirt fields missing | role `argument_specs` | role-arg validation fails before any cluster call |
-| Required podman field (`image`) missing | role `argument_specs` | same |
-| K8s API unreachable / podman socket missing | underlying module | propagates; not wrapped |
-| Network/cleanup failures during destroy | role destroy task | fail loudly; destroy is idempotent (`state: absent`) so re-runs are safe |
+| Failure                                       | Where                      | Behavior                                                                 |
+| --------------------------------------------- | -------------------------- | ------------------------------------------------------------------------ |
+| `$PROVISIONER` not in `{podman, kubevirt}`    | dispatcher, first task     | `assert` fails with explicit message                                     |
+| Platform missing the active provisioner's key | dispatcher, second task    | `assert` fails listing the offending names                               |
+| `kubevirt.ssh_service.type` ≠ `NodePort`      | kubevirt role, create task | `assert` fails: "v1 supports only ssh_service.type=NodePort"             |
+| Required kubevirt fields missing              | role `argument_specs`      | role-arg validation fails before any cluster call                        |
+| Required podman field (`image`) missing       | role `argument_specs`      | same                                                                     |
+| K8s API unreachable / podman socket missing   | underlying module          | propagates; not wrapped                                                  |
+| Network/cleanup failures during destroy       | role destroy task          | fail loudly; destroy is idempotent (`state: absent`) so re-runs are safe |
 
 We do not swallow errors. Provisioner playbooks failing visibly is the right behavior in CI.
 
@@ -203,10 +203,10 @@ We do not swallow errors. Provisioner playbooks failing visibly is the right beh
 
 The collection self-tests via the existing `pytest tests/integration` machinery. `tests/integration/test_integration.py` discovers each `extensions/molecule/<scenario>/` and runs `molecule test` per scenario via the `pytest_ansible.molecule.MoleculeScenario` fixture.
 
-| Scenario | Provisioner | Runs in CI? | Why |
-| --- | --- | --- | --- |
-| `extensions/molecule/podman/` | podman | yes | podman runs in GH Actions runners |
-| `extensions/molecule/kubevirt/` | kubevirt | no (gated) | needs a live KubeVirt-enabled cluster |
+| Scenario                        | Provisioner | Runs in CI? | Why                                   |
+| ------------------------------- | ----------- | ----------- | ------------------------------------- |
+| `extensions/molecule/podman/`   | podman      | yes         | podman runs in GH Actions runners     |
+| `extensions/molecule/kubevirt/` | kubevirt    | no (gated)  | needs a live KubeVirt-enabled cluster |
 
 CI gating: kubevirt scenario is skipped when `MOLECULE_KUBEVIRT_ENABLED` is unset (the default). Locally, `MOLECULE_KUBEVIRT_ENABLED=1 pytest tests/integration` runs both. Mechanism: a small `tests/integration/conftest.py` filters the `molecule_scenario` parameterization by env var.
 
@@ -226,6 +226,7 @@ Before tagging v1.0: take a copy of devhost, replace its `extensions/molecule/pr
 ## Repo cleanup
 
 **Delete:**
+
 - `plugins/action/sample_action.py`, `plugins/filter/sample_filter.py`, `plugins/lookup/sample_lookup.py`, `plugins/test/sample_test.py`, `plugins/modules/sample_*.py`
 - Empty plugin subdirs not used by this collection: `cache/`, `inventory/`, `module_utils/`, `plugin_utils/`, `sub_plugins/`
 - `roles/run/`
@@ -233,9 +234,11 @@ Before tagging v1.0: take a copy of devhost, replace its `extensions/molecule/pr
 - `tests/integration/targets/hello_world/`
 
 **Also delete:**
+
 - `extensions/molecule/utils/` — its shared converge stripped an `integration_` prefix that no longer applies. The two self-test scenarios (`podman/`, `kubevirt/`) each carry their own minimal `converge.yml` and `verify.yml` inline.
 
 **Keep:**
+
 - `tests/integration/test_integration.py` + `pytest_ansible.molecule` plumbing (extended with the conftest-based env gate above).
 
 ## `galaxy.yml` updates
@@ -255,15 +258,15 @@ Also fill in `authors`, `repository`, `documentation`, `homepage`, `issues` (cur
 
 ## Documentation surface
 
-| File | Purpose |
-| --- | --- |
-| `README.md` | Replace boilerplate with: what this is, the 3 one-liner files, link to `docs/examples/`, `$PROVISIONER` toggle, supported backends |
-| `docs/examples/{molecule,create,destroy,prepare}.yml` | Copy-paste starter scenario |
-| `docs/examples/platforms.yml` | Full platform schema documented inline |
-| `roles/podman/README.md`, `roles/kubevirt/README.md` | Required/optional inputs (matches `argument_specs.yml`) |
-| `CHANGELOG.rst` + `changelogs/fragments/` | Existing `antsibull-changelog` flow |
-| `CLAUDE.md` | Update to describe the new architecture (replaces the current scaffold-oriented description) |
-| `docs/MIGRATION.md` | Verbatim steps for converting a devhost-style consumer |
+| File                                                  | Purpose                                                                                                                            |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `README.md`                                           | Replace boilerplate with: what this is, the 3 one-liner files, link to `docs/examples/`, `$PROVISIONER` toggle, supported backends |
+| `docs/examples/{molecule,create,destroy,prepare}.yml` | Copy-paste starter scenario                                                                                                        |
+| `docs/examples/platforms.yml`                         | Full platform schema documented inline                                                                                             |
+| `roles/podman/README.md`, `roles/kubevirt/README.md`  | Required/optional inputs (matches `argument_specs.yml`)                                                                            |
+| `CHANGELOG.rst` + `changelogs/fragments/`             | Existing `antsibull-changelog` flow                                                                                                |
+| `CLAUDE.md`                                           | Update to describe the new architecture (replaces the current scaffold-oriented description)                                       |
+| `docs/MIGRATION.md`                                   | Verbatim steps for converting a devhost-style consumer                                                                             |
 
 ## Release flow
 

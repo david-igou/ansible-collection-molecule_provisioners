@@ -16,7 +16,7 @@
   ansible.builtin.assert:
     that:
       - _mp_specs[item].boot_source.type in
-          ['container_disk', 'data_volume_url', 'data_volume_pvc', 'pvc']
+        ['container_disk', 'data_volume_url', 'data_volume_pvc', 'pvc']
     fail_msg: >-
       Host '{{ item }}' has unsupported boot_source.type
       '{{ _mp_specs[item].boot_source.type }}'. Supported:
