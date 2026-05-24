@@ -42,11 +42,20 @@
   vars:
     _ssh_port: "{{ mp_qemu_slirp_port_base | int + (groups['molecule'].index(item) | int) }}"
     _accel: "{{ 'kvm:tcg' if _mp_qemu_kvm_ok | default(false) else 'tcg' }}"
+    # Default 'host' under KVM (full feature passthrough), 'qemu64-v2' under
+    # TCG. Without an explicit -cpu, qemu falls through to a model that strips
+    # x86-64-v2 features and RHEL/Rocky/CentOS 9+ panic at first userspace
+    # process because glibc requires v2.
+    _cpu_model: >-
+      {{ _mp_specs[item].cpu_model
+         | default('host' if _mp_qemu_kvm_ok | default(false) else 'qemu64-v2', true) }}
   ansible.builtin.command:
     argv:
       - qemu-system-x86_64
       - -machine
       - "accel={{ _accel }}"
+      - -cpu
+      - "{{ _cpu_model }}"
       - -m
       - "{{ _mp_specs[item].memory | int }}"
       - -smp
@@ -80,6 +89,9 @@
     _ssh_port: "{{ mp_qemu_slirp_port_base | int + (groups['molecule'].index(item) | int) }}"
     _accel: "{{ 'kvm:tcg' if _mp_qemu_kvm_ok | default(false) else 'tcg' }}"
     _ovmf_vars_path: "{{ molecule_ephemeral_directory }}/{{ item }}-ovmf-vars.fd"
+    _cpu_model: >-
+      {{ _mp_specs[item].cpu_model
+         | default('host' if _mp_qemu_kvm_ok | default(false) else 'qemu64-v2', true) }}
   ansible.builtin.command:
     argv:
       - qemu-system-x86_64
@@ -89,6 +101,8 @@
       - "if=pflash,format=raw,file={{ _ovmf_vars_path }}"
       - -machine
       - "accel={{ _accel }}"
+      - -cpu
+      - "{{ _cpu_model }}"
       - -m
       - "{{ _mp_specs[item].memory | int }}"
       - -smp

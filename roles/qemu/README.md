@@ -26,6 +26,7 @@ all:
               memory: 1024                                                   # optional MiB, role default 1024
               ssh_user: ubuntu                                               # optional, role default cloud-user
               firmware: bios                                                 # optional, role default 'bios'; 'uefi' loads OVMF pflash
+              cpu_model: host                                                # optional; defaults to 'host' under KVM, 'qemu64-v2' under TCG. Set explicitly to override (e.g. 'EPYC', 'Skylake-Server', or pass through 'host')
               disk_size: ""                                                  # optional; resizes the overlay and grows root on first boot via cloud-init growpart
 ```
 
