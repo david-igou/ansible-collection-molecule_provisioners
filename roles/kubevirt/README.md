@@ -52,11 +52,12 @@ all:
               namespace: molecule              # role default 'molecule'
               ssh_user: cloud-user             # role default 'cloud-user'
               ssh_service:
-                type: NodePort                 # only NodePort in v1
-              connection_ip: 192.0.2.10        # optional; when set, skips the
-                                               # cluster-scoped Node lookup for
-                                               # this host (saves the SA's nodes
-                                               # [get,list] RBAC requirement). See
+                type: NodePort                 # 'NodePort' or 'None'
+                port: 22                       # only consulted when type=None; default 22
+              connection_ip: 192.0.2.10        # optional with NodePort, REQUIRED with None.
+                                               # When set, skips the cluster-scoped Node
+                                               # lookup for this host (saves the SA's
+                                               # nodes [get,list] RBAC requirement). See
                                                # "Skipping the Node lookup" below.
 
               # Curated compute
@@ -160,6 +161,21 @@ If even one host omits `connection_ip`, the Node lookup still runs (the rest of 
 
 See `defaults/main.yml` (`mp_kubevirt_role_defaults`, `mp_kubevirt_ssh_key_path`, `mp_kubevirt_wait_timeout`, `mp_kubevirt_allowed_ssh_service_types`).
 
-## v1 limitation
+## SSH service types
 
-Only `ssh_service.type: NodePort` is supported. The role asserts this on create. LoadBalancer / ClusterIP+port-forward are out of scope for v1.
+Two modes are supported:
+
+- **`NodePort`** (default): the role creates a `NodePort` Service per VM and resolves `ansible_host` to a cluster Node InternalIP (or to `connection_ip` if set).
+- **`None`**: no Service is created. `connection_ip` is required (the role asserts this at validate time). `ansible_port` defaults to `22`; override per-host with `ssh_service.port`. Use this for setups where SSH access is provided by an external Route/Ingress, or where the controller can talk to pod IPs directly.
+
+```yaml
+mp:
+  kubevirt:
+    boot_source: {type: container_disk, image: quay.io/containerdisks/ubuntu:24.04}
+    ssh_service:
+      type: None
+      port: 2222 # only if the Route/Ingress maps to a non-default port
+    connection_ip: route.example.com # or a controller-reachable pod IP
+```
+
+`LoadBalancer` / `ClusterIP`+port-forward are out of scope.

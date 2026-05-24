@@ -72,6 +72,20 @@
       '{{ _mp_specs[item].ssh_service.type | default('(missing)') }}'.
       Supported: {{ mp_kubevirt_allowed_ssh_service_types | join(', ') }}.
 
+# 'None' mode skips Service creation, so the role has no way to discover a
+# connection IP on its own — the consumer must supply one.
+- name: "Assert connection_ip is set when ssh_service.type is None: {{ item }}"
+  ansible.builtin.assert:
+    that:
+      - _mp_specs[item].connection_ip is defined
+      - _mp_specs[item].connection_ip | length > 0
+    fail_msg: >-
+      Host '{{ item }}' uses ssh_service.type=None but did not set
+      connection_ip. With no Service, the role has no way to reach
+      the VM. Set mp.kubevirt.connection_ip to a controller-reachable
+      address (e.g. external Route IP, pod IP).
+  when: (_mp_specs[item].ssh_service.type | default('NodePort')) == 'None'
+
 - name: "Warn if instancetype is set alongside cpu/memory_limit: {{ item }}"
   ansible.builtin.debug:
     msg: >-

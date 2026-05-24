@@ -7,7 +7,7 @@
     item: instance
     _mp_specs:
       instance: "{{ host_spec }}"
-    mp_kubevirt_allowed_ssh_service_types: ["NodePort"]
+    mp_kubevirt_allowed_ssh_service_types: ["NodePort", "None"]
   tasks:
     - name: Include the validator
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../roles/kubevirt/tasks/_validate.yml"

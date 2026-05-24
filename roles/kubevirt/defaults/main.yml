@@ -7,9 +7,13 @@ mp_kubevirt_ssh_key_path: "{{ molecule_ephemeral_directory }}/identity_file"
 # wait_for_connection timeout (seconds) for prepare phase.
 mp_kubevirt_wait_timeout: 120
 
-# Allowed ssh_service.type values. v1 supports NodePort only.
+# Allowed ssh_service.type values.
+#   NodePort — create a NodePort Service per VM; connect via Node InternalIP.
+#   None     — skip Service creation; consumer supplies connection_ip per host
+#              (e.g. external Route/Ingress, controller-reachable pod IP).
 mp_kubevirt_allowed_ssh_service_types:
   - NodePort
+  - "None"
 
 # Per-host field defaults. Layered as: this dict <- mp_defaults.kubevirt <- hostvars[item].mp.kubevirt.
 # Only `image` is required and is therefore not present here.
