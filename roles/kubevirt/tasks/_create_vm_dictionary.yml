@@ -17,7 +17,7 @@
     __mp_kubevirt_runtime_hosts: >-
       {{ __mp_kubevirt_runtime_hosts | combine({
           item: {
-            'ansible_host': __mp_kubevirt_node_ip,
+            'ansible_host': (_mp_specs[item].connection_ip | default(__mp_kubevirt_node_ip)),
             'ansible_port': (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort),
             'ansible_user': _mp_specs[item].ssh_user,
             'ansible_ssh_private_key_file': mp_kubevirt_ssh_key_path,

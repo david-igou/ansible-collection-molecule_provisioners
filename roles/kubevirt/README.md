@@ -36,6 +36,11 @@ all:
               ssh_user: cloud-user             # role default 'cloud-user'
               ssh_service:
                 type: NodePort                 # only NodePort in v1
+              connection_ip: 192.0.2.10        # optional; when set, skips the
+                                               # cluster-scoped Node lookup for
+                                               # this host (saves the SA's nodes
+                                               # [get,list] RBAC requirement). See
+                                               # "Skipping the Node lookup" below.
 
               # Curated compute
               cpu:
@@ -120,6 +125,19 @@ boot_source:
 - **Don't change `metadata.labels.kubevirt.io/domain` or the SSH Service's selector.** The NodePort routes by this label.
 
 When `instancetype` is set, the renderer **omits** `domain.cpu` and `domain.resources` from the rendered spec — KubeVirt rejects conflicting fields. Setting `cpu:`/`memory_limit:` alongside `instancetype:` is silently ignored (a debug message is emitted at validate time).
+
+## Skipping the Node lookup
+
+By default the role lists cluster `Node`s once to pick an `InternalIP` for the NodePort connection. This needs cluster-scoped `nodes [get,list]` RBAC. Namespace-scoped service accounts can opt out by setting `connection_ip` on every host — the role then skips the Node lookup entirely:
+
+```yaml
+mp:
+  kubevirt:
+    boot_source: {type: container_disk, image: quay.io/containerdisks/ubuntu:24.04}
+    connection_ip: 192.0.2.10 # e.g. cluster ingress IP, controller-reachable Node IP, etc.
+```
+
+If even one host omits `connection_ip`, the Node lookup still runs (the rest of the cluster nodes is unchanged); only the host with `connection_ip` set bypasses it for its own `ansible_host`.
 
 ## Role-level overrides
 

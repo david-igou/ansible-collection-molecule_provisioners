@@ -1,0 +1,24 @@
+---
+# Renders the exact gating expression from roles/kubevirt/tasks/create.yml
+# against a synthetic _mp_specs dict, writes the result to output_path for
+# the python test to assert on. If the expression below diverges from the
+# one in create.yml, this test will silently start measuring the wrong
+# thing — keep them in sync.
+- name: connection_ip gating
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    _mp_specs: "{{ specs }}"
+  tasks:
+    - name: Compute needs_node_lookup
+      ansible.builtin.set_fact:
+        _needs: >-
+          {{ _mp_specs.values()
+             | rejectattr('connection_ip', 'defined')
+             | list | length > 0 }}
+    - name: Emit JSON for the python harness
+      ansible.builtin.copy:
+        content: "{{ {'needs_node_lookup': _needs | bool} | to_json }}"
+        dest: "{{ output_path }}"
+        mode: "0600"
