@@ -6,6 +6,20 @@
     - name: Ping each host
       ansible.builtin.ping:
 
+    # Regression for #35: container backends must default ansible_user to
+    # root in the runtime inventory. Without this, the connection plugin
+    # falls back to the controller's local user inside the container and
+    # gather_facts fails with PAM sudo errors. Skip for non-container
+    # backends (kubevirt/qemu set ansible_user from ssh_user instead).
+    - name: Assert ansible_user is set on the container backends
+      ansible.builtin.assert:
+        that: ansible_user == "root"
+        fail_msg: >-
+          Expected ansible_user=root on container backend; got
+          '{{ ansible_user | default('<unset>') }}'. The role should write
+          ansible_user: root into the runtime inventory by default.
+      when: lookup('env', 'PROVISIONER') | default('podman', true) in ['podman', 'docker']
+
 - name: Verify — podman container has the expected configuration
   hosts: localhost
   connection: local

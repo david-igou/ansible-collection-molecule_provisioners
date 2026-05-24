@@ -63,6 +63,10 @@ Names listed in `mp_podman_reserved_networks` (default: `bridge`, `none`, `host`
 
 Shared defaults can be hoisted into `mp_defaults.podman` in `inventory/group_vars/molecule.yml` (overrides role defaults; per-host fields override mp_defaults). Field resolution order in the role: role defaults <- `mp_defaults.podman` <- `hostvars[item].mp.podman`.
 
+## Connection user
+
+The role writes `ansible_user: root` into the runtime inventory by default, matching the typical container default. Override per-host by setting `ansible_user` in your static inventory (in `inventory/hosts.yml`, or in `group_vars/molecule.yml`); the role reads it from hostvars before writing the runtime inventory, so consumer-set values win.
+
 ## Role-level overrides
 
 See `defaults/main.yml` (`mp_podman_role_defaults`, `mp_podman_async_*`, `mp_podman_reserved_networks`, `mp_podman_executable`).

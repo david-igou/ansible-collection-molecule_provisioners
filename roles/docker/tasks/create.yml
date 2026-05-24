@@ -93,16 +93,26 @@
   loop_control:
     label: "{{ item.item }}"
 
-# Augment the static inventory with ansible_connection so subsequent molecule
-# phases (prepare/converge/verify) talk to the containers via the docker
-# connection plugin. Each phase is a separate ansible-playbook invocation, so
-# the augmentation has to be written to disk in molecule_ephemeral_directory/
-# inventory/ (which is in molecule's inventory chain).
+# Augment the static inventory with:
+#   - ansible_connection: community.docker.docker — so subsequent phases
+#     (prepare/converge/verify) talk to the containers via the docker
+#     connection plugin.
+#   - ansible_user: root (default) — without this the connection plugin uses
+#     the controller's local user (e.g. `igou`) inside the container, then
+#     gather_facts attempts sudo for an account that doesn't exist there.
+#     Consumer-set `ansible_user` on the host wins (read from hostvars before
+#     the runtime inventory is written).
+# Each phase is a separate ansible-playbook invocation, so the augmentation
+# has to be written to disk in molecule_ephemeral_directory/inventory/
+# (which is in molecule's inventory chain).
 - name: Build runtime connection dict
   ansible.builtin.set_fact:
     __mp_docker_runtime_hosts: >-
       {{ __mp_docker_runtime_hosts | default({})
-         | combine({item: {'ansible_connection': 'community.docker.docker'}}) }}
+         | combine({item: {
+             'ansible_connection': 'community.docker.docker',
+             'ansible_user': hostvars[item].ansible_user | default('root')
+           }}) }}
   loop: "{{ groups['molecule'] }}"
   loop_control:
     label: "{{ item }}"
