@@ -12,6 +12,10 @@ mp_defaults:
     namespace: molecule
     memory: 1Gi
     ssh_user: cloud-user
+  qemu:
+    cpus: 2
+    memory: 1024
+    ssh_user: cloud-user
   docker:
     command: /sbin/init
     privileged: true

@@ -11,6 +11,7 @@ Stop redefining `create.yml`/`destroy.yml`/`prepare.yml` per repo. Install this 
 | `podman` (default) | Containers, fastest CI loop |
 | `kubevirt` | Real VMs in a Kubernetes cluster (requires KubeVirt) |
 | `qemu` | Real VMs via direct `qemu-system` process (no libvirtd) |
+| `docker` | Containers, when a local docker daemon is what's available |
 
 ## Installing
 
@@ -76,11 +77,15 @@ all:
             podman:
               image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
             kubevirt:
-              image: quay.io/containerdisks/ubuntu:24.04
+              boot_source:
+                type: container_disk
+                image: quay.io/containerdisks/ubuntu:24.04
               ssh_user: ubuntu
             qemu:
               image: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
               ssh_user: ubuntu
+            docker:
+              image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
 ```
 
 **`inventory/group_vars/molecule.yml`** (backend selector + DRY defaults):
@@ -100,9 +105,12 @@ mp_defaults:
     cpus: 2
     memory: 1024
     ssh_user: cloud-user
+  docker:
+    command_handling: compatibility
+    privileged: true
 ```
 
-Switch backends at runtime: `PROVISIONER=podman molecule test` or `PROVISIONER=kubevirt molecule test`.
+Switch backends at runtime: `PROVISIONER=podman molecule test` (or `kubevirt`, `qemu`, `docker`).
 
 See [`docs/examples/`](docs/examples/) for the canonical starter and [`docs/MIGRATION.md`](docs/MIGRATION.md) if you're translating from a `platforms:`-based scenario.
 
@@ -112,25 +120,30 @@ See [`docs/examples/`](docs/examples/) for the canonical starter and [`docs/MIGR
 | --- | --- |
 | `podman` | `podman` |
 | `kubevirt` | `kubectl` + a kubeconfig pointing at a KubeVirt-enabled cluster |
-| `qemu` | `qemu-system-x86_64`, `qemu-img`, `cloud-localds` (or `genisoimage`) |
+| `qemu` | `qemu-system-x86_64`, `qemu-img`, `cloud-localds` (or `genisoimage`); OVMF firmware only when a host sets `firmware: uefi` |
+| `docker` | A reachable local docker daemon and the `docker` python package (`pip install docker`) |
 
 ## What's in the box
 
 - `playbooks/{create,destroy,prepare}.yml` — top-level dispatchers; read `mp_backend` (driven by `$PROVISIONER` env var by convention), validate, dispatch.
+- `playbooks/reset.yml` — standalone purge playbook (`david_igou.molecule_provisioners.reset`); currently removes podman containers labeled `owner=molecule`.
 - `roles/podman/` — uses `containers.podman.podman_container` + `containers.podman.podman_network`.
-- `roles/kubevirt/` — generates an SSH keypair, creates `VirtualMachine` + `NodePort` Service per platform, writes the molecule inventory file.
+- `roles/kubevirt/` — generates an SSH keypair, creates `VirtualMachine` + `NodePort` Service per host, writes the molecule inventory file.
+- `roles/qemu/` — caches base qcow2 images, builds NoCloud seed ISOs, launches per-VM `qemu-system-x86_64` processes with SLIRP `hostfwd` for SSH.
+- `roles/docker/` — uses `community.docker.docker_container` + `community.docker.docker_network`.
 
-Both roles produce a host group named `molecule` containing all platform hosts.
+Every backend produces a host group named `molecule` containing all platform hosts.
 
 ## Out of scope
 
-- docker, AWS, Azure, GCP backends
+- AWS, Azure, GCP backends
 - qemu via libvirtd (use the `process` path that ships, or a future minor)
 - qemu remote / non-controller-local hosts
 - qemu NAT or bridge networking (SLIRP only in v1.1)
 - LoadBalancer / ClusterIP+port-forward kubevirt service types
 - Windows/macOS guests
-- Per-platform networks beyond `podman.podman_network`
+- Per-platform networks beyond `podman.podman_network` and `docker.networks`
+- Docker image build at create time, private-registry login, remote/TLS docker daemons
 - Molecule `shared_state` / shared default-scenario pattern
 
 ## Licensing
