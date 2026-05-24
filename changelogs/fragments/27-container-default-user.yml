@@ -1,0 +1,10 @@
+---
+minor_changes:
+  - >-
+    podman and docker roles: default ``ansible_user`` to ``root`` in the
+    runtime inventory written at create time. Previously the runtime
+    inventory carried only ``ansible_connection``, and the connection
+    plugin defaulted to the controller's local user inside the container,
+    which then made gather_facts fail with PAM sudo errors. Consumer-set
+    ``ansible_user`` in static inventory or group_vars wins — the role
+    reads it from hostvars before writing the runtime inventory (#35).
