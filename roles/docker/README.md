@@ -21,7 +21,7 @@ all:
           mp:
             docker:
               image: docker.io/...:tag         # required
-              command: /sbin/init              # optional
+              command: /sbin/init              # optional; when unset (and override_command is true) the role uses a long-lived keepalive
               command_handling: compatibility  # optional, role default 'compatibility'
               override_command: true           # optional, role default true
               hostname: <str>                  # optional, defaults to inventory_hostname

@@ -65,7 +65,9 @@ Shared defaults can be hoisted into `mp_defaults.podman` in `inventory/group_var
 
 ## Role-level overrides
 
-See `defaults/main.yml` (`mp_podman_role_defaults`, `mp_podman_async_*`, `mp_podman_reserved_networks`).
+See `defaults/main.yml` (`mp_podman_role_defaults`, `mp_podman_async_*`, `mp_podman_reserved_networks`, `mp_podman_executable`).
+
+`mp_podman_executable` is read from the `MOLECULE_PODMAN_EXECUTABLE` env var and is threaded through every `containers.podman.podman_*` module call (useful for swapping in `podman-remote`).
 
 ## Resetting state
 

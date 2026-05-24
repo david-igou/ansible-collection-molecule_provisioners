@@ -25,7 +25,8 @@ all:
               cpus: 2                                                        # optional, role default 2
               memory: 1024                                                   # optional MiB, role default 1024
               ssh_user: ubuntu                                               # optional, role default cloud-user
-              disk_size: ""                                                  # optional; if set, growpart resizes root on first boot
+              firmware: bios                                                 # optional, role default 'bios'; 'uefi' loads OVMF pflash
+              disk_size: ""                                                  # optional; resizes the overlay and grows root on first boot via cloud-init growpart
 ```
 
 Shared defaults can be hoisted into `mp_defaults.qemu` in `inventory/group_vars/molecule.yml` (overrides role defaults; per-host fields override mp_defaults). Field resolution order in the role: role defaults <- `mp_defaults.qemu` <- `hostvars[item].mp.qemu`.
@@ -38,7 +39,8 @@ See `defaults/main.yml`:
 - `mp_qemu_wait_timeout` — `wait_for_connection` ceiling for prepare (default `180`; TCG boots are slow).
 - `mp_qemu_slirp_port_base` — base host port for SLIRP `hostfwd` (default `2222`; per-host port = base + host index).
 - `mp_qemu_image_cache_dir` — base image cache root (default honours `XDG_CACHE_HOME`, else `~/.cache/molecule-qemu`).
-- `mp_qemu_role_defaults` — the per-host field defaults (cpus/memory/ssh_user). Only `image` is required and is therefore absent from this dict.
+- `mp_qemu_role_defaults` — the per-host field defaults (cpus/memory/ssh_user/firmware). Only `image` is required and is therefore absent from this dict.
+- `mp_qemu_ovmf_code` / `mp_qemu_ovmf_vars` — paths to the OVMF firmware images (defaults: `/usr/share/edk2/ovmf/OVMF_CODE.fd` and `/usr/share/edk2/ovmf/OVMF_VARS.fd`). Only consumed when a host sets `firmware: uefi`. Per-VM writable copies of `OVMF_VARS.fd` are created in `molecule_ephemeral_directory`; `OVMF_CODE.fd` is mounted read-only.
 
 ## XZ-compressed images
 
@@ -50,3 +52,4 @@ URLs that resolve to xz-compressed qcow2 (e.g. Armbian cloud images served behin
 - `xz` (for decompressing xz-compressed upstream images)
 - A NoCloud seed-ISO builder: `cloud-localds` (preferred) or `genisoimage`
 - `/dev/kvm` accessible to the running user (KVM acceleration); falls back to TCG otherwise
+- OVMF firmware files (only when a host sets `firmware: uefi`); paths are overridable via `mp_qemu_ovmf_code` / `mp_qemu_ovmf_vars`
