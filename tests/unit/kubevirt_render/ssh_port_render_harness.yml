@@ -3,7 +3,7 @@
 # a synthetic spec. The synthetic __mp_kubevirt_svc has nodePort=31234 so we
 # can detect when NodePort-mode wrongly falls through to the None branch.
 # Keep this expression in sync with the one in _create_vm_dictionary.yml.
-- name: ssh_service port resolution
+- name: Render ssh_service port resolution from _create_vm_dictionary.yml
   hosts: localhost
   connection: local
   gather_facts: false
