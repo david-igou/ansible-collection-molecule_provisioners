@@ -61,24 +61,39 @@
   loop_control:
     label: "{{ item }}"
 
+# Cluster-Node lookup is only needed for hosts that don't pin their own
+# connection_ip. When every host pins one, skip the lookup entirely so
+# namespace-scoped service accounts without cluster-wide `nodes [get,list]`
+# RBAC can still drive this role. See #30.
+- name: Determine whether any host needs the cluster-Node lookup
+  ansible.builtin.set_fact:
+    __mp_kubevirt_needs_node_lookup: >-
+      {{ _mp_specs.values()
+         | rejectattr('connection_ip', 'defined')
+         | list | length > 0 }}
+
 # Look up cluster nodes once, before the per-VM dictionary loop, so every VM
-# uses the same node IP. Subsequent dictionary build is purely local.
+# without an explicit connection_ip uses the same node IP. Subsequent
+# dictionary build is purely local.
 - name: Look up cluster nodes (for NodePort connection IP)
   kubernetes.core.k8s_info:
     api_version: v1
     kind: Node
   register: __mp_kubevirt_nodes
+  when: __mp_kubevirt_needs_node_lookup
 
 - name: Assert at least one cluster node is available
   ansible.builtin.assert:
     that: __mp_kubevirt_nodes.resources | length > 0
     fail_msg: "No cluster nodes returned from Kubernetes API. Check kubeconfig and cluster health."
+  when: __mp_kubevirt_needs_node_lookup
 
 - name: Choose first node InternalIP
   ansible.builtin.set_fact:
     __mp_kubevirt_node_ip: >-
       {{ (__mp_kubevirt_nodes.resources[0].status.addresses
           | selectattr('type', 'equalto', 'InternalIP') | list | first).address }}
+  when: __mp_kubevirt_needs_node_lookup
 
 - name: Initialize VM runtime inventory dict
   ansible.builtin.set_fact:

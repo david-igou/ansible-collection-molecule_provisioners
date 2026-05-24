@@ -81,6 +81,7 @@ all:
               ssh_user: <str> # optional, role default 'cloud-user'
               ssh_service:
                 type: NodePort # optional, only NodePort in v1
+              connection_ip: <str> # optional; when set, skips the cluster-scoped Node lookup for this host (relieves SA of nodes [get,list])
               # Optional curated knobs:
               cpu: { cores, sockets, threads, model }
               memory: <str> # role default '1Gi' → requests.memory
