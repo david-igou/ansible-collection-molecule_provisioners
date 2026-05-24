@@ -1,0 +1,26 @@
+---
+# Renders the _ansible_port expression from _create_vm_dictionary.yml against
+# a synthetic spec. The synthetic __mp_kubevirt_svc has nodePort=31234 so we
+# can detect when NodePort-mode wrongly falls through to the None branch.
+# Keep this expression in sync with the one in _create_vm_dictionary.yml.
+- name: ssh_service port resolution
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    __mp_kubevirt_svc:
+      resources:
+        - spec:
+            ports:
+              - nodePort: 31234
+    _service_mode: "{{ spec.ssh_service.type | default('NodePort') }}"
+    _ansible_port: >-
+      {{ (spec.ssh_service.port | default(22))
+         if _service_mode == 'None'
+         else (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort) }}
+  tasks:
+    - name: Emit JSON for the python harness
+      ansible.builtin.copy:
+        content: "{{ {'ansible_port': _ansible_port | int} | to_json }}"
+        dest: "{{ output_path }}"
+        mode: "0600"

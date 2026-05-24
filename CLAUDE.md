@@ -80,8 +80,9 @@ all:
               namespace: <str> # optional, role default 'molecule'
               ssh_user: <str> # optional, role default 'cloud-user'
               ssh_service:
-                type: NodePort # optional, only NodePort in v1
-              connection_ip: <str> # optional; when set, skips the cluster-scoped Node lookup for this host (relieves SA of nodes [get,list])
+                type: NodePort # optional, 'NodePort' (default, creates Service) or 'None' (skip Service; requires connection_ip)
+                port: 22 # optional, only consulted when type=None; default 22
+              connection_ip: <str> # optional with NodePort, REQUIRED with None. Skips cluster-scoped Node lookup for this host
               # Optional curated knobs:
               cpu: { cores, sockets, threads, model }
               memory: <str> # role default '1Gi' → requests.memory

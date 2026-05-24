@@ -1,4 +1,7 @@
 ---
+# NodePort lookup is skipped in 'None' mode — no Service was created, and
+# the consumer-supplied connection_ip + ssh_service.port (default 22)
+# carry the connection.
 - name: "Look up NodePort service for: {{ item }}"
   kubernetes.core.k8s_info:
     api_version: v1
@@ -11,14 +14,21 @@
     - (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort | default(0)) | int > 0
   retries: 10
   delay: 3
+  when: (_mp_specs[item].ssh_service.type | default('NodePort')) == 'NodePort'
 
 - name: "Add VM to runtime inventory dict: {{ item }}"
+  vars:
+    _service_mode: "{{ _mp_specs[item].ssh_service.type | default('NodePort') }}"
+    _ansible_port: >-
+      {{ (_mp_specs[item].ssh_service.port | default(22))
+         if _service_mode == 'None'
+         else (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort) }}
   ansible.builtin.set_fact:
     __mp_kubevirt_runtime_hosts: >-
       {{ __mp_kubevirt_runtime_hosts | combine({
           item: {
             'ansible_host': (_mp_specs[item].connection_ip | default(__mp_kubevirt_node_ip)),
-            'ansible_port': (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort),
+            'ansible_port': _ansible_port | int,
             'ansible_user': _mp_specs[item].ssh_user,
             'ansible_ssh_private_key_file': mp_kubevirt_ssh_key_path,
             'ansible_connection': 'ssh',
