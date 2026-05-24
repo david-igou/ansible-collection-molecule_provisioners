@@ -65,6 +65,12 @@ all:
 
 Shared defaults can be hoisted into `mp_defaults.docker` in `inventory/group_vars/molecule.yml` (overrides role defaults; per-host fields override mp_defaults). Field resolution order in the role: role defaults <- `mp_defaults.docker` <- `hostvars[item].mp.docker`.
 
+## Connection user
+
+The role writes `ansible_user: root` into the runtime inventory by default, matching the typical container default. Override per-host by setting `ansible_user` in your static inventory (in `inventory/hosts.yml`, or in `group_vars/molecule.yml`); the role reads it from hostvars before writing the runtime inventory, so consumer-set values win.
+
+Note that `mp.docker.user` is a different setting — it controls the container process owner (passed to `community.docker.docker_container`'s `user`), not the user ansible operates as inside the container.
+
 ## Role-level overrides
 
 See `defaults/main.yml` (`mp_docker_role_defaults`, `mp_docker_async_*`, `mp_docker_reserved_networks`).
