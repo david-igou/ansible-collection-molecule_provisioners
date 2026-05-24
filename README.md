@@ -15,11 +15,25 @@ Stop redefining `create.yml`/`destroy.yml`/`prepare.yml` per repo. Install this 
 
 ## Installing
 
+Until the first Galaxy release lands, install from git. Molecule's
+`dependency` step looks for **`collections.yml`** (not `requirements.yml`)
+in the scenario directory by default, so place this at
+`extensions/molecule/<scenario>/collections.yml`:
+
+```yaml
+collections:
+  - name: https://github.com/david-igou/ansible-collection-molecule_provisioners.git
+    type: git
+    version: main # or a tag like '1.1.0'
+```
+
+Once published to Galaxy, this will work as well:
+
 ```bash
 ansible-galaxy collection install david_igou.molecule_provisioners
 ```
 
-Or via `requirements.yml`:
+Or pinned in `collections.yml`:
 
 ```yaml
 collections:
