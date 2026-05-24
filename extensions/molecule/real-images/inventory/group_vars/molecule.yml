@@ -3,13 +3,11 @@ mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
 mp_kubevirt_wait_timeout: 300
 mp_qemu_wait_timeout: 300
 
-# mp_defaults.podman.command must be set per-host in hosts.yml (not here):
-# the dispatcher's role include runs on localhost, which isn't in the
-# `molecule` group, so group_vars/molecule.yml isn't visible to it.
 # These non-init images don't run systemd, so PID 1 must be a long-lived
-# no-op. We deliberately do NOT set privileged: true — the scenario's
-# point is to exercise the role against minimal distro images without
-# the systemd-init wrapper that the default scenario uses.
+# no-op (set per-host as command: sleep infinity). We deliberately do NOT
+# set privileged: true — the scenario's point is to exercise the role
+# against minimal distro images without the systemd-init wrapper that
+# the default scenario uses.
 mp_defaults:
   kubevirt:
     namespace: "{{ lookup('env', 'MOLECULE_NAMESPACE') | default('molecule', true) }}"

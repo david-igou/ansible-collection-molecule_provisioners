@@ -1,0 +1,17 @@
+---
+bugfixes:
+  - >-
+    dispatcher: ``mp_defaults`` was silently dropped during the create and
+    destroy phases because they run on ``hosts: localhost``, which isn't in
+    the ``molecule`` group — so ``inventory/group_vars/molecule.yml`` (the
+    documented home for the var) was out of scope. The merge in each
+    backend's ``_spec_merge.yml`` would fall through to role defaults
+    without warning. The dispatcher now pulls ``mp_defaults`` from the
+    first molecule host's hostvars when not already in localhost scope,
+    matching the existing ``mp_backend`` lookup pattern (#36).
+  - >-
+    qemu role: pass an explicit ``-cpu`` flag to ``qemu-system-x86_64``.
+    Without it, qemu fell back to a model that strips x86-64-v2 features
+    and RHEL/Rocky/CentOS 9+ panic at the first userspace process because
+    glibc requires v2. New per-host ``cpu_model`` knob; defaults to
+    ``host`` under KVM, ``Nehalem`` under TCG (#37).

@@ -62,6 +62,27 @@ def test_seed_iso_is_built_and_contains_user(tmp_path) -> None:
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
+def test_cpu_model_resolution() -> None:
+    """Regression for #37: the _cpu_model expression in _create_process.yml
+    must pick 'host' under KVM, 'qemu64-v2' under TCG, and honor per-host
+    overrides. Without an explicit -cpu, qemu falls through to a model that
+    strips x86-64-v2 features and RHEL/Rocky/CentOS 9+ panic at boot.
+    """
+    proc = subprocess.run(
+        [
+            "ansible-playbook",
+            "-i",
+            "localhost,",
+            str(ASSERTIONS / "run_cpu_model_render.yml"),
+        ],
+        cwd=COLLECTION_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
 def test_destroy_is_idempotent_on_fresh_state(tmp_path) -> None:
     import os
 

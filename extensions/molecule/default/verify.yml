@@ -163,3 +163,17 @@
         fail_msg: >-
           Expected Config.Labels.owner=molecule;
           got {{ _ctr.Config.Labels | default({}) }}.
+
+    # Regression test for the mp_defaults dispatcher bug: privileged: true
+    # lives only in mp_defaults.podman (no per-host override). If the dispatcher
+    # stops forwarding mp_defaults from the molecule group's hostvars to its
+    # localhost play, this falls back to the role default (false) silently.
+    - name: Assert privileged propagated from mp_defaults
+      ansible.builtin.assert:
+        that:
+          - _ctr.HostConfig.Privileged | bool
+        fail_msg: >-
+          Expected HostConfig.Privileged=true (mp_defaults.podman.privileged);
+          got {{ _ctr.HostConfig.Privileged | default('<unset>') }}.
+          This usually means group_vars/molecule.yml's mp_defaults didn't
+          reach the create dispatcher.

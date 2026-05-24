@@ -15,6 +15,17 @@
       ansible.builtin.set_fact:
         _mp_backend: "{{ hostvars[groups['molecule'][0]].mp_backend | default(none) }}"
 
+    # group_vars/molecule.yml is the documented home for mp_defaults, but this
+    # play runs on localhost, which isn't in the molecule group — so that file
+    # is out of scope here. Pull from the first molecule host's hostvars so
+    # _spec_merge sees the consumer's overrides.
+    - name: Pull mp_defaults from molecule group hostvars
+      ansible.builtin.set_fact:
+        mp_defaults: "{{ hostvars[groups['molecule'][0]].mp_defaults }}"
+      when:
+        - mp_defaults is not defined
+        - hostvars[groups['molecule'][0]].mp_defaults is defined
+
     - name: Validate backend
       ansible.builtin.assert:
         that: _mp_backend in mp_supported_backends
