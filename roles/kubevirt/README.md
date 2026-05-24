@@ -7,6 +7,23 @@ Requires:
 - A reachable Kubernetes cluster with KubeVirt installed and a working `KUBECONFIG`.
 - `kubernetes.core` and `community.crypto` collections (declared in `galaxy.yml`).
 
+### RBAC required by the service account in `KUBECONFIG`
+
+The minimal verb set with the default `container_disk` boot source:
+
+| Scope | Resource | Verbs |
+| --- | --- | --- |
+| cluster | `nodes` | `get`, `list` |
+| namespace (`mp.kubevirt.namespace`, default `molecule`) | `virtualmachines.kubevirt.io` | `create`, `get`, `delete` |
+| namespace | `services` | `create`, `get`, `delete` |
+| namespace | `virtualmachineinstances.kubevirt.io` | `get` |
+
+`secrets` access is **not** required in `container_disk` mode — the role injects the SSH key via cloud-init userData on the VM spec, not as a Kubernetes Secret. The `data_volume_url` / `data_volume_pvc` modes additionally need `datavolumes.cdi.kubevirt.io [create, get, delete]`.
+
+The cluster-scoped `nodes` requirement is currently the tight spot for least-privilege namespaced setups (it's used to pick the NodePort connection IP). See [issue #30](https://github.com/david-igou/ansible-collection-molecule_provisioners/issues/30) for an opt-out via `mp.kubevirt.connection_ip`.
+
+> **OpenShift note:** prefer `oc auth can-i …` over `kubectl auth can-i …` to preflight these. OpenShift adds a separate authorization layer that `kubectl`'s SubjectAccessReview can return false negatives for; `oc` is authoritative.
+
 ## Entry points
 
 | `tasks_from` | What it does |
