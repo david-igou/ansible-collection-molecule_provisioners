@@ -2,7 +2,7 @@
 # Renders the `_cpu_model` expression from _create_process.yml under three
 # scenarios and asserts each resolves to the expected value. Doesn't launch
 # qemu — purely a Jinja-resolution test.
-- name: cpu_model resolution
+- name: Render cpu_model expression under three KVM/override permutations
   hosts: localhost
   connection: local
   gather_facts: false
@@ -12,7 +12,7 @@
     # other and this expectation together.
     _cpu_model_expr: >-
       {{ spec.cpu_model
-         | default('host' if _mp_qemu_kvm_ok | default(false) else 'qemu64-v2', true) }}
+         | default('host' if _mp_qemu_kvm_ok | default(false) else 'Nehalem', true) }}
   tasks:
     - name: Case 1 — KVM available, no per-host override → 'host'
       vars:
@@ -22,13 +22,13 @@
         that: (_cpu_model_expr | trim) == 'host'
         fail_msg: "Expected 'host' under KVM; got '{{ _cpu_model_expr | trim }}'"
 
-    - name: Case 2 — KVM unavailable, no per-host override → 'qemu64-v2'
+    - name: Case 2 — KVM unavailable, no per-host override → 'Nehalem'
       vars:
         spec: {}
         _mp_qemu_kvm_ok: false
       ansible.builtin.assert:
-        that: (_cpu_model_expr | trim) == 'qemu64-v2'
-        fail_msg: "Expected 'qemu64-v2' under TCG; got '{{ _cpu_model_expr | trim }}'"
+        that: (_cpu_model_expr | trim) == 'Nehalem'
+        fail_msg: "Expected 'Nehalem' under TCG; got '{{ _cpu_model_expr | trim }}'"
 
     - name: Case 3 — per-host override wins regardless of KVM
       vars:
