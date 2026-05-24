@@ -1,0 +1,9 @@
+---
+minor_changes:
+  - >-
+    kubevirt role: new optional per-host ``connection_ip`` field. When set,
+    the role uses it as ``ansible_host`` for that VM and skips the
+    cluster-scoped Node lookup for that host. When every host pins one,
+    the lookup is skipped entirely — namespace-scoped service accounts
+    no longer need cluster-wide ``nodes [get, list]`` RBAC. Default
+    behavior unchanged for hosts that don't set it (#30).

@@ -4,7 +4,7 @@
 # the python test to assert on. If the expression below diverges from the
 # one in create.yml, this test will silently start measuring the wrong
 # thing — keep them in sync.
-- name: connection_ip gating
+- name: Render the connection_ip gating expression from create.yml
   hosts: localhost
   connection: local
   gather_facts: false
