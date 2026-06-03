@@ -43,14 +43,24 @@ See `defaults/main.yml`:
 - `mp_qemu_role_defaults` — the per-host field defaults (cpus/memory/ssh_user/firmware). Only `image` is required and is therefore absent from this dict.
 - `mp_qemu_ovmf_code` / `mp_qemu_ovmf_vars` — paths to the OVMF firmware images (defaults: `/usr/share/edk2/ovmf/OVMF_CODE.fd` and `/usr/share/edk2/ovmf/OVMF_VARS.fd`). Only consumed when a host sets `firmware: uefi`. Per-VM writable copies of `OVMF_VARS.fd` are created in `molecule_ephemeral_directory`; `OVMF_CODE.fd` is mounted read-only.
 
-## XZ-compressed images
+## Compressed and non-qcow2 images
 
-URLs that resolve to xz-compressed qcow2 (e.g. Armbian cloud images served behind a redirect) are automatically decompressed after download. Detection is by content sniffing (`file --brief --mime-type`) rather than URL extension, so images served via redirects to `.img.qcow2.xz` paths are handled correctly. The cached file at `<cache>/<sha>/disk.qcow2` is always a bare qcow2 regardless of upstream format.
+`image:` can point at most common upstream artifacts — the cache ingests them and always produces a bare qcow2 at `<cache>/<sha>/disk.qcow2`:
+
+| Upstream artifact                         | Detected MIME                   | Handling                                            |
+| ----------------------------------------- | ------------------------------- | --------------------------------------------------- |
+| qcow2                                     | `application/x-qemu-disk`       | renamed into place                                  |
+| raw `.img`                                | (any)                           | `qemu-img convert -O qcow2`                          |
+| xz / gz / bz2 compressed                  | `application/x-xz` etc.         | decompressed (`community.general.decompress`)       |
+| zip (e.g. MikroTik CHR `.img.zip`)        | `application/zip`               | extracted (`ansible.builtin.unarchive`); largest entry used |
+
+The pipeline is: download → sniff content type (`file --brief --mime-type`, not URL extension, so redirect-served artifacts work) → decompress/extract by type → detect the real disk format with `qemu-img info` → convert to qcow2 unless it already is one. zstd-compressed images are not yet supported.
 
 ## Host requirements
 
 - `qemu-system-x86_64`, `qemu-img`
-- `xz` (for decompressing xz-compressed upstream images)
+- `xz`, `gzip`, `bzip2` (for decompressing compressed upstream images)
+- `unzip` (only when ingesting zip-archived images, e.g. MikroTik CHR `.img.zip`)
 - A NoCloud seed-ISO builder: `cloud-localds` (preferred) or `genisoimage`
 - `/dev/kvm` accessible to the running user (KVM acceleration); falls back to TCG otherwise
 - OVMF firmware files (only when a host sets `firmware: uefi`); paths are overridable via `mp_qemu_ovmf_code` / `mp_qemu_ovmf_vars`

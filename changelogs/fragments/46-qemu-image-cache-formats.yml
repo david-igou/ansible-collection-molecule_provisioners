@@ -1,0 +1,14 @@
+---
+minor_changes:
+  - >-
+    qemu role: the image cache now ingests compressed and non-qcow2 upstream
+    artifacts instead of only xz-compressed or already-qcow2 images. The
+    downloaded file is sniffed by content type and decompressed by detected
+    format — xz/gz/bz2 via ``community.general.decompress`` and zip via
+    ``ansible.builtin.unarchive`` (largest extracted entry wins) — then its
+    real disk format is detected with ``qemu-img info`` and converted to qcow2
+    when it isn't already one (e.g. a raw ``.img``). Previously any non-xz
+    download was renamed straight to ``disk.qcow2`` with no format check,
+    silently producing a broken base image for raw/zip/gz sources such as
+    MikroTik CHR's ``.img.zip``. Detection is by content, not URL extension.
+    zstd-compressed images are not yet supported (#46).

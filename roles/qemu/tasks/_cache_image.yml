@@ -1,0 +1,154 @@
+---
+# Ingest one upstream image artifact into the cache as a valid qcow2.
+#
+# Flow: download -> sniff MIME -> decompress/extract by detected type
+# (xz/gz/bz2 via community.general.decompress, zip via ansible.builtin.unarchive)
+# -> detect the real disk format with `qemu-img info` -> convert to qcow2 when it
+# isn't already one (e.g. a raw .img), otherwise rename into place.
+#
+# The whole body is skipped when the final disk.qcow2 already exists, so a cache
+# hit is a no-op and the upstream artifact is never re-downloaded.
+#
+# Loop var: _mp_qemu_image (a {key: url, value: checksum_or_none} dict item).
+- name: Resolve cache dir for this image
+  ansible.builtin.set_fact:
+    _mp_qemu_img_dir: "{{ mp_qemu_image_cache_dir }}/{{ _mp_qemu_image.key | ansible.builtin.hash('sha256') }}"
+
+# Decide cache hit ONCE, before the block. A block's `when` is re-evaluated per
+# child task at run time, so a guard that probed disk.qcow2 directly would flip
+# to "skip" for every task after the convert/rename creates it — silently
+# dropping the cleanup step. Snapshotting into a fact keeps the guard stable.
+- name: Determine whether this image is already cached
+  ansible.builtin.set_fact:
+    _mp_qemu_cache_hit: "{{ (_mp_qemu_img_dir ~ '/disk.qcow2') is file }}"
+
+- name: Ingest and cache base image
+  when: not _mp_qemu_cache_hit
+  block:
+    - name: Ensure per-image cache subdir exists
+      ansible.builtin.file:
+        path: "{{ _mp_qemu_img_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Download base image to neutral staging name (idempotent, cached)
+      ansible.builtin.get_url:
+        url: "{{ _mp_qemu_image.key }}"
+        dest: "{{ _mp_qemu_img_dir }}/disk.download"
+        checksum: "{{ _mp_qemu_image.value | default(omit, true) }}"
+        mode: "0644"
+
+    - name: Detect MIME type of downloaded image
+      ansible.builtin.command:
+        cmd: "file --brief --mime-type {{ _mp_qemu_img_dir }}/disk.download"
+      register: _mp_qemu_mime
+      changed_when: false
+
+    # Map sniffed MIME -> handler. Unknown types fall through as 'none', i.e. the
+    # download is treated as an uncompressed disk image and handed straight to
+    # qemu-img (which decides qcow2 vs raw). Detection is by content, not URL
+    # extension, so redirect-served artifacts classify correctly.
+    - name: Classify compression from MIME type
+      ansible.builtin.set_fact:
+        _mp_qemu_compression: "{{ _mp_qemu_mime_map[_mp_qemu_mime.stdout] | default('none') }}"
+      vars:
+        _mp_qemu_mime_map:
+          application/x-xz: xz
+          application/gzip: gz
+          application/x-gzip: gz
+          application/x-bzip2: bz2
+          application/zip: zip
+
+    - name: Decompress single-file compressed image (xz/gz/bz2)
+      community.general.decompress:
+        src: "{{ _mp_qemu_img_dir }}/disk.download"
+        dest: "{{ _mp_qemu_img_dir }}/disk.payload"
+        format: "{{ _mp_qemu_compression }}"
+        remove: false
+      when: _mp_qemu_compression in ['xz', 'gz', 'bz2']
+
+    - name: Extract zip archive
+      when: _mp_qemu_compression == 'zip'
+      block:
+        - name: Ensure extraction dir exists
+          ansible.builtin.file:
+            path: "{{ _mp_qemu_img_dir }}/extracted"
+            state: directory
+            mode: "0755"
+
+        - name: Unpack zip into extraction dir
+          ansible.builtin.unarchive:
+            src: "{{ _mp_qemu_img_dir }}/disk.download"
+            dest: "{{ _mp_qemu_img_dir }}/extracted"
+            remote_src: true
+
+        - name: Enumerate extracted files
+          ansible.builtin.find:
+            paths: "{{ _mp_qemu_img_dir }}/extracted"
+            recurse: true
+            file_type: file
+          register: _mp_qemu_zip_files
+
+        - name: Fail when zip contained no files
+          ansible.builtin.assert:
+            that: _mp_qemu_zip_files.files | length > 0
+            fail_msg: "Zip archive {{ _mp_qemu_image.key }} contained no files to use as a disk image."
+
+        # A disk image is the dominant payload of an appliance zip; pick the
+        # largest entry so single-entry zips (the common case) and zips that
+        # also bundle a checksum/readme both resolve to the actual image.
+        - name: Select largest extracted file as the disk image
+          ansible.builtin.set_fact:
+            _mp_qemu_zip_payload: "{{ (_mp_qemu_zip_files.files | sort(attribute='size') | last).path }}"
+
+    # Resolve the path of the uncompressed disk image, whichever branch produced it.
+    - name: Resolve uncompressed payload path
+      ansible.builtin.set_fact:
+        _mp_qemu_payload: >-
+          {{ _mp_qemu_zip_payload if _mp_qemu_compression == 'zip'
+             else (_mp_qemu_img_dir ~ '/disk.payload') if _mp_qemu_compression in ['xz', 'gz', 'bz2']
+             else (_mp_qemu_img_dir ~ '/disk.download') }}
+
+    # Trust qemu-img, not the file extension or MIME: `file` is unreliable on raw
+    # disk images, so always probe the real format and branch on that.
+    - name: Detect disk format of payload
+      ansible.builtin.command:
+        cmd: "qemu-img info --output=json {{ _mp_qemu_payload }}"
+      register: _mp_qemu_imginfo
+      changed_when: false
+
+    - name: Parse detected disk format
+      ansible.builtin.set_fact:
+        _mp_qemu_disk_format: "{{ (_mp_qemu_imginfo.stdout | from_json).format }}"
+
+    - name: Move already-qcow2 payload into place
+      ansible.builtin.command:
+        argv:
+          - mv
+          - "--"
+          - "{{ _mp_qemu_payload }}"
+          - "{{ _mp_qemu_img_dir }}/disk.qcow2"
+        creates: "{{ _mp_qemu_img_dir }}/disk.qcow2"
+      when: _mp_qemu_disk_format == 'qcow2'
+
+    - name: Convert non-qcow2 payload to qcow2
+      ansible.builtin.command:
+        argv:
+          - qemu-img
+          - convert
+          - "-O"
+          - qcow2
+          - "{{ _mp_qemu_payload }}"
+          - "{{ _mp_qemu_img_dir }}/disk.qcow2"
+        creates: "{{ _mp_qemu_img_dir }}/disk.qcow2"
+      when: _mp_qemu_disk_format != 'qcow2'
+
+    - name: Remove staging artifacts after caching
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ _mp_qemu_img_dir }}/disk.download"
+        - "{{ _mp_qemu_img_dir }}/disk.payload"
+        - "{{ _mp_qemu_img_dir }}/extracted"
+      when: (_mp_qemu_img_dir ~ '/disk.qcow2') is file
