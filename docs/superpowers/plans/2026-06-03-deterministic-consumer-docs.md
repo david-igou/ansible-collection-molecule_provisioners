@@ -361,26 +361,31 @@ git commit -m "docs(readme): add backend prereqs snippet + OVMF/pylibssh notes (
 
 ---
 
-### Task 5: Add a top-level `AGENTS.md` determinism checklist
+### Task 5: Add a determinism checklist to `AGENTS.md`
 
 A one-pass checklist an agent can follow to land the deterministic setup, cross-linking the example files and README sections from the earlier tasks.
 
+> **Note:** `AGENTS.md` already exists at the repo root with a short ansible-creator reference (lines 1–7). **Append** the new section below — do not recreate the file or drop the existing reference.
+
 **Files:**
 
-- Create: `AGENTS.md`
+- Modify: `AGENTS.md` (append the determinism checklist section after the existing ansible-creator reference)
 
-- [ ] **Step 1: Create `AGENTS.md`**
+- [ ] **Step 1: Append the determinism-checklist section to `AGENTS.md`**
+
+Leave the existing content (the `# AGENTS.md` heading and the ansible-creator reference) untouched. Append:
 
 ```markdown
-# AGENTS.md
 
-Guidance for agents adding a Molecule scenario to a consumer collection that
-uses `david_igou.molecule_provisioners`. Following this checklist yields a
+## Adding a Molecule scenario to a consumer collection
+
+The checklist below is for agents adding a Molecule scenario to a **consumer**
+collection that uses `david_igou.molecule_provisioners`. Following it yields a
 **deterministic**, environment-independent test setup in one pass, matching the
 maintainer's reference consumer
 ([`ansible-collection-armbian`](https://github.com/david-igou/ansible-collection-armbian)).
 
-## Determinism checklist
+### Determinism checklist
 
 - [ ] **Pin the provisioner version.** In `extensions/molecule/requirements-test.yml`,
       pin `david_igou.molecule_provisioners` to an exact Galaxy version (e.g.
@@ -400,9 +405,7 @@ maintainer's reference consumer
       guests, and the OVMF path notes for `qemu` UEFI.
 
 Do all five and re-running the same scenario a week later produces the same
-provisioner behavior.
-
-See the [README](README.md) for the full consumer walkthrough.
+provisioner behavior. See the [README](README.md) for the full consumer walkthrough.
 ```
 
 - [ ] **Step 2: Lint `AGENTS.md`**

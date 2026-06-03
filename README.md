@@ -216,6 +216,7 @@ Notes for the VM backends (`qemu`, `kubevirt`):
   symlink the Debian paths to the role defaults:
 
   ```bash
+  mkdir -p /usr/share/edk2/ovmf
   ln -sf /usr/share/OVMF/OVMF_CODE.fd /usr/share/edk2/ovmf/OVMF_CODE.fd
   ln -sf /usr/share/OVMF/OVMF_VARS.fd /usr/share/edk2/ovmf/OVMF_VARS.fd
   ```
