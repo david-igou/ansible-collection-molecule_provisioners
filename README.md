@@ -15,31 +15,52 @@ Stop redefining `create.yml`/`destroy.yml`/`prepare.yml` per repo. Install this 
 
 ## Installing
 
-Until the first Galaxy release lands, install from git. Molecule's
-`dependency` step looks for **`collections.yml`** (not `requirements.yml`)
-in the scenario directory by default, so place this at
-`extensions/molecule/<scenario>/collections.yml`:
+The collection is published on [Ansible Galaxy](https://galaxy.ansible.com/ui/repo/published/david_igou/molecule_provisioners/).
+**Pin an exact version** so test runs stay deterministic — a floating `main`
+can change provisioner behavior between runs with no change on your side.
+
+The recommended pattern (used by the reference consumer
+[`ansible-collection-armbian`](https://github.com/david-igou/ansible-collection-armbian))
+centralizes the pin in one file shared by every scenario, instead of a
+per-scenario `collections.yml` that drifts independently:
+
+**1. Pin the version in `extensions/molecule/requirements-test.yml`:**
+
+```yaml
+collections:
+  - name: david_igou.molecule_provisioners
+    version: 0.0.1-alpha
+```
+
+**2. Wire it into every scenario once via `extensions/molecule/config.yml`:**
+
+```yaml
+dependency:
+  name: galaxy
+  enabled: true
+  options:
+    requirements-file: extensions/molecule/requirements-test.yml
+```
+
+Molecule auto-merges `extensions/molecule/config.yml` into every scenario — but
+only when invoked from the **collection root** (see [Running tests](#running-tests)).
+Both files ship ready-to-copy under [`docs/examples/`](docs/examples/).
+
+<details>
+<summary>Tracking unreleased changes (git install)</summary>
+
+To test against unreleased changes, point at the git repo instead of a Galaxy
+version. Molecule's `dependency` step also reads a scenario-local
+**`collections.yml`** (not `requirements.yml`):
 
 ```yaml
 collections:
   - name: https://github.com/david-igou/ansible-collection-molecule_provisioners.git
     type: git
-    version: main # or a tag like '1.1.0'
+    version: main # floats — not for reproducible runs
 ```
 
-Once published to Galaxy, this will work as well:
-
-```bash
-ansible-galaxy collection install david_igou.molecule_provisioners
-```
-
-Or pinned in `collections.yml`:
-
-```yaml
-collections:
-  - name: david_igou.molecule_provisioners
-    version: ">=1.0.0,<2.0.0"
-```
+</details>
 
 ## Using
 
