@@ -198,6 +198,28 @@ tight. Copies of both files ship under [`docs/examples/`](docs/examples/).
 | `qemu` | `qemu-system-x86_64`, `qemu-img`, `cloud-localds` (or `genisoimage`); OVMF firmware only when a host sets `firmware: uefi` |
 | `docker` | A reachable local docker daemon and the `docker` python package (`pip install docker`) |
 
+On a Debian/Ubuntu controller, the `qemu` backend's system prerequisites are:
+
+```bash
+apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils ovmf sshpass
+```
+
+Notes for the VM backends (`qemu`, `kubevirt`):
+
+- **`network_cli` guests:** install `ansible-pylibssh` (`pip install ansible-pylibssh`).
+  paramiko fails to negotiate SSH with some network OSes (e.g. RouterOS); pylibssh
+  is required for those guests.
+- **OVMF path (qemu UEFI only):** the role defaults to the Fedora/RHEL paths
+  `mp_qemu_ovmf_code: /usr/share/edk2/ovmf/OVMF_CODE.fd` and
+  `mp_qemu_ovmf_vars: /usr/share/edk2/ovmf/OVMF_VARS.fd`. Debian/Ubuntu ship OVMF
+  under `/usr/share/OVMF/`. Either override those two vars in `group_vars`, or
+  symlink the Debian paths to the role defaults:
+
+  ```bash
+  ln -sf /usr/share/OVMF/OVMF_CODE.fd /usr/share/edk2/ovmf/OVMF_CODE.fd
+  ln -sf /usr/share/OVMF/OVMF_VARS.fd /usr/share/edk2/ovmf/OVMF_VARS.fd
+  ```
+
 ## What's in the box
 
 - `playbooks/{create,destroy,prepare}.yml` — top-level dispatchers; read `mp_backend` (driven by `$PROVISIONER` env var by convention), validate, dispatch.
