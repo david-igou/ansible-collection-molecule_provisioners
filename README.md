@@ -147,7 +147,47 @@ mp_defaults:
 
 Switch backends at runtime: `PROVISIONER=podman molecule test` (or `kubevirt`, `qemu`, `docker`).
 
+A single-backend scenario may hardcode `mp_backend: qemu`, but the env-driven
+form above is preferred — it keeps the `PROVISIONER=<backend>` override working
+and stays consistent with multi-backend repos.
+
 See [`docs/examples/`](docs/examples/) for the canonical starter and [`docs/MIGRATION.md`](docs/MIGRATION.md) if you're translating from a `platforms:`-based scenario.
+
+## Running tests
+
+Molecule auto-discovers `extensions/molecule/config.yml` — which wires in the
+pinned dependency (see [Installing](#installing)) — **only when invoked from the
+collection root**. Run it from anywhere else and the deterministic dependency
+step silently won't engage. Commit a `Makefile` at the collection root that sets
+`MOLECULE_GLOB` and runs from root:
+
+```makefile
+export MOLECULE_GLOB := extensions/molecule/*/molecule.yml
+
+.PHONY: test
+test:
+	molecule test --all
+```
+
+`make test` then runs every scenario. For one scenario: `molecule test -s <scenario>`.
+Switch backends with `PROVISIONER=<backend> make test`.
+
+Also commit an `ansible.cfg` at the collection root so collection resolution and
+connection timeouts don't depend on each contributor's shell environment:
+
+```ini
+[defaults]
+collections_path = ~/.ansible/collections
+
+[persistent_connection]
+connect_timeout = 120
+command_timeout = 120
+```
+
+The `[persistent_connection]` bump matters for the `qemu` and `kubevirt`
+backends: their SSH guests are frequently managed over `network_cli`
+(community.routeros, community.network, …), and the default 30s timeouts are too
+tight. Copies of both files ship under [`docs/examples/`](docs/examples/).
 
 ## Controller-host prerequisites by backend
 
