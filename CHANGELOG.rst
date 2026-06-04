@@ -4,6 +4,19 @@ David\_igou Molecule\_provisioners Collection Release Notes
 
 .. contents:: Topics
 
+v0.0.4-alpha
+============
+
+Minor Changes
+-------------
+
+- qemu - ``mp.qemu.extra_args`` is now validated as a list of strings, failing fast with a clear message on a bare string or non-string elements (https://github.com/david-igou/ansible-collection-molecule_provisioners/issues/50).
+
+Bugfixes
+--------
+
+- qemu - ``mp.qemu.extra_args`` is now appended to the launched ``qemu-system`` argv on both the BIOS and UEFI paths. It was previously advertised in the per-host schema but silently dropped, leaving no supported way to add extra NICs or other qemu CLI flags to a provisioned VM (https://github.com/david-igou/ansible-collection-molecule_provisioners/issues/50).
+
 v0.0.2-alpha
 ============
 
