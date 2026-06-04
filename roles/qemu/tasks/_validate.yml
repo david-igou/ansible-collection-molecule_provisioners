@@ -11,3 +11,21 @@
   loop: "{{ groups['molecule'] }}"
   loop_control:
     label: "{{ item }}"
+
+- name: Validate extra_args is a list of strings when set
+  ansible.builtin.assert:
+    that:
+      - >-
+        _mp_specs[item].extra_args is not defined
+        or (_mp_specs[item].extra_args is sequence
+            and _mp_specs[item].extra_args is not string
+            and (_mp_specs[item].extra_args | select('string') | list | length)
+                == (_mp_specs[item].extra_args | length))
+    fail_msg: >-
+      Host '{{ item }}' has an invalid mp.qemu.extra_args
+      ({{ _mp_specs[item].extra_args | type_debug }}). It must be a YAML list of
+      qemu CLI argument strings — quote each element, e.g.
+      ['-netdev', 'user,id=net1', '-device', 'virtio-net-pci,netdev=net1'].
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    label: "{{ item }}"
