@@ -187,7 +187,7 @@ jobs:
         working-directory: ansible_collections/david_igou/molecule_provisioners
         run: |
           ansible-galaxy collection install \
-            containers.podman kubernetes.core community.crypto
+            containers.podman kubernetes.core community.crypto community.general
 
       - name: Cache base qcow2 images
         uses: actions/cache@v4

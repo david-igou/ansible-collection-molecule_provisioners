@@ -28,7 +28,29 @@ all:
               firmware: bios                                                 # optional, role default 'bios'; 'uefi' loads OVMF pflash
               cpu_model: host                                                # optional; defaults to 'host' under KVM, 'Nehalem' under TCG. Set explicitly to override (e.g. 'EPYC', 'Skylake-Server', 'Westmere'). Nehalem is the oldest named model that satisfies the x86-64-v2 ABI glibc requires on RHEL/Rocky/CentOS 9+.
               disk_size: ""                                                  # optional; resizes the overlay and grows root on first boot via cloud-init growpart
+              extra_args: []                                                 # optional; raw qemu-system CLI args appended to argv (BIOS and UEFI). Must be a flat list of strings — quote elements containing '='. Canonical use is extra NICs.
 ```
+
+### Adding extra NICs with `extra_args`
+
+The role launches each VM with a single SLIRP NIC (`net0`, the SSH hostfwd).
+To give a guest more interfaces, append `-netdev`/`-device` pairs via
+`extra_args`:
+
+```yaml
+mp:
+  qemu:
+    image: ...
+    extra_args:
+      - -netdev
+      - "user,id=net1"
+      - -device
+      - "virtio-net-pci,netdev=net1"
+```
+
+This adds a second NIC the guest kernel enumerates on boot. `extra_args` is a
+raw escape hatch — its elements are passed to `qemu-system-x86_64` verbatim, so
+any qemu flag works, not just networking.
 
 Shared defaults can be hoisted into `mp_defaults.qemu` in `inventory/group_vars/molecule.yml` (overrides role defaults; per-host fields override mp_defaults). Field resolution order in the role: role defaults <- `mp_defaults.qemu` <- `hostvars[item].mp.qemu`.
 

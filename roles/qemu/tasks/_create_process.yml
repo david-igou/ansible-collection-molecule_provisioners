@@ -51,8 +51,7 @@
     _cpu_model: >-
       {{ _mp_specs[item].cpu_model
          | default('host' if _mp_qemu_kvm_ok | default(false) else 'Nehalem', true) }}
-  ansible.builtin.command:
-    argv:
+    _base_argv:
       - qemu-system-x86_64
       - -machine
       - "accel={{ _accel }}"
@@ -77,6 +76,11 @@
       - "unix:{{ molecule_ephemeral_directory }}/{{ item }}.qmp,server,nowait"
       - -display
       - "none"
+  ansible.builtin.command:
+    # Append per-host extra_args (raw qemu CLI flags, e.g. extra NICs). The
+    # field arrives in _mp_specs via _spec_merge.yml's deep-merge; _validate.yml
+    # guarantees it is a list of strings when set. See issue #50.
+    argv: "{{ _base_argv + (_mp_specs[item].extra_args | default([])) }}"
     creates: "{{ molecule_ephemeral_directory }}/{{ item }}.pid"
   when: _mp_specs[item].firmware | default('bios') != 'uefi'
   loop: "{{ groups['molecule'] }}"
@@ -94,8 +98,7 @@
     _cpu_model: >-
       {{ _mp_specs[item].cpu_model
          | default('host' if _mp_qemu_kvm_ok | default(false) else 'qemu64-v2', true) }}
-  ansible.builtin.command:
-    argv:
+    _base_argv:
       - qemu-system-x86_64
       - -drive
       - "if=pflash,format=raw,readonly=on,file={{ mp_qemu_ovmf_code }}"
@@ -124,6 +127,9 @@
       - "unix:{{ molecule_ephemeral_directory }}/{{ item }}.qmp,server,nowait"
       - -display
       - "none"
+  ansible.builtin.command:
+    # Append per-host extra_args (raw qemu CLI flags, e.g. extra NICs). See #50.
+    argv: "{{ _base_argv + (_mp_specs[item].extra_args | default([])) }}"
     creates: "{{ molecule_ephemeral_directory }}/{{ item }}.pid"
   when: _mp_specs[item].firmware | default('bios') == 'uefi'
   loop: "{{ groups['molecule'] }}"

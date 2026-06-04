@@ -177,3 +177,33 @@
           got {{ _ctr.HostConfig.Privileged | default('<unset>') }}.
           This usually means group_vars/molecule.yml's mp_defaults didn't
           reach the create dispatcher.
+
+- name: Verify — qemu guest received the extra_args NIC
+  hosts: molecule
+  gather_facts: true
+  vars:
+    # Source the backend from PROVISIONER (matches inventory/group_vars/molecule.yml).
+    _mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
+  tasks:
+    - name: Skip non-qemu backends
+      ansible.builtin.meta: end_play
+      when: _mp_backend != 'qemu'
+
+    # Regression for #50: mp.qemu.extra_args was advertised but dropped, so the
+    # VM always launched with only net0. The inventory declares a second NIC
+    # (net1) via extra_args; the guest kernel enumerates it regardless of
+    # cloud-init, so a passthrough that works yields >=2 non-loopback interfaces.
+    - name: Assert the guest enumerates the extra_args NIC
+      ansible.builtin.assert:
+        that:
+          - (ansible_interfaces | reject('equalto', 'lo') | list | length) >= 2
+        fail_msg: >-
+          Expected >=2 non-loopback interfaces in the qemu guest (net0 + the
+          extra_args net1); got
+          {{ ansible_interfaces | reject('equalto', 'lo') | list }}.
+          mp.qemu.extra_args was likely dropped instead of appended to the
+          qemu argv.
+        success_msg: >-
+          Guest sees
+          {{ ansible_interfaces | reject('equalto', 'lo') | list | length }}
+          non-loopback interfaces — the extra_args NIC reached the VM.
