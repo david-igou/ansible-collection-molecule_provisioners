@@ -1,7 +1,7 @@
 ---
 namespace: david_igou
 name: molecule_provisioners
-version: 0.0.1-alpha
+version: 0.0.2-alpha
 readme: README.md
 authors:
   - David Igou <igou.david@gmail.com>

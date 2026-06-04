@@ -1,21 +1,55 @@
-======================================================
-David_igou Molecule_provisioners Collection Changelog
-======================================================
+===========================================================
+David\_igou Molecule\_provisioners Collection Release Notes
+===========================================================
 
 .. contents:: Topics
 
-v1.0.0
-======
+v0.0.2-alpha
+============
 
 Release Summary
 ---------------
 
-Initial release. Reusable Molecule provisioner playbooks and roles
-for podman and kubevirt backends. Consumers' scenario lifecycle
-files become one-line ``import_playbook`` wrappers; backend selected
-via ``$PROVISIONER`` (default ``podman``).
+First changelog-tracked alpha. Reusable Molecule provisioner playbooks
+and roles for the ``podman``, ``kubevirt``, ``qemu``, and ``docker``
+backends, built on molecule's ansible-native config shape. Consumers
+describe test instances in ``inventory/hosts.yml`` using nested
+``mp.<backend>.<field>`` hostvars and select the backend via the
+``mp_backend`` group var (typically driven from the ``$PROVISIONER``
+env var). Scenario lifecycle files become one-line ``import_playbook``
+wrappers using FQCNs — no ``driver:``, ``platforms:``, or
+``provisioner:`` blocks in the consumer's molecule.yml.
 
 Major Changes
 -------------
 
-- Initial v1.0.0 release.
+- Convert v1.0 release shape to molecule's ansible-native config. Consumers describe test instances in ``inventory/hosts.yml`` using nested ``mp.<backend>.<field>`` hostvars; backends are selected via the ``mp_backend`` group var (typically driven from the ``$PROVISIONER`` env var by convention). The ``platforms:``, ``driver:``, and ``provisioner:`` blocks no longer appear in the consumer's molecule.yml.
+
+Minor Changes
+-------------
+
+- Add ``docker`` backend. Creates containers via ``community.docker.docker_container`` against the local docker daemon and exposes them to subsequent molecule phases through the ``community.docker.docker`` connection plugin. Selected via ``mp_backend: docker`` (or ``PROVISIONER=docker``); per-host shape under ``mp.docker.{image, command, privileged, volumes, capabilities, networks, network_mode, env, exposed_ports, published_ports, tmpfs, security_opts, sysctls, ulimits, mounts, devices, etc_hosts, dns_servers, restart_policy, memory, ...}`` (full schema in the role README). Reserved network names (``bridge``, ``host``, ``none``) are filtered from the create/destroy network lifecycle. See ``docs/superpowers/specs/2026-05-22-docker-backend-design.md``. Intentionally omits the upstream ``molecule-plugins/docker`` features that don't fit a modern setup: wrapper-image build (``Dockerfile.j2``, ``pre_build_image``, ``buildargs``), private registry login (``docker_login``), and remote daemons / TLS. Consumers ship a fully prepared image and a reachable local docker socket.
+- Add ``qemu`` backend. Spawns a local ``qemu-system-x86_64 -daemonize`` per host, with cloud-init NoCloud seed-ISO bootstrap and SLIRP user-mode networking (SSH reachable on the controller at ``127.0.0.1:<mp_qemu_slirp_port_base + host index>``). Selected via ``mp_backend: qemu`` (or ``PROVISIONER=qemu``); per-host shape under ``mp.qemu.{image, image_checksum?, cpus?, memory?, disk_size?, ssh_user?, extra_args?}``. See ``docs/superpowers/specs/2026-05-21-qemu-backend-design.md``.
+- Add curated VirtualMachine parameterization for the ``kubevirt`` backend: discriminated ``boot_source`` (``container_disk``, ``data_volume_url``, ``data_volume_pvc``, ``pvc``), curated compute fields (``cpu``, ``memory``, ``memory_limit``, ``instancetype``, ``preference``), scheduling fields (``node_selector``, ``tolerations``, ``affinity``), extras (``extra_disks``, ``extra_volumes``, ``extra_interfaces``, ``extra_networks``), and a ``vm_overrides`` deep-merge escape hatch. See ``docs/superpowers/specs/2026-05-22-kubevirt-vm-parameters-design.md``.
+- kubevirt role: ``ssh_service.type`` now accepts ``None`` to skip Service creation entirely. ``connection_ip`` is required in this mode (validated on create). ``ansible_port`` defaults to 22 and can be overridden via ``ssh_service.port``. Unblocks setups where SSH access is provided by an external Route/Ingress, or where the controller can talk to pod IPs directly. ``NodePort`` remains the default; ``LoadBalancer`` / ``ClusterIP`` + port-forward remain out of scope (#31).
+- kubevirt role: new optional per-host ``connection_ip`` field. When set, the role uses it as ``ansible_host`` for that VM and skips the cluster-scoped Node lookup for that host. When every host pins one, the lookup is skipped entirely — namespace-scoped service accounts no longer need cluster-wide ``nodes [get, list]`` RBAC. Default behavior unchanged for hosts that don't set it (#30).
+- podman and docker roles: default ``ansible_user`` to ``root`` in the runtime inventory written at create time. Previously the runtime inventory carried only ``ansible_connection``, and the connection plugin defaulted to the controller's local user inside the container, which then made gather_facts fail with PAM sudo errors. Consumer-set ``ansible_user`` in static inventory or group_vars wins — the role reads it from hostvars before writing the runtime inventory (#35).
+- podman role: ``_spec_merge.yml`` / ``_validate.yml`` extracted to mirror the docker role layout; switches to recursive ``combine`` so ``mp_defaults.podman.<dict>`` and per-host overrides compose instead of last-write-wins.
+- podman role: containers are now labeled ``owner=molecule`` (overridable via ``mp.podman.labels.owner``). New ``david_igou.molecule_provisioners.reset`` playbook purges anything carrying that label. Pre-flight assertion catches ``ansible-core`` older than the collection's 2.15 floor.
+- podman role: expose ``systemd`` and ``cgroupns`` per-host fields (closes #19) and add Group A schema fields from the parity catalogue in #24: ``hostname``, ``tty``, ``detach``, ``etc_hosts``, ``dns_servers``, ``pid_mode``, ``security_opts``, ``devices``, ``ulimits``, ``ip``, ``restart_policy``, ``restart_retries``.
+- podman role: honor the ``MOLECULE_PODMAN_EXECUTABLE`` env var via the new ``mp_podman_executable`` role variable; threaded through every ``containers.podman.podman_*`` module call.
+- podman role: new ``extra_opts`` catch-all and curated ``cgroup_manager``, ``storage_opt``, ``storage_driver`` fields, all assembled into the ``cmd_args`` passed to ``containers.podman.podman_container``.
+- podman role: widen ``podman_network`` to accept ``str``, ``list[str]``, or ``list[dict]`` (``{name, subnet?, gateway?}``). Reserved-network list now also includes ``ns`` and ``private``.
+- qemu role: the image cache now ingests compressed and non-qcow2 upstream artifacts instead of only xz-compressed or already-qcow2 images. The downloaded file is sniffed by content type and decompressed by detected format — xz/gz/bz2 via ``community.general.decompress`` and zip via ``ansible.builtin.unarchive`` (largest extracted entry wins) — then its real disk format is detected with ``qemu-img info`` and converted to qcow2 when it isn't already one (e.g. a raw ``.img``). Previously any non-xz download was renamed straight to ``disk.qcow2`` with no format check, silently producing a broken base image for raw/zip/gz sources such as MikroTik CHR's ``.img.zip``. Detection is by content, not URL extension. zstd-compressed images are not yet supported (#46).
+
+Bugfixes
+--------
+
+- dispatcher: ``mp_defaults`` was silently dropped during the create and destroy phases because they run on ``hosts: localhost``, which isn't in the ``molecule`` group — so ``inventory/group_vars/molecule.yml`` (the documented home for the var) was out of scope. The merge in each backend's ``_spec_merge.yml`` would fall through to role defaults without warning. The dispatcher now pulls ``mp_defaults`` from the first molecule host's hostvars when not already in localhost scope, matching the existing ``mp_backend`` lookup pattern (#36).
+- kubevirt renderer no longer emits empty ``spec.instancetype`` / ``spec.preference`` blocks when those fields are unset. The previous gate relied on Python ``None`` surviving Jinja templating, which only holds in ansible-core 2.19+; on the supported floor (2.15+) it leaked an empty ``{'name': ''}`` into the VM spec.
+- qemu role: pass an explicit ``-cpu`` flag to ``qemu-system-x86_64``. Without it, qemu fell back to a model that strips x86-64-v2 features and RHEL/Rocky/CentOS 9+ panic at the first userspace process because glibc requires v2. New per-host ``cpu_model`` knob; defaults to ``host`` under KVM, ``Nehalem`` under TCG (#37).
+
+Documentation Changes
+---------------------
+
+- Consumer docs now teach a deterministic test-setup pattern aligned with the reference consumer: the README "Installing" section leads with a pinned Galaxy install plus a shared ``extensions/molecule/requirements-test.yml`` + ``extensions/molecule/config.yml`` instead of a floating per-scenario ``collections.yml``; a new "Running tests" section documents the ``MOLECULE_GLOB`` / run-from-collection-root requirement and a committed ``ansible.cfg`` (collections path + ``[persistent_connection]`` timeouts for ``network_cli`` guests); the per-backend prerequisites gain a copy-paste install snippet, an ``ansible-pylibssh`` note, and OVMF path-override guidance for ``qemu`` UEFI. Ships ``docs/examples/{requirements-test.yml, config.yml,ansible.cfg,Makefile}`` and an ``AGENTS.md`` determinism checklist (#45).
