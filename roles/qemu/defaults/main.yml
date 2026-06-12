@@ -11,6 +11,12 @@ mp_qemu_wait_timeout: 180
 # Base port for SLIRP host-forwards. ansible_port = base + host index.
 mp_qemu_slirp_port_base: 2222
 
+# Base-image download robustness. get_url's default 10s read timeout is
+# too tight for cloud-image mirrors that stall before the first byte
+# (cloud.debian.org does this intermittently); retry a few times on top.
+mp_qemu_image_download_timeout: 60
+mp_qemu_image_download_retries: 5
+
 # Image cache root. Honours XDG_CACHE_HOME, falls back to ~/.cache/molecule-qemu.
 mp_qemu_image_cache_dir: >-
   {{ (lookup('env', 'XDG_CACHE_HOME') | default(lookup('env', 'HOME') ~ '/.cache', true))
