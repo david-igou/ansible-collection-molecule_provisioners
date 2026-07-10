@@ -10,17 +10,20 @@
       - "'type' in _mp_specs[item].boot_source"
     fail_msg: >-
       Host '{{ item }}' is missing `mp.kubevirt.boot_source`. Set it to
-      one of: container_disk, data_volume_url, data_volume_pvc, pvc.
+      one of: container_disk, data_volume_url, data_volume_pvc,
+      data_volume_source_ref, pvc.
 
 - name: "Assert boot_source.type is supported: {{ item }}"
   ansible.builtin.assert:
     that:
       - _mp_specs[item].boot_source.type in
-        ['container_disk', 'data_volume_url', 'data_volume_pvc', 'pvc']
+        ['container_disk', 'data_volume_url', 'data_volume_pvc',
+         'data_volume_source_ref', 'pvc']
     fail_msg: >-
       Host '{{ item }}' has unsupported boot_source.type
       '{{ _mp_specs[item].boot_source.type }}'. Supported:
-      container_disk, data_volume_url, data_volume_pvc, pvc.
+      container_disk, data_volume_url, data_volume_pvc,
+      data_volume_source_ref, pvc.
 
 - name: "Assert container_disk required fields: {{ item }}"
   ansible.builtin.assert:
@@ -50,6 +53,18 @@
       Host '{{ item }}' boot_source.type=data_volume_pvc requires
       source.name, source.namespace, and size.
   when: _mp_specs[item].boot_source.type == 'data_volume_pvc'
+
+- name: "Assert data_volume_source_ref required fields: {{ item }}"
+  ansible.builtin.assert:
+    that:
+      - _mp_specs[item].boot_source.source_ref is defined
+      - _mp_specs[item].boot_source.source_ref.name is defined
+      - _mp_specs[item].boot_source.source_ref.namespace is defined
+      - _mp_specs[item].boot_source.size is defined
+    fail_msg: >-
+      Host '{{ item }}' boot_source.type=data_volume_source_ref requires
+      source_ref.name, source_ref.namespace, and size.
+  when: _mp_specs[item].boot_source.type == 'data_volume_source_ref'
 
 - name: "Assert pvc required fields: {{ item }}"
   ansible.builtin.assert:

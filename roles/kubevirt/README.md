@@ -18,7 +18,9 @@ The minimal verb set with the default `container_disk` boot source:
 | namespace | `services` | `create`, `get`, `delete` |
 | namespace | `virtualmachineinstances.kubevirt.io` | `get` |
 
-`secrets` access is **not** required in `container_disk` mode — the role injects the SSH key via cloud-init userData on the VM spec, not as a Kubernetes Secret. The `data_volume_url` / `data_volume_pvc` modes additionally need `datavolumes.cdi.kubevirt.io [create, get, delete]`.
+`secrets` access is **not** required in `container_disk` mode — the role injects the SSH key via cloud-init userData on the VM spec, not as a Kubernetes Secret. The `data_volume_url` / `data_volume_pvc` / `data_volume_source_ref` modes additionally need `datavolumes.cdi.kubevirt.io [create, get, delete]` in `mp.kubevirt.namespace`.
+
+`data_volume_source_ref` clones a golden image across namespaces (the `DataSource` and its backing PVC live in the OS-images namespace, e.g. `openshift-virtualization-os-images`). CDI enforces a cross-namespace authorization check for this: the service account in `KUBECONFIG` additionally needs `create` on the **`datavolumes/source`** subresource in the **source** namespace (`source_ref.namespace`), on top of the `datavolumes [create, get, delete]` grant in `mp.kubevirt.namespace`. Without it, the DataVolume is created but stalls and the CDI controller reports an authorization/`clone` error. (`data_volume_pvc` needs the same `datavolumes/source create` in its `source.namespace` when cloning cross-namespace.)
 
 The cluster-scoped `nodes` requirement is currently the tight spot for least-privilege namespaced setups (it's used to pick the NodePort connection IP). See [issue #30](https://github.com/david-igou/ansible-collection-molecule_provisioners/issues/30) for an opt-out via `mp.kubevirt.connection_ip`.
 
@@ -43,7 +45,8 @@ all:
           mp:
             kubevirt:
               # Required: boot source (one of container_disk, data_volume_url,
-              # data_volume_pvc, pvc). See "Boot sources" below.
+              # data_volume_pvc, data_volume_source_ref, pvc). See "Boot
+              # sources" below.
               boot_source:
                 type: container_disk
                 image: quay.io/containerdisks/ubuntu:24.04
@@ -123,6 +126,33 @@ boot_source:
   size: 10Gi                  # required
   storage_class: standard     # optional
 ```
+
+### `data_volume_source_ref` — CDI clone from a DataSource (golden image)
+
+Requires CDI installed on the cluster. Boots from a CDI `DataSource` (golden
+image) via `dataVolumeTemplates[].spec.sourceRef`. Use this instead of
+`data_volume_pvc` when the golden-image PVC has a rolling name managed by a
+`DataImportCron` (e.g. `centos-stream10-1fcd75f226b4`) — the `DataSource` is a
+stable indirection that always points at the current PVC, so the static PVC name
+in `data_volume_pvc` can't track it.
+
+```yaml
+boot_source:
+  type: data_volume_source_ref
+  source_ref:
+    name: centos-stream10                             # DataSource name (required)
+    namespace: openshift-virtualization-os-images     # required
+    kind: DataSource                                  # optional, default DataSource
+  size: 30Gi                  # required (storage request)
+  storage_class: ""           # optional, same semantics as data_volume_url
+```
+
+Renders a `dataVolumeTemplates` entry whose `spec.sourceRef` is `{kind, name,
+namespace}` and whose `spec.storage.resources.requests.storage` is `size`
+(`storageClassName` is added only when `storage_class` is set). Because the
+`DataSource` lives in a different namespace, this needs the cross-namespace CDI
+authorization grant — see the RBAC section above (`datavolumes/source create` in
+`source_ref.namespace`).
 
 ### `pvc` — direct mount of existing PVC
 
