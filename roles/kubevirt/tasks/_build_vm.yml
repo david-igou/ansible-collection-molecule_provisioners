@@ -139,6 +139,44 @@
           storage: "{{ _storage_block }}"
   when: _mp_specs[item].boot_source.type == 'data_volume_pvc'
 
+- name: "Dispatch boot_source data_volume_source_ref: {{ item }}"
+  vars:
+    _bs: "{{ _mp_specs[item].boot_source }}"
+    _dv_name: "{{ item }}-boot"
+    _source_ref: >-
+      {{
+        {
+          'kind': _bs.source_ref.kind | default('DataSource'),
+          'name': _bs.source_ref.name,
+          'namespace': _bs.source_ref.namespace,
+        }
+      }}
+    _storage_block: >-
+      {{
+        {
+          'resources': {'requests': {'storage': _bs.size}}
+        }
+        | combine(
+            {'storageClassName': _bs.storage_class} if _bs.storage_class is defined else {}
+          )
+      }}
+  ansible.builtin.set_fact:
+    __mp_boot_disk:
+      name: containerdisk
+      disk:
+        bus: virtio
+    __mp_boot_volume:
+      name: containerdisk
+      dataVolume:
+        name: "{{ _dv_name }}"
+    __mp_data_volume_templates:
+      - metadata:
+          name: "{{ _dv_name }}"
+        spec:
+          sourceRef: "{{ _source_ref }}"
+          storage: "{{ _storage_block }}"
+  when: _mp_specs[item].boot_source.type == 'data_volume_source_ref'
+
 - name: "Dispatch boot_source pvc: {{ item }}"
   vars:
     _bs: "{{ _mp_specs[item].boot_source }}"

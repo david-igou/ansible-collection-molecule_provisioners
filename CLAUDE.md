@@ -76,7 +76,7 @@ all:
               # extra_opts, labels
             kubevirt: # required when mp_backend == kubevirt
               boot_source: # required: discriminated union
-                type: container_disk #   container_disk | data_volume_url | data_volume_pvc | pvc
+                type: container_disk #   container_disk | data_volume_url | data_volume_pvc | data_volume_source_ref | pvc
                 image: <str> #   per-type fields; see roles/kubevirt/README.md
               namespace: <str> # optional, role default 'molecule'
               ssh_user: <str> # optional, role default 'cloud-user'

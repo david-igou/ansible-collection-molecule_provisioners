@@ -168,6 +168,91 @@ def test_data_volume_pvc_omits_storage_class_when_unset(render_vm) -> None:
     assert dv["spec"]["storage"]["resources"]["requests"]["storage"] == "20Gi"
 
 
+def test_data_volume_source_ref_renders_template(render_vm) -> None:
+    """data_volume_source_ref renders dataVolumeTemplates with sourceRef."""
+    vm = render_vm(
+        {
+            "boot_source": {
+                "type": "data_volume_source_ref",
+                "source_ref": {
+                    "name": "centos-stream10",
+                    "namespace": "openshift-virtualization-os-images",
+                    "kind": "DataSource",
+                },
+                "size": "30Gi",
+                "storage_class": "",
+            },
+        },
+    )
+    templates = vm["spec"]["dataVolumeTemplates"]
+    assert len(templates) == 1
+    dv = templates[0]
+    assert dv["metadata"]["name"] == "instance-boot"
+    assert dv["spec"]["sourceRef"] == {
+        "kind": "DataSource",
+        "name": "centos-stream10",
+        "namespace": "openshift-virtualization-os-images",
+    }
+    # sourceRef and source are mutually exclusive on a CDI DataVolume.
+    assert "source" not in dv["spec"]
+    assert dv["spec"]["storage"]["resources"]["requests"]["storage"] == "30Gi"
+    # storage_class set to "" is honored verbatim (same semantics as data_volume_url).
+    assert dv["spec"]["storage"]["storageClassName"] == ""
+
+
+def test_data_volume_source_ref_defaults_kind_to_datasource(render_vm) -> None:
+    """kind defaults to DataSource when source_ref.kind is omitted."""
+    vm = render_vm(
+        {
+            "boot_source": {
+                "type": "data_volume_source_ref",
+                "source_ref": {
+                    "name": "centos-stream10",
+                    "namespace": "openshift-virtualization-os-images",
+                },
+                "size": "30Gi",
+            },
+        },
+    )
+    dv = vm["spec"]["dataVolumeTemplates"][0]
+    assert dv["spec"]["sourceRef"]["kind"] == "DataSource"
+
+
+def test_data_volume_source_ref_boot_volume_references_template(render_vm) -> None:
+    """The VM's boot volume references the dataVolumeTemplate by name."""
+    vm = render_vm(
+        {
+            "boot_source": {
+                "type": "data_volume_source_ref",
+                "source_ref": {"name": "centos-stream10", "namespace": "os-images"},
+                "size": "30Gi",
+            },
+        },
+    )
+    boot = next(
+        v for v in vm["spec"]["template"]["spec"]["volumes"] if v["name"] == "containerdisk"
+    )
+    assert boot["dataVolume"]["name"] == "instance-boot"
+    assert "containerDisk" not in boot
+    assert "persistentVolumeClaim" not in boot
+
+
+def test_data_volume_source_ref_omits_storage_class_when_unset(render_vm) -> None:
+    """No storageClassName key when storage_class isn't supplied."""
+    vm = render_vm(
+        {
+            "boot_source": {
+                "type": "data_volume_source_ref",
+                "source_ref": {"name": "centos-stream10", "namespace": "os-images"},
+                "size": "30Gi",
+            },
+        },
+    )
+    dv = vm["spec"]["dataVolumeTemplates"][0]
+    assert "storageClassName" not in dv["spec"]["storage"]
+    assert dv["spec"]["storage"]["resources"]["requests"]["storage"] == "30Gi"
+
+
 def test_pvc_direct_mount(render_vm) -> None:
     """boot_source=pvc directly mounts a PVC, no dataVolumeTemplates."""
     vm = render_vm(
