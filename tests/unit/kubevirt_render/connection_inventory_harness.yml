@@ -1,0 +1,83 @@
+---
+# Renders the per-host runtime-inventory entry from _create_vm_dictionary.yml
+# against a synthetic spec, with a synthetic NodePort service (nodePort=31234)
+# and node IP. Dumps the resolved entry as JSON for the python harness.
+#
+# Keep the _entry expression in sync with the one in
+# roles/kubevirt/tasks/_create_vm_dictionary.yml.
+- name: Render runtime inventory entry from _create_vm_dictionary.yml
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    item: instance
+    __mp_kubevirt_node_ip: "10.9.9.9"
+    mp_kubevirt_ssh_key_path: "/tmp/identity_file"
+    __mp_kubevirt_svc:
+      resources:
+        - spec:
+            ports:
+              - nodePort: 31234
+    _mp_specs:
+      instance: "{{ spec }}"
+    _connection: "{{ _mp_specs[item].connection | default('ssh') }}"
+    _service_mode: "{{ _mp_specs[item].ssh_service.type | default('NodePort') }}"
+    _guest_port: "{{ 5986 if _connection in ['psrp', 'winrm'] else 22 }}"
+    _ansible_port: >-
+      {{ (_mp_specs[item].ssh_service.port | default(_guest_port))
+         if _service_mode == 'None'
+         else (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort) }}
+    _ansible_host: "{{ _mp_specs[item].connection_ip | default(__mp_kubevirt_node_ip) }}"
+    _admin_user: "{{ _mp_specs[item].admin_user | default('Administrator') }}"
+    _admin_password: "{{ _mp_specs[item].admin_password | default('') }}"
+    _ssh_entry: >-
+      {{
+        {
+          'ansible_host': _ansible_host,
+          'ansible_port': _ansible_port | int,
+          'ansible_user': _mp_specs[item].ssh_user,
+          'ansible_ssh_private_key_file': mp_kubevirt_ssh_key_path,
+          'ansible_connection': 'ssh',
+          'ansible_ssh_common_args': '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+        }
+      }}
+    _psrp_entry: >-
+      {{
+        {
+          'ansible_host': _ansible_host,
+          'ansible_port': _ansible_port | int,
+          'ansible_user': _admin_user,
+          'ansible_password': _admin_password,
+          'ansible_connection': 'psrp',
+          'ansible_psrp_protocol': 'https',
+          'ansible_psrp_auth': 'ntlm',
+          'ansible_psrp_cert_validation': 'ignore',
+          'ansible_psrp_connection_timeout': 60,
+          'ansible_psrp_read_timeout': 70,
+          'ansible_psrp_operation_timeout': 60
+        }
+      }}
+    _winrm_entry: >-
+      {{
+        {
+          'ansible_host': _ansible_host,
+          'ansible_port': _ansible_port | int,
+          'ansible_user': _admin_user,
+          'ansible_password': _admin_password,
+          'ansible_connection': 'winrm',
+          'ansible_winrm_scheme': 'https',
+          'ansible_winrm_transport': 'ntlm',
+          'ansible_winrm_server_cert_validation': 'ignore',
+          'ansible_winrm_operation_timeout_sec': 60,
+          'ansible_winrm_read_timeout_sec': 70
+        }
+      }}
+    _entry: >-
+      {{ _psrp_entry if _connection == 'psrp'
+         else (_winrm_entry if _connection == 'winrm' else _ssh_entry) }}
+  tasks:
+    - name: Emit JSON for the python harness
+      ansible.builtin.copy:
+        content: "{{ _entry | to_json }}"
+        dest: "{{ output_path }}"
+        mode: "0600"

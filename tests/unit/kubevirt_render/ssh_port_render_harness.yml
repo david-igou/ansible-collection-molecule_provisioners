@@ -13,9 +13,11 @@
         - spec:
             ports:
               - nodePort: 31234
+    _connection: "{{ spec.connection | default('ssh') }}"
     _service_mode: "{{ spec.ssh_service.type | default('NodePort') }}"
+    _guest_port: "{{ 5986 if _connection in ['psrp', 'winrm'] else 22 }}"
     _ansible_port: >-
-      {{ (spec.ssh_service.port | default(22))
+      {{ (spec.ssh_service.port | default(_guest_port))
          if _service_mode == 'None'
          else (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort) }}
   tasks:
