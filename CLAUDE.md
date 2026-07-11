@@ -79,11 +79,16 @@ all:
                 type: container_disk #   container_disk | data_volume_url | data_volume_pvc | data_volume_source_ref | pvc
                 image: <str> #   per-type fields; see roles/kubevirt/README.md
               namespace: <str> # optional, role default 'molecule'
-              ssh_user: <str> # optional, role default 'cloud-user'
+              ssh_user: <str> # optional, role default 'cloud-user' (ssh connection)
               ssh_service:
                 type: NodePort # optional, 'NodePort' (default, creates Service) or 'None' (skip Service; requires connection_ip)
-                port: 22 # optional, only consulted when type=None; default 22
+                port: 22 # optional, only consulted when type=None; default 22 (5986 for psrp/winrm)
               connection_ip: <str> # optional with NodePort, REQUIRED with None. Skips cluster-scoped Node lookup for this host
+              # Guest connection (Windows support):
+              connection: ssh # optional, 'ssh' (default) | 'psrp' | 'winrm'. psrp/winrm drop cloud-init, target 5986.
+              admin_user: <str> # psrp/winrm only, default 'Administrator'
+              admin_password: <str> # psrp/winrm only, REQUIRED (sensitive; no_log). Local admin the unattend set.
+              sysprep_secret: <str> # optional, attach a KubeVirt sysprep cdrom volume {sysprep: {secret: {name: <str>}}}
               # Optional curated knobs:
               cpu: { cores, sockets, threads, model }
               memory: <str> # role default '1Gi' → requests.memory
@@ -178,4 +183,6 @@ Why this matters for the kubevirt renderer: ansible-core 2.19+ preserves Python 
 
 ## Out of scope (per the v1.0 spec)
 
-libvirt / cloud backends, LoadBalancer kubevirt service types, Windows guests, Molecule `shared_state` pattern. See `docs/superpowers/specs/2026-05-08-molecule-provisioners-design.md` for the design discussion.
+libvirt / cloud backends, LoadBalancer kubevirt service types, Molecule `shared_state` pattern. See `docs/superpowers/specs/2026-05-08-molecule-provisioners-design.md` for the design discussion.
+
+(Windows guests on the kubevirt backend — `connection: psrp|winrm`, sysprep-specialized goldens — are now **supported**; the v1.0 out-of-scope line was retired. See `roles/kubevirt/README.md` → "Windows guests".)

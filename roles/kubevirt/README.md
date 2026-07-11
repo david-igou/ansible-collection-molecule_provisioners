@@ -32,7 +32,7 @@ The cluster-scoped `nodes` requirement is currently the tight spot for least-pri
 | --- | --- |
 | `create` | Computes per-host merged specs, generates an SSH keypair, creates VirtualMachine + NodePort Service per host in `groups['molecule']`, writes runtime connection details (`ansible_host`, `ansible_port`, etc.) into the runtime inventory file. |
 | `destroy` | Deletes VirtualMachine and NodePort Service per host. |
-| `prepare` | `wait_for_connection` against each created host. |
+| `prepare` | `wait_for_connection` against each created host (honors the per-host connection plugin: ssh/psrp/winrm). Windows hosts get the longer `mp_kubevirt_windows_wait_timeout`. |
 
 ## Inputs (per-host, in inventory)
 
@@ -53,15 +53,23 @@ all:
 
               # Optional
               namespace: molecule              # role default 'molecule'
-              ssh_user: cloud-user             # role default 'cloud-user'
+              ssh_user: cloud-user             # role default 'cloud-user' (ssh connection)
               ssh_service:
                 type: NodePort                 # 'NodePort' or 'None'
                 port: 22                       # only consulted when type=None; default 22
+                                               # (5986 for psrp/winrm connections)
               connection_ip: 192.0.2.10        # optional with NodePort, REQUIRED with None.
                                                # When set, skips the cluster-scoped Node
                                                # lookup for this host (saves the SA's
                                                # nodes [get,list] RBAC requirement). See
                                                # "Skipping the Node lookup" below.
+
+              # Guest connection (see "Windows guests" below)
+              connection: ssh                  # ssh (default) | psrp | winrm
+              admin_user: Administrator        # psrp/winrm only; default 'Administrator'
+              admin_password: "{{ ... }}"      # psrp/winrm only; REQUIRED (sensitive)
+              sysprep_secret: win2k25-sysprep  # optional; attach a KubeVirt sysprep
+                                               # cdrom volume from this Secret name
 
               # Curated compute
               cpu:
@@ -164,6 +172,76 @@ boot_source:
   name: existing-boot-pvc
 ```
 
+## Windows guests (psrp / winrm)
+
+Set `connection: psrp` (or `winrm`) to provision a Windows Server 2025 / Windows 11
+test VM from a **sysprep-generalized golden image**. A generalized clone boots
+into OOBE and is specialized at first boot by a KubeVirt **sysprep** volume — a
+`Secret` (or `ConfigMap`) carrying `unattend.xml`, which Windows OOBE auto-consumes
+from the attached removable media. The unattend sets a local administrator
+password; Ansible then connects over **WinRM-over-HTTPS** (port 5986, NTLM,
+certificate validation off) as that admin.
+
+```yaml
+mp:
+  kubevirt:
+    boot_source:
+      type: data_volume_source_ref                    # clone a golden DataSource-backed PVC
+      source_ref:
+        name: win2k25                                 # DataSource for the golden image
+        namespace: openshift-virtualization-os-images
+      size: 80Gi
+    connection: psrp                                   # ssh (default) | psrp | winrm
+    admin_user: Administrator                          # default 'Administrator'
+    admin_password: "{{ lookup('ansible.builtin.env', 'WIN_ADMIN_PASSWORD') }}"
+    sysprep_secret: win2k25-sysprep                    # the Secret carrying unattend.xml
+    memory: 8Gi
+    cpu: {cores: 4}
+```
+
+What changes when `connection != ssh`:
+
+- **No cloud-init.** The renderer omits the `cloudinitdisk` disk/volume entirely
+  (Windows goldens have no cloud-init, and a stray cloudinit disk shifts disk
+  ordering and confuses boot). No SSH keypair is generated when *no* host uses ssh.
+- **Sysprep volume.** When `sysprep_secret` is set, a `cdrom` disk named `sysprep`
+  plus a volume `{sysprep: {secret: {name: <sysprep_secret>}}}` is attached, after
+  the boot disk. **CRITICAL KubeVirt gotcha:** the field is `secret.name` — the API
+  silently drops `secretName` and the VMI wedges `Pending`. (`sysprep_secret` is
+  valid for any connection, but is primarily used with psrp/winrm.)
+- **Service targets 5986.** The per-VM NodePort Service (still keyed `ssh_service`
+  in the schema — the name is **historical**, it predates Windows support and is
+  kept to avoid breaking every consumer) fronts guest port **5986** instead of 22.
+  In `ssh_service.type: None` mode, `ssh_service.port` defaults to 5986 for
+  psrp/winrm (22 for ssh).
+- **Ephemeral inventory.** The runtime inventory renders `ansible_connection: psrp`
+  (or `winrm`) with `ansible_user`/`ansible_password` (the admin credentials),
+  `ansible_psrp_auth: ntlm` / `ansible_winrm_transport: ntlm`,
+  `ansible_psrp_cert_validation: ignore` / `ansible_winrm_server_cert_validation:
+  ignore`, and generous connection/read timeouts. The file is written `0600` with
+  `no_log` because the password now lands on disk.
+- **Longer prepare wait.** `prepare` uses `wait_for_connection` (which honors the
+  connection plugin) but with `mp_kubevirt_windows_wait_timeout` (default **900s**)
+  for psrp/winrm hosts — OOBE specialize + the unattend `FirstLogonCommands`
+  routinely take several minutes — versus `mp_kubevirt_wait_timeout` (120s) for ssh.
+
+**Controller prerequisites (not shipped by this collection):** psrp needs
+[`pypsrp`](https://pypi.org/project/pypsrp/) on the controller (and `pypsrp[credssp]`
+only if you switch off NTLM); `winrm` needs [`pywinrm`](https://pypi.org/project/pywinrm/).
+These are controller-side runtime deps of the Ansible connection plugins, so they
+are intentionally **not** in this collection's `requirements.txt` — install them in
+your Molecule execution environment / controller venv.
+
+**RBAC:** a `sysprep_secret` is a `Secret` the *consumer* creates (it is not managed
+by this role), so no extra Secret verbs are needed here. The golden-image clone
+paths (`data_volume_pvc` / `data_volume_source_ref`) carry their usual CDI grants —
+see the RBAC section above.
+
+> **Consumer ordering:** the VM starts immediately (`running: true`), so the sysprep
+> `Secret` must exist **before** the create playbook runs. In your scenario
+> `create.yml`, create the Secret *before* `import_playbook:
+> david_igou.molecule_provisioners.create`.
+
 ## Escape hatch and foot-guns
 
 `vm_overrides` is deep-merged into the whole VirtualMachine object with `list_merge='append'`. There are no guardrails — overriding any of the following will break the lifecycle:
@@ -189,7 +267,7 @@ If even one host omits `connection_ip`, the Node lookup still runs (the rest of 
 
 ## Role-level overrides
 
-See `defaults/main.yml` (`mp_kubevirt_role_defaults`, `mp_kubevirt_ssh_key_path`, `mp_kubevirt_wait_timeout`, `mp_kubevirt_allowed_ssh_service_types`).
+See `defaults/main.yml` (`mp_kubevirt_role_defaults`, `mp_kubevirt_ssh_key_path`, `mp_kubevirt_wait_timeout`, `mp_kubevirt_windows_wait_timeout`, `mp_kubevirt_allowed_ssh_service_types`, `mp_kubevirt_allowed_connections`).
 
 ## SSH service types
 
