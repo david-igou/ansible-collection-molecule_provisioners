@@ -68,10 +68,21 @@
         name: "{{ item }}"
         namespace: "{{ _mp_specs[item].namespace }}"
       spec:
-        ports:
-          - port: "{{ _guest_port | int }}"
-            protocol: TCP
-            targetPort: "{{ _guest_port | int }}"
+        # Build the ports list as a SINGLE Jinja dict-literal expression so
+        # `_guest_port | int` stays a real int. A quoted `"{{ _guest_port | int }}"`
+        # YAML scalar string-coerces to "22"/"5986" on ansible-core 2.16/2.17
+        # (native types only on 2.19+), and Kubernetes rejects a non-numeric
+        # spec.ports[].port. Same pattern as `_entry` in _create_vm_dictionary.yml.
+        ports: >-
+          {{
+            [
+              {
+                'port': _guest_port | int,
+                'protocol': 'TCP',
+                'targetPort': _guest_port | int
+              }
+            ]
+          }}
         selector:
           kubevirt.io/domain: "{{ item }}"
         type: NodePort

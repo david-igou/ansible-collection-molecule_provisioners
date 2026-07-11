@@ -125,7 +125,9 @@
       admin_password. WinRM authentication needs the local admin password that
       the sysprep unattend.xml assigned. Set mp.kubevirt.admin_password
       (typically via a scenario group_var doing an env/op lookup).
-  no_log: true
+  # no no_log: the `that:` conditions only test presence/length (never
+  # interpolate the password value) and fail_msg prints connection type, not
+  # the secret — so the fail_msg stays visible when the assert trips.
   when: (_mp_specs[item].connection | default('ssh')) in ['psrp', 'winrm']
 
 - name: "Warn if instancetype is set alongside cpu/memory_limit: {{ item }}"

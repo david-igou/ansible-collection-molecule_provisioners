@@ -12,7 +12,7 @@ argument_specs:
         type: dict
         description: >-
           Per-host field defaults. Currently includes namespace, ssh_user, memory,
-          and ssh_service.type. Layered as: this dict <- mp_defaults.kubevirt
+          connection (default ssh), and ssh_service.type. Layered as: this dict <- mp_defaults.kubevirt
           <- hostvars[item].mp.kubevirt. Per-host hostvars accepts a much wider
           schema (boot_source, cpu, memory_limit, scheduling, extras, vm_overrides);
           see roles/kubevirt/README.md.

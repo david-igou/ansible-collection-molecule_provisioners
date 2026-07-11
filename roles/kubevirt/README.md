@@ -177,10 +177,18 @@ boot_source:
 Set `connection: psrp` (or `winrm`) to provision a Windows Server 2025 / Windows 11
 test VM from a **sysprep-generalized golden image**. A generalized clone boots
 into OOBE and is specialized at first boot by a KubeVirt **sysprep** volume — a
-`Secret` (or `ConfigMap`) carrying `unattend.xml`, which Windows OOBE auto-consumes
+`Secret` carrying `unattend.xml`, which Windows OOBE auto-consumes
 from the attached removable media. The unattend sets a local administrator
 password; Ansible then connects over **WinRM-over-HTTPS** (port 5986, NTLM,
 certificate validation off) as that admin.
+
+> **Security scope — cert validation off is intentional here.** These are
+> ephemeral, network-isolated Molecule test guests whose self-signed WinRM
+> certificate was minted seconds earlier by the unattend at first boot, so there
+> is no trust anchor to validate against and nothing durable to protect. This is
+> a deliberate test-scope behavior — **do not copy `ansible_psrp_cert_validation:
+> ignore` / `ansible_winrm_server_cert_validation: ignore` into a production
+> connection configuration**, where a validated certificate chain is expected.
 
 ```yaml
 mp:
@@ -274,7 +282,7 @@ See `defaults/main.yml` (`mp_kubevirt_role_defaults`, `mp_kubevirt_ssh_key_path`
 Two modes are supported:
 
 - **`NodePort`** (default): the role creates a `NodePort` Service per VM and resolves `ansible_host` to a cluster Node InternalIP (or to `connection_ip` if set).
-- **`None`**: no Service is created. `connection_ip` is required (the role asserts this at validate time). `ansible_port` defaults to `22`; override per-host with `ssh_service.port`. Use this for setups where SSH access is provided by an external Route/Ingress, or where the controller can talk to pod IPs directly.
+- **`None`**: no Service is created. `connection_ip` is required (the role asserts this at validate time). `ansible_port` defaults to the guest port implied by the connection type — `22` for `ssh`, `5986` for `psrp`/`winrm` — override per-host with `ssh_service.port`. Use this for setups where access is provided by an external Route/Ingress, or where the controller can talk to pod IPs directly.
 
 ```yaml
 mp:

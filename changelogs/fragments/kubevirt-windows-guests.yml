@@ -4,7 +4,9 @@ minor_changes:
     ``connection`` discriminator (``ssh`` (default) ``| psrp | winrm``). Windows Server 2025
     / Windows 11 test VMs are provisioned from sysprep-generalized golden-image DataSources
     and specialized at first boot by a KubeVirt sysprep volume, then reached over
-    WinRM-over-HTTPS (NTLM, 5986, certificate validation off).
+    WinRM-over-HTTPS (NTLM, 5986). Certificate validation is intentionally skipped for
+    these ephemeral, isolated test guests, whose self-signed cert is minted at first boot;
+    this is a deliberate test-scope behavior and must not be copied to production configs.
   - kubevirt - add per-host ``admin_user`` (default ``Administrator``) and ``admin_password``
     (required, sensitive/``no_log``) fields, consumed by the ``psrp``/``winrm`` runtime
     inventory as ``ansible_user``/``ansible_password``. ``admin_password`` is validated
