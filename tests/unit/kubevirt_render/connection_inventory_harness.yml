@@ -1,28 +1,25 @@
 ---
-# NodePort lookup is skipped in 'None' mode — no Service was created, and
-# the consumer-supplied connection_ip + ssh_service.port (default 22)
-# carry the connection.
-- name: "Look up NodePort service for: {{ item }}"
-  kubernetes.core.k8s_info:
-    api_version: v1
-    kind: Service
-    name: "{{ item }}"
-    namespace: "{{ _mp_specs[item].namespace }}"
-  register: __mp_kubevirt_svc
-  until:
-    - __mp_kubevirt_svc.resources | length > 0
-    - (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort | default(0)) | int > 0
-  retries: 10
-  delay: 3
-  when: (_mp_specs[item].ssh_service.type | default('NodePort')) == 'NodePort'
-
-# _guest_port is the in-guest connection port implied by the connection type:
-# 22 for ssh, 5986 (WinRM-over-HTTPS) for psrp/winrm. In None mode it is the
-# per-host default for ssh_service.port; in NodePort mode the resolved nodePort
-# carries the connection and _guest_port is unused.
-# Keep this expression in sync with tests/unit/kubevirt_render/ssh_port_render_harness.yml.
-- name: "Add VM to runtime inventory dict: {{ item }}"
+# Renders the per-host runtime-inventory entry from _create_vm_dictionary.yml
+# against a synthetic spec, with a synthetic NodePort service (nodePort=31234)
+# and node IP. Dumps the resolved entry as JSON for the python harness.
+#
+# Keep the _entry expression in sync with the one in
+# roles/kubevirt/tasks/_create_vm_dictionary.yml.
+- name: Render runtime inventory entry from _create_vm_dictionary.yml
+  hosts: localhost
+  connection: local
+  gather_facts: false
   vars:
+    item: instance
+    __mp_kubevirt_node_ip: "10.9.9.9"
+    mp_kubevirt_ssh_key_path: "/tmp/identity_file"
+    __mp_kubevirt_svc:
+      resources:
+        - spec:
+            ports:
+              - nodePort: 31234
+    _mp_specs:
+      instance: "{{ spec }}"
     _connection: "{{ _mp_specs[item].connection | default('ssh') }}"
     _service_mode: "{{ _mp_specs[item].ssh_service.type | default('NodePort') }}"
     _guest_port: "{{ 5986 if _connection in ['psrp', 'winrm'] else 22 }}"
@@ -33,12 +30,6 @@
     _ansible_host: "{{ _mp_specs[item].connection_ip | default(__mp_kubevirt_node_ip) }}"
     _admin_user: "{{ _mp_specs[item].admin_user | default('Administrator') }}"
     _admin_password: "{{ _mp_specs[item].admin_password | default('') }}"
-    # Each entry is built as a SINGLE Jinja dict expression so `_ansible_port |
-    # int` stays a real int. A quoted `"{{ _ansible_port | int }}"` YAML scalar
-    # string-coerces to "31234" on ansible-core 2.16/2.17 (native types only on
-    # 2.19+) — see CLAUDE.md. Keep these as dict literals inside `{{ }}`.
-    #
-    # ssh: cloud-init injected an SSH key; connect as ssh_user with that key.
     _ssh_entry: >-
       {{
         {
@@ -50,7 +41,6 @@
           'ansible_ssh_common_args': '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
         }
       }}
-    # psrp: WinRM-over-HTTPS via pypsrp, NTLM, cert validation off (self-signed).
     _psrp_entry: >-
       {{
         {
@@ -67,7 +57,6 @@
           'ansible_psrp_operation_timeout': 60
         }
       }}
-    # winrm: same target, the legacy winrm connection plugin (pywinrm).
     _winrm_entry: >-
       {{
         {
@@ -86,7 +75,9 @@
     _entry: >-
       {{ _psrp_entry if _connection == 'psrp'
          else (_winrm_entry if _connection == 'winrm' else _ssh_entry) }}
-  ansible.builtin.set_fact:
-    __mp_kubevirt_runtime_hosts: >-
-      {{ __mp_kubevirt_runtime_hosts | combine({item: _entry}) }}
-  no_log: true
+  tasks:
+    - name: Emit JSON for the python harness
+      ansible.builtin.copy:
+        content: "{{ _entry | to_json }}"
+        dest: "{{ output_path }}"
+        mode: "0600"

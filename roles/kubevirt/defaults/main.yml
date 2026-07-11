@@ -4,8 +4,14 @@
 # SSH keypair lives in the molecule ephemeral dir so destroy can find it.
 mp_kubevirt_ssh_key_path: "{{ molecule_ephemeral_directory }}/identity_file"
 
-# wait_for_connection timeout (seconds) for prepare phase.
+# wait_for_connection timeout (seconds) for prepare phase (ssh/Linux hosts).
 mp_kubevirt_wait_timeout: 120
+
+# wait_for_connection timeout (seconds) for Windows (psrp/winrm) hosts. A
+# generalized golden boots into OOBE specialize + the unattend FirstLogon
+# Commands before WinRM answers — this can take several minutes, so the default
+# is deliberately generous. Override per-scenario if your golden is faster/slower.
+mp_kubevirt_windows_wait_timeout: 900
 
 # Allowed ssh_service.type values.
 #   NodePort — create a NodePort Service per VM; connect via Node InternalIP.
@@ -15,11 +21,20 @@ mp_kubevirt_allowed_ssh_service_types:
   - NodePort
   - "None"
 
+# Allowed connection values (per-host mp.kubevirt.connection discriminator).
+#   ssh          — Linux golden; SSH key injected via cloud-init (default).
+#   psrp | winrm — Windows golden; WinRM-over-HTTPS (5986), NTLM, cert ignore.
+mp_kubevirt_allowed_connections:
+  - ssh
+  - psrp
+  - winrm
+
 # Per-host field defaults. Layered as: this dict <- mp_defaults.kubevirt <- hostvars[item].mp.kubevirt.
 # Only `image` is required and is therefore not present here.
 mp_kubevirt_role_defaults:
   namespace: molecule
   ssh_user: cloud-user
   memory: 1Gi
+  connection: ssh
   ssh_service:
     type: NodePort

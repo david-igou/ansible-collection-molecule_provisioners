@@ -8,10 +8,47 @@
 #   __mp_curated  — first-class fields layered onto the base.
 #   __mp_kubevirt_vm = __mp_curated | combine(vm_overrides, recursive, list_merge=append).
 
+# The base skeleton's disks/volumes depend on the guest's connection type:
+#   ssh (default)  — inject a cloudinitdisk (SSH key via cloud-init userData).
+#   psrp | winrm   — Windows goldens have no cloud-init; render NO cloudinitdisk
+#                    (a stray cloudinit disk shifts disk ordering and confuses
+#                    boot). Instead, when sysprep_secret is set, attach a sysprep
+#                    cdrom whose volume references the Secret (unattend.xml).
+# CRITICAL KubeVirt gotcha: the sysprep volume field is `secret.name` — the API
+# silently drops `secretName` and the VMI wedges Pending.
 - name: "Build base VM skeleton: {{ item }}"
   vars:
-    _ns: "{{ _mp_specs[item].namespace | default('molecule') }}"
-    _ssh_user: "{{ _mp_specs[item].ssh_user | default('cloud-user') }}"
+    _spec: "{{ _mp_specs[item] }}"
+    _ns: "{{ _spec.namespace | default('molecule') }}"
+    _ssh_user: "{{ _spec.ssh_user | default('cloud-user') }}"
+    _connection: "{{ _spec.connection | default('ssh') }}"
+    _has_sysprep: "{{ _spec.sysprep_secret is defined and (_spec.sysprep_secret | default('') | length > 0) }}"
+    _cloudinit_disks:
+      - name: cloudinitdisk
+        disk:
+          bus: virtio
+    _cloudinit_volumes:
+      - name: cloudinitdisk
+        cloudInitNoCloud:
+          userData: |
+            #cloud-config
+            users:
+              - name: {{ _ssh_user }}
+                ssh_authorized_keys:
+                  - {{ temporary_ssh_public_key }}
+                sudo: ALL=(ALL) NOPASSWD:ALL
+                shell: /bin/bash
+            chpasswd:
+              expire: false
+    _sysprep_disks: >-
+      {{ [{'name': 'sysprep', 'cdrom': {'bus': 'sata'}}] if _has_sysprep else [] }}
+    _sysprep_volumes: >-
+      {{ [{'name': 'sysprep', 'sysprep': {'secret': {'name': _spec.sysprep_secret}}}]
+         if _has_sysprep else [] }}
+    _base_disks: >-
+      {{ (_cloudinit_disks if _connection == 'ssh' else []) + _sysprep_disks }}
+    _base_volumes: >-
+      {{ (_cloudinit_volumes if _connection == 'ssh' else []) + _sysprep_volumes }}
   ansible.builtin.set_fact:
     __mp_base:
       apiVersion: kubevirt.io/v1
@@ -30,29 +67,14 @@
           spec:
             domain:
               devices:
-                disks:
-                  - name: cloudinitdisk
-                    disk:
-                      bus: virtio
+                disks: "{{ _base_disks }}"
                 interfaces:
                   - name: default
                     masquerade: {}
             networks:
               - name: default
                 pod: {}
-            volumes:
-              - name: cloudinitdisk
-                cloudInitNoCloud:
-                  userData: |
-                    #cloud-config
-                    users:
-                      - name: {{ _ssh_user }}
-                        ssh_authorized_keys:
-                          - {{ temporary_ssh_public_key }}
-                        sudo: ALL=(ALL) NOPASSWD:ALL
-                        shell: /bin/bash
-                    chpasswd:
-                      expire: false
+            volumes: "{{ _base_volumes }}"
 
 - name: "Reset boot-source facts: {{ item }}"
   ansible.builtin.set_fact:
