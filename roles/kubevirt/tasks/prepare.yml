@@ -1,6 +1,13 @@
 ---
+# wait_for_connection honors each host's connection plugin (ssh/psrp/winrm from
+# the runtime inventory). Windows guests need a much longer budget: after the
+# generalized clone boots it runs OOBE specialize + the unattend FirstLogon
+# Commands before WinRM answers, which routinely takes several minutes.
 - name: Wait for the host to be reachable
   ansible.builtin.wait_for_connection:
-    timeout: "{{ mp_kubevirt_wait_timeout }}"
+    timeout: >-
+      {{ mp_kubevirt_windows_wait_timeout
+         if ansible_connection in ['psrp', 'winrm']
+         else mp_kubevirt_wait_timeout }}
     delay: 10
     sleep: 5

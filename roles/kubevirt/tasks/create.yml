@@ -23,15 +23,28 @@
   loop_control:
     label: "{{ item }}"
 
+# Only ssh-connection hosts consume the cloud-init-injected key. Skip keygen
+# entirely when NO host needs ssh (e.g. an all-Windows psrp/winrm scenario) —
+# a Windows golden has no cloud-init to consume the key anyway.
+- name: Determine whether any host uses an ssh connection
+  ansible.builtin.set_fact:
+    __mp_kubevirt_any_ssh: >-
+      {{ _mp_specs.values()
+         | map(attribute='connection', default='ssh')
+         | select('equalto', 'ssh')
+         | list | length > 0 }}
+
 - name: Generate SSH key pair
   community.crypto.openssh_keypair:
     path: "{{ mp_kubevirt_ssh_key_path }}"
     type: ed25519
   register: __mp_kubevirt_ssh_keypair
+  when: __mp_kubevirt_any_ssh | bool
 
 - name: Set SSH public key fact
   ansible.builtin.set_fact:
     temporary_ssh_public_key: "{{ __mp_kubevirt_ssh_keypair.public_key }}"
+  when: __mp_kubevirt_any_ssh | bool
 
 - name: Create VirtualMachine in KubeVirt
   ansible.builtin.include_tasks: _create_vm.yml
@@ -39,7 +52,13 @@
   loop_control:
     label: "{{ item }}"
 
-- name: Create SSH NodePort Kubernetes service
+# The Service key is named `ssh_service` for historical reasons — it predates
+# Windows/WinRM support. It now fronts whatever guest port the connection uses:
+# 22 for ssh, 5986 (WinRM-over-HTTPS) for psrp/winrm.
+- name: Create guest NodePort Kubernetes service
+  vars:
+    _guest_port: >-
+      {{ 5986 if (_mp_specs[item].connection | default('ssh')) in ['psrp', 'winrm'] else 22 }}
   kubernetes.core.k8s:
     state: present
     definition:
@@ -50,9 +69,9 @@
         namespace: "{{ _mp_specs[item].namespace }}"
       spec:
         ports:
-          - port: 22
+          - port: "{{ _guest_port | int }}"
             protocol: TCP
-            targetPort: 22
+            targetPort: "{{ _guest_port | int }}"
         selector:
           kubevirt.io/domain: "{{ item }}"
         type: NodePort
@@ -105,6 +124,8 @@
   loop_control:
     label: "{{ item }}"
 
+# no_log: the runtime inventory now carries ansible_password for Windows
+# (psrp/winrm) hosts. Keep mode restrictive (0600) since a secret lands on disk.
 - name: Write runtime connection inventory file
   vars:
     runtime_inventory:
@@ -114,6 +135,7 @@
     content: "{{ runtime_inventory | to_nice_yaml }}"
     dest: "{{ molecule_ephemeral_directory }}/inventory/molecule_runtime.yml"
     mode: "0600"
+  no_log: true
 
 - name: Refresh inventory
   ansible.builtin.meta: refresh_inventory

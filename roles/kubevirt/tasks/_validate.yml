@@ -101,6 +101,33 @@
       address (e.g. external Route IP, pod IP).
   when: (_mp_specs[item].ssh_service.type | default('NodePort')) == 'None'
 
+# connection discriminates guest handling: ssh (default, Linux/cloud-init) vs
+# psrp/winrm (Windows WinRM-over-HTTPS). See roles/kubevirt/README.md.
+- name: "Assert connection is supported: {{ item }}"
+  ansible.builtin.assert:
+    that:
+      - (_mp_specs[item].connection | default('ssh')) in mp_kubevirt_allowed_connections
+    fail_msg: >-
+      Host '{{ item }}' has unsupported connection
+      '{{ _mp_specs[item].connection | default('(missing)') }}'.
+      Supported: {{ mp_kubevirt_allowed_connections | join(', ') }}.
+
+# psrp/winrm authenticate with a local admin whose password the sysprep
+# unattend.xml set. Fail fast (before we ever start a VM) if it is missing.
+- name: "Assert admin_password is set for psrp/winrm: {{ item }}"
+  ansible.builtin.assert:
+    that:
+      - _mp_specs[item].admin_password is defined
+      - _mp_specs[item].admin_password | default('') | length > 0
+    fail_msg: >-
+      Host '{{ item }}' uses connection
+      '{{ _mp_specs[item].connection | default('ssh') }}' but did not set
+      admin_password. WinRM authentication needs the local admin password that
+      the sysprep unattend.xml assigned. Set mp.kubevirt.admin_password
+      (typically via a scenario group_var doing an env/op lookup).
+  no_log: true
+  when: (_mp_specs[item].connection | default('ssh')) in ['psrp', 'winrm']
+
 - name: "Warn if instancetype is set alongside cpu/memory_limit: {{ item }}"
   ansible.builtin.debug:
     msg: >-

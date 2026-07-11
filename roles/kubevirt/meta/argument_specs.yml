@@ -22,7 +22,16 @@ argument_specs:
       mp_kubevirt_allowed_ssh_service_types:
         type: list
         elements: str
-        description: Allowlist for ssh_service.type. v1 supports NodePort only.
+        description: Allowlist for ssh_service.type. Supports NodePort and None.
+      mp_kubevirt_allowed_connections:
+        type: list
+        elements: str
+        description: >-
+          Allowlist for the per-host mp.kubevirt.connection discriminator.
+          Defaults to [ssh, psrp, winrm]. ssh injects an SSH key via cloud-init;
+          psrp/winrm drive Windows guests over WinRM-over-HTTPS (5986, NTLM,
+          cert validation off) and require admin_password (and typically a
+          sysprep_secret) in the per-host spec.
   destroy:
     short_description: Delete KubeVirt VirtualMachines and NodePort services.
     options:
@@ -34,3 +43,10 @@ argument_specs:
       mp_kubevirt_wait_timeout:
         type: int
         default: 120
+        description: wait_for_connection timeout (seconds) for ssh/Linux hosts.
+      mp_kubevirt_windows_wait_timeout:
+        type: int
+        default: 900
+        description: >-
+          wait_for_connection timeout (seconds) for Windows (psrp/winrm) hosts.
+          Generous by default to cover OOBE specialize + FirstLogonCommands.
