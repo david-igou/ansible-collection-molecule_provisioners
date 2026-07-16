@@ -6,7 +6,7 @@ on: # yamllint disable-line rule:truthy
     types: [published]
 jobs:
   release_automation_hub:
-    uses: ansible/ansible-content-actions/.github/workflows/release_galaxy.yaml@main
+    uses: ansible/ansible-content-actions/.github/workflows/release_galaxy.yaml@41201c8e472d212b283090605b5120d2374261b4 # main 2026-07-16
     with:
       environment: release
     secrets:
