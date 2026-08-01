@@ -18,7 +18,7 @@
     _guest_port: "{{ 5986 if _connection in ['psrp', 'winrm'] else 22 }}"
     _ansible_port: >-
       {{ (spec.ssh_service.port | default(_guest_port))
-         if _service_mode == 'None'
+         if _service_mode in ['None', 'PodIP']
          else (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort) }}
   tasks:
     - name: Emit JSON for the python harness

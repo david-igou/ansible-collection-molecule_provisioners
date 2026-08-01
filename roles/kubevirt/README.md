@@ -55,7 +55,7 @@ all:
               namespace: molecule              # role default 'molecule'
               ssh_user: cloud-user             # role default 'cloud-user' (ssh connection)
               ssh_service:
-                type: NodePort                 # 'NodePort' or 'None'
+                type: NodePort                 # 'NodePort', 'None', or 'PodIP'
                 port: 22                       # only consulted when type=None; default 22
                                                # (5986 for psrp/winrm connections)
               connection_ip: 192.0.2.10        # optional with NodePort, REQUIRED with None.
@@ -279,10 +279,11 @@ See `defaults/main.yml` (`mp_kubevirt_role_defaults`, `mp_kubevirt_ssh_key_path`
 
 ## SSH service types
 
-Two modes are supported:
+Three modes are supported:
 
 - **`NodePort`** (default): the role creates a `NodePort` Service per VM and resolves `ansible_host` to a cluster Node InternalIP (or to `connection_ip` if set).
 - **`None`**: no Service is created. `connection_ip` is required (the role asserts this at validate time). `ansible_port` defaults to the guest port implied by the connection type — `22` for `ssh`, `5986` for `psrp`/`winrm` — override per-host with `ssh_service.port`. Use this for setups where access is provided by an external Route/Ingress, or where the controller can talk to pod IPs directly.
+- **`PodIP`**: no Service is created and no `connection_ip` is needed — the role waits for the VMI to report its pod-network address (`status.interfaces[0].ipAddress`, the masquerade/virt-launcher pod IP) and connects there directly. Only works when the controller runs **inside the cluster** (e.g. an OpenShift Dev Spaces workspace or CI pod). This is the least-privilege mode: the driving ServiceAccount needs neither `services` nor cluster-wide `nodes` RBAC — just VMs/VMIs in the target namespace. Port defaults as in `None` mode (`ssh_service.port` override honored). Lookup bounds: `mp_kubevirt_podip_lookup_retries` (60) × `mp_kubevirt_podip_lookup_delay` (5s).
 
 ```yaml
 mp:

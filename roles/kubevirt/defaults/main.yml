@@ -17,9 +17,19 @@ mp_kubevirt_windows_wait_timeout: 900
 #   NodePort — create a NodePort Service per VM; connect via Node InternalIP.
 #   None     — skip Service creation; consumer supplies connection_ip per host
 #              (e.g. external Route/Ingress, controller-reachable pod IP).
+#   PodIP    — skip Service creation; connect to the VMI's pod-network address
+#              (masquerade interface = virt-launcher pod IP). For controllers
+#              running IN the cluster (e.g. a Dev Spaces workspace) — needs
+#              neither `services` nor cluster-wide `nodes` RBAC.
 mp_kubevirt_allowed_ssh_service_types:
   - NodePort
   - "None"
+  - PodIP
+
+# PodIP mode: retries x delay bound the wait for the VMI to report
+# status.interfaces[0].ipAddress after the VirtualMachine is created.
+mp_kubevirt_podip_lookup_retries: 60
+mp_kubevirt_podip_lookup_delay: 5
 
 # Allowed connection values (per-host mp.kubevirt.connection discriminator).
 #   ssh          — Linux golden; SSH key injected via cloud-init (default).

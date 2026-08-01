@@ -1,0 +1,14 @@
+---
+minor_changes:
+  - >-
+    kubevirt - new ``ssh_service.type: PodIP`` connects to the VMI's
+    pod-network address (masquerade/virt-launcher pod IP) directly — no
+    per-VM Service and no cluster-wide ``nodes`` RBAC required. Intended for
+    controllers running inside the cluster, such as OpenShift Dev Spaces
+    workspaces, where a namespace-scoped ServiceAccount with only
+    VM/VMI permissions can drive the full molecule lifecycle.
+bugfixes:
+  - >-
+    kubevirt - destroy no longer attempts to delete the per-VM Service in
+    ``None``/``PodIP`` modes, which failed for scoped service accounts
+    without ``services`` RBAC (no Service was ever created in those modes).
