@@ -1,24 +1,10 @@
-objects:
-  role:
-    docker:
-      description: "Default entry point \u2014 does nothing on its own; use tasks_from=create|destroy|prepare."
-      name: docker
-      version_added: null
-    kubevirt:
-      description: "Default entry point \u2014 does nothing on its own; use tasks_from=create|destroy|prepare."
-      name: kubevirt
-      version_added: null
-    podman:
-      description: "Default entry point \u2014 does nothing on its own; use tasks_from=create|destroy|prepare."
-      name: podman
-      version_added: null
+objects: {}
 plugins:
   become: {}
   cache: {}
   callback: {}
   cliconf: {}
   connection: {}
-  filter: {}
   httpapi: {}
   inventory: {}
   lookup: {}
@@ -26,6 +12,5 @@ plugins:
   netconf: {}
   shell: {}
   strategy: {}
-  test: {}
   vars: {}
-version: 0.0.4-alpha
+version: 0.0.5-alpha
