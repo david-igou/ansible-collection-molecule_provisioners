@@ -1,3 +1,0 @@
----
-minor_changes:
-  - kubevirt - add a new ``boot_source.type=data_volume_source_ref`` that boots a VM from a CDI ``DataSource`` (golden image) via ``dataVolumeTemplates[].spec.sourceRef``. Unlike ``data_volume_pvc`` (which pins a static PVC name), this tracks golden-image PVCs with rolling names managed by a ``DataImportCron`` (e.g. ``centos-stream10-1fcd75f226b4``) through the stable ``DataSource`` indirection. Requires ``source_ref.name``, ``source_ref.namespace`` and ``size``; ``source_ref.kind`` defaults to ``DataSource`` and ``storage_class`` is optional. Cross-namespace cloning needs ``datavolumes/source create`` in the source namespace on top of ``datavolumes [create, get, delete]`` in the VM namespace (documented in ``roles/kubevirt/README.md``).
