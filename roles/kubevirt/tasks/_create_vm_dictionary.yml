@@ -1,7 +1,8 @@
 ---
-# NodePort lookup is skipped in 'None' mode — no Service was created, and
-# the consumer-supplied connection_ip + ssh_service.port (default 22)
-# carry the connection.
+# NodePort lookup is skipped in 'None' and 'PodIP' modes — no Service was
+# created. In 'None' mode the consumer-supplied connection_ip +
+# ssh_service.port (default 22) carry the connection; in 'PodIP' mode the
+# VMI's pod-network address does.
 - name: "Look up NodePort service for: {{ item }}"
   kubernetes.core.k8s_info:
     api_version: v1
@@ -16,6 +17,24 @@
   delay: 3
   when: (_mp_specs[item].ssh_service.type | default('NodePort')) == 'NodePort'
 
+# PodIP mode reads the VMI's pod-network address (masquerade interface =
+# virt-launcher pod IP), which appears in VMI status once the launcher pod is
+# up. Bounded by mp_kubevirt_podip_lookup_retries x _delay.
+- name: "Look up VMI pod IP for: {{ item }}"
+  kubernetes.core.k8s_info:
+    api_version: kubevirt.io/v1
+    kind: VirtualMachineInstance
+    name: "{{ item }}"
+    namespace: "{{ _mp_specs[item].namespace }}"
+  register: __mp_kubevirt_vmi
+  until:
+    - __mp_kubevirt_vmi.resources | length > 0
+    - (__mp_kubevirt_vmi.resources[0].status.interfaces | default([]) | length) > 0
+    - (__mp_kubevirt_vmi.resources[0].status.interfaces[0].ipAddress | default('')) | length > 0
+  retries: "{{ mp_kubevirt_podip_lookup_retries }}"
+  delay: "{{ mp_kubevirt_podip_lookup_delay }}"
+  when: (_mp_specs[item].ssh_service.type | default('NodePort')) == 'PodIP'
+
 # _guest_port is the in-guest connection port implied by the connection type:
 # 22 for ssh, 5986 (WinRM-over-HTTPS) for psrp/winrm. In None mode it is the
 # per-host default for ssh_service.port; in NodePort mode the resolved nodePort
@@ -28,9 +47,12 @@
     _guest_port: "{{ 5986 if _connection in ['psrp', 'winrm'] else 22 }}"
     _ansible_port: >-
       {{ (_mp_specs[item].ssh_service.port | default(_guest_port))
-         if _service_mode == 'None'
+         if _service_mode in ['None', 'PodIP']
          else (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort) }}
-    _ansible_host: "{{ _mp_specs[item].connection_ip | default(__mp_kubevirt_node_ip) }}"
+    _ansible_host: >-
+      {{ __mp_kubevirt_vmi.resources[0].status.interfaces[0].ipAddress
+         if _service_mode == 'PodIP'
+         else (_mp_specs[item].connection_ip | default(__mp_kubevirt_node_ip)) }}
     _admin_user: "{{ _mp_specs[item].admin_user | default('Administrator') }}"
     _admin_password: "{{ _mp_specs[item].admin_password | default('') }}"
     # Each entry is built as a SINGLE Jinja dict expression so `_ansible_port |

@@ -18,6 +18,11 @@
         - spec:
             ports:
               - nodePort: 31234
+    __mp_kubevirt_vmi:
+      resources:
+        - status:
+            interfaces:
+              - ipAddress: "10.130.0.42"
     _mp_specs:
       instance: "{{ spec }}"
     _connection: "{{ _mp_specs[item].connection | default('ssh') }}"
@@ -25,9 +30,12 @@
     _guest_port: "{{ 5986 if _connection in ['psrp', 'winrm'] else 22 }}"
     _ansible_port: >-
       {{ (_mp_specs[item].ssh_service.port | default(_guest_port))
-         if _service_mode == 'None'
+         if _service_mode in ['None', 'PodIP']
          else (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort) }}
-    _ansible_host: "{{ _mp_specs[item].connection_ip | default(__mp_kubevirt_node_ip) }}"
+    _ansible_host: >-
+      {{ __mp_kubevirt_vmi.resources[0].status.interfaces[0].ipAddress
+         if _service_mode == 'PodIP'
+         else (_mp_specs[item].connection_ip | default(__mp_kubevirt_node_ip)) }}
     _admin_user: "{{ _mp_specs[item].admin_user | default('Administrator') }}"
     _admin_password: "{{ _mp_specs[item].admin_password | default('') }}"
     _ssh_entry: >-

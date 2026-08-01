@@ -22,7 +22,13 @@ argument_specs:
       mp_kubevirt_allowed_ssh_service_types:
         type: list
         elements: str
-        description: Allowlist for ssh_service.type. Supports NodePort and None.
+        description: Allowlist for ssh_service.type. Supports NodePort, None, and PodIP.
+      mp_kubevirt_podip_lookup_retries:
+        type: int
+        description: PodIP mode — retries for the VMI pod-IP lookup (default 60).
+      mp_kubevirt_podip_lookup_delay:
+        type: int
+        description: PodIP mode — delay in seconds between VMI pod-IP lookups (default 5).
       mp_kubevirt_allowed_connections:
         type: list
         elements: str

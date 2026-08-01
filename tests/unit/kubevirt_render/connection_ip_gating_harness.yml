@@ -16,6 +16,9 @@
         _needs: >-
           {{ _mp_specs.values()
              | rejectattr('connection_ip', 'defined')
+             | map(attribute='ssh_service', default={})
+             | map(attribute='type', default='NodePort')
+             | select('equalto', 'NodePort')
              | list | length > 0 }}
     - name: Emit JSON for the python harness
       ansible.builtin.copy:

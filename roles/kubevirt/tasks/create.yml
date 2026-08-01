@@ -91,15 +91,19 @@
   loop_control:
     label: "{{ item }}"
 
-# Cluster-Node lookup is only needed for hosts that don't pin their own
-# connection_ip. When every host pins one, skip the lookup entirely so
-# namespace-scoped service accounts without cluster-wide `nodes [get,list]`
-# RBAC can still drive this role. See #30.
+# Cluster-Node lookup is only needed for NodePort hosts that don't pin their
+# own connection_ip. 'None' mode requires connection_ip (validated) and
+# 'PodIP' mode reads the VMI's pod address instead — skipping the lookup
+# keeps namespace-scoped service accounts without cluster-wide
+# `nodes [get,list]` RBAC viable. See #30.
 - name: Determine whether any host needs the cluster-Node lookup
   ansible.builtin.set_fact:
     __mp_kubevirt_needs_node_lookup: >-
       {{ _mp_specs.values()
          | rejectattr('connection_ip', 'defined')
+         | map(attribute='ssh_service', default={})
+         | map(attribute='type', default='NodePort')
+         | select('equalto', 'NodePort')
          | list | length > 0 }}
 
 # Look up cluster nodes once, before the per-VM dictionary loop, so every VM
