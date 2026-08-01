@@ -98,7 +98,10 @@ jobs:
 
       - name: Install KubeVirt operator + CR (emulation mode)
         run: |
-          KUBEVIRT_VERSION=$(curl -fsSL https://api.github.com/repos/kubevirt/kubevirt/releases/latest | jq -r .tag_name)
+          # Pinned: v1.9.0 (latest as of 2026-08-01) breaks on kind — virt-launcher
+          # pods crash-loop in Init:StartError, so every VM boot times out.
+          # v1.8.4 = last green (2026-07-16 run). Bump deliberately with a PR.
+          KUBEVIRT_VERSION=v1.8.4
           echo "Installing KubeVirt ${KUBEVIRT_VERSION}"
           kubectl apply -f "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-operator.yaml"
           kubectl apply -f "https://github.com/kubevirt/kubevirt/releases/download/${KUBEVIRT_VERSION}/kubevirt-cr.yaml"
