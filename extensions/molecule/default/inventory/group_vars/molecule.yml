@@ -1,6 +1,9 @@
 ---
 mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
-mp_kubevirt_wait_timeout: 300
+# 600: kind-in-CI runs KubeVirt with TCG software emulation on 2-vCPU
+# runners — ubuntu containerdisk boot + cloud-init routinely exceeds 300s
+# there (two consecutive prepare timeouts at ~310s on PR #57).
+mp_kubevirt_wait_timeout: 600
 mp_qemu_wait_timeout: 300
 
 mp_defaults:
