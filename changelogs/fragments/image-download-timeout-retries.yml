@@ -1,0 +1,8 @@
+---
+bugfixes:
+  - >-
+    qemu - the base-image download now uses a 60s timeout (was get_url's
+    10s default) and retries up to 5 times, tunable via
+    ``mp_qemu_image_download_timeout`` / ``mp_qemu_image_download_retries``.
+    cloud.debian.org intermittently stalls past 10s before serving the
+    first byte, which previously failed whole scenarios.
