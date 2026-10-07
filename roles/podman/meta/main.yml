@@ -4,11 +4,12 @@ galaxy_info:
   author: David Igou
   description: Molecule provisioner role using containers.podman
   company: ""
-  license: GPL-3.0-or-later
+  license: MIT
   min_ansible_version: "2.15"
   platforms:
     - name: GenericLinux
-      versions: [all]
+      versions:
+        - all
   galaxy_tags:
     - molecule
     - podman
