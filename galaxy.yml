@@ -11,7 +11,8 @@ description: >-
   testing other Ansible collections without copy-pasting create/destroy/prepare
   automation per repo.
 
-license_file: LICENSE
+license:
+  - MIT
 tags:
   - molecule
   - testing

@@ -246,4 +246,4 @@ Every backend produces a host group named `molecule` containing all platform hos
 
 ## Licensing
 
-GPL v3.0 or later — see [LICENSE](LICENSE).
+MIT License. See [LICENSE](LICENSE).
