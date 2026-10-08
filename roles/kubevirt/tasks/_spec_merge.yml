@@ -10,7 +10,8 @@
          | combine((hostvars[item].mp | default({}))['kubevirt'] | default({})) }}
     _defaults: >-
       {{ (mp_kubevirt_role_defaults | dict2items
-          | selectattr('key', 'in', ['namespace', 'ssh_user', 'connection', 'ssh_service']) | items2dict)
+          | selectattr('key', 'in', ['namespace', 'ssh_user', 'connection', 'ssh_service',
+                                   'connection_ip', 'admin_user', 'admin_password']) | items2dict)
          if _user_spec.vm_definition is defined else mp_kubevirt_role_defaults }}
   ansible.builtin.set_fact:
     _mp_specs: "{{ _mp_specs | combine({item: _defaults | combine(_user_spec)}) }}"

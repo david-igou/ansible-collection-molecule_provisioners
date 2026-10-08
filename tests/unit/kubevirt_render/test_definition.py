@@ -202,6 +202,12 @@ def test_actual_spec_merge_only_applies_connection_defaults(tmp_path, shared_mem
                     "ansible.builtin.include_vars": str(root / "roles/kubevirt/defaults/main.yml"),
                 },
                 {
+                    "name": "Set caller connection defaults",
+                    "ansible.builtin.set_fact": {
+                        "mp_kubevirt_role_defaults": "{{ mp_kubevirt_role_defaults | combine({'connection_ip': '192.0.2.10', 'admin_user': 'tester'}) }}",
+                    },
+                },
+                {
                     "name": "Merge input",
                     "ansible.builtin.include_tasks": str(
                         root / "roles/kubevirt/tasks/_spec_merge.yml"
@@ -230,6 +236,8 @@ def test_actual_spec_merge_only_applies_connection_defaults(tmp_path, shared_mem
     merged = yaml.safe_load(output.read_text())
     assert merged["namespace"] == "custom"
     assert merged["ssh_user"] == "tester"
+    assert merged["connection_ip"] == "192.0.2.10"
+    assert merged["admin_user"] == "tester"
     assert "interfaces" not in merged
     assert "cloud_init" not in merged
     assert ("memory" in merged) is shared_memory
