@@ -1,0 +1,75 @@
+{
+  "apiVersion": "kubevirt.io/v1",
+  "kind": "VirtualMachine",
+  "metadata": {
+    "labels": {
+      "kubevirt.io/domain": "instance"
+    },
+    "name": "instance",
+    "namespace": "molecule"
+  },
+  "spec": {
+    "running": true,
+    "template": {
+      "metadata": {
+        "labels": {
+          "kubevirt.io/domain": "instance"
+        }
+      },
+      "spec": {
+        "domain": {
+          "cpu": {
+            "cores": 4
+          },
+          "devices": {
+            "disks": [
+              {
+                "disk": {
+                  "bus": "virtio"
+                },
+                "name": "containerdisk"
+              },
+              {
+                "disk": {
+                  "bus": "virtio"
+                },
+                "name": "cloudinitdisk"
+              }
+            ],
+            "interfaces": [
+              {
+                "masquerade": {},
+                "name": "default"
+              }
+            ]
+          },
+          "resources": {
+            "requests": {
+              "memory": "2Gi"
+            }
+          }
+        },
+        "networks": [
+          {
+            "name": "default",
+            "pod": {}
+          }
+        ],
+        "volumes": [
+          {
+            "containerDisk": {
+              "image": "quay.io/containerdisks/ubuntu:24.04"
+            },
+            "name": "containerdisk"
+          },
+          {
+            "cloudInitNoCloud": {
+              "userData": "#cloud-config\nusers:\n  - name: ubuntu\n    ssh_authorized_keys:\n      - ssh-ed25519 AAAATESTKEY\n    sudo: ALL=(ALL) NOPASSWD:ALL\n    shell: /bin/bash\nchpasswd:\n  expire: false\n"
+            },
+            "name": "cloudinitdisk"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -4,6 +4,26 @@ David\_igou Molecule\_provisioners Collection Release Notes
 
 .. contents:: Topics
 
+v0.0.5-alpha
+============
+
+Minor Changes
+-------------
+
+- kubevirt - add ``mp_kubevirt_allowed_connections`` (default ``[ssh, psrp, winrm]``) as the allowlist for the new ``connection`` field.
+- kubevirt - add ``mp_kubevirt_windows_wait_timeout`` (default 900s) used by the ``prepare`` phase for ``psrp``/``winrm`` hosts, since OOBE specialize and the unattend FirstLogonCommands can take several minutes. ``ssh`` hosts continue to use ``mp_kubevirt_wait_timeout`` (120s).
+- kubevirt - add a new ``boot_source.type=data_volume_source_ref`` that boots a VM from a CDI ``DataSource`` (golden image) via ``dataVolumeTemplates[].spec.sourceRef``. Unlike ``data_volume_pvc`` (which pins a static PVC name), this tracks golden-image PVCs with rolling names managed by a ``DataImportCron`` (e.g. ``centos-stream10-1fcd75f226b4``) through the stable ``DataSource`` indirection. Requires ``source_ref.name``, ``source_ref.namespace`` and ``size``; ``source_ref.kind`` defaults to ``DataSource`` and ``storage_class`` is optional. Cross-namespace cloning needs ``datavolumes/source create`` in the source namespace on top of ``datavolumes [create, get, delete]`` in the VM namespace (documented in ``roles/kubevirt/README.md``).
+- kubevirt - add an optional per-host ``sysprep_secret`` field. When set, the renderer attaches a ``cdrom`` disk plus a sysprep volume whose ``sysprep.secret.name`` references the named Secret (note the ``secret.name`` field - ``secretName`` is silently dropped by the KubeVirt API). Valid for any connection type.
+- kubevirt - add per-host ``admin_user`` (default ``Administrator``) and ``admin_password`` (required, sensitive/``no_log``) fields, consumed by the ``psrp``/``winrm`` runtime inventory as ``ansible_user``/``ansible_password``. ``admin_password`` is validated fail-fast when missing.
+- kubevirt - new ``ssh_service.type: PodIP`` connects to the VMI's pod-network address (masquerade/virt-launcher pod IP) directly — no per-VM Service and no cluster-wide ``nodes`` RBAC required. Intended for controllers running inside the cluster, such as OpenShift Dev Spaces workspaces, where a namespace-scoped ServiceAccount with only VM/VMI permissions can drive the full molecule lifecycle.
+- kubevirt - support Windows guests on the kubevirt backend via a new per-host ``connection`` discriminator (``ssh`` (default) ``| psrp | winrm``). Windows Server 2025 / Windows 11 test VMs are provisioned from sysprep-generalized golden-image DataSources and specialized at first boot by a KubeVirt sysprep volume, then reached over WinRM-over-HTTPS (NTLM, 5986). Certificate validation is intentionally skipped for these ephemeral, isolated test guests, whose self-signed cert is minted at first boot; this is a deliberate test-scope behavior and must not be copied to production configs.
+- kubevirt - when ``connection`` is ``psrp``/``winrm`` the renderer omits the ``cloudinitdisk`` disk/volume (Windows goldens have no cloud-init), the per-VM NodePort Service (still keyed ``ssh_service`` for backward compatibility) targets guest port 5986, and SSH keypair generation is skipped entirely when no host uses an ssh connection.
+
+Bugfixes
+--------
+
+- kubevirt - destroy no longer attempts to delete the per-VM Service in ``None``/``PodIP`` modes, which failed for scoped service accounts without ``services`` RBAC (no Service was ever created in those modes).
+
 v0.0.4-alpha
 ============
 

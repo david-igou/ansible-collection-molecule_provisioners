@@ -28,6 +28,8 @@
   loop_control:
     label: "{{ item }}"
 
+# Only NodePort mode created a Service. Guarding the delete keeps scoped
+# service accounts without `services` RBAC (None/PodIP consumers) working.
 - name: Delete NodePort SSH service
   kubernetes.core.k8s:
     state: absent
@@ -35,6 +37,7 @@
     kind: Service
     name: "{{ item }}"
     namespace: "{{ _mp_specs[item].namespace }}"
+  when: (_mp_specs[item].ssh_service.type | default('NodePort')) == 'NodePort'
   loop: "{{ groups['molecule'] }}"
   loop_control:
     label: "{{ item }}"

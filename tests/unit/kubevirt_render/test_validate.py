@@ -48,6 +48,60 @@ def test_pvc_missing_name_fails(run_validate) -> None:
     assert "name" in (proc.stdout + proc.stderr)
 
 
+def test_data_volume_source_ref_valid_passes(run_validate) -> None:
+    proc = run_validate(
+        {
+            "boot_source": {
+                "type": "data_volume_source_ref",
+                "source_ref": {
+                    "name": "centos-stream10",
+                    "namespace": "openshift-virtualization-os-images",
+                },
+                "size": "30Gi",
+            },
+        },
+    )
+    assert proc.returncode == 0, proc.stderr
+
+
+def test_data_volume_source_ref_missing_source_ref_fails(run_validate) -> None:
+    proc = run_validate(
+        {"boot_source": {"type": "data_volume_source_ref", "size": "30Gi"}},
+    )
+    assert proc.returncode != 0
+    assert "source_ref" in (proc.stdout + proc.stderr)
+
+
+def test_data_volume_source_ref_missing_namespace_fails(run_validate) -> None:
+    proc = run_validate(
+        {
+            "boot_source": {
+                "type": "data_volume_source_ref",
+                "source_ref": {"name": "centos-stream10"},
+                "size": "30Gi",
+            },
+        },
+    )
+    assert proc.returncode != 0
+    assert "namespace" in (proc.stdout + proc.stderr)
+
+
+def test_data_volume_source_ref_missing_size_fails(run_validate) -> None:
+    proc = run_validate(
+        {
+            "boot_source": {
+                "type": "data_volume_source_ref",
+                "source_ref": {
+                    "name": "centos-stream10",
+                    "namespace": "openshift-virtualization-os-images",
+                },
+            },
+        },
+    )
+    assert proc.returncode != 0
+    assert "size" in (proc.stdout + proc.stderr)
+
+
 def test_invalid_ssh_service_type_fails(run_validate) -> None:
     proc = run_validate(
         {
