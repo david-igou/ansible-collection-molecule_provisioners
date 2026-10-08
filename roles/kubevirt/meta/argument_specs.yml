@@ -8,6 +8,14 @@ argument_specs:
     short_description: >-
       Create KubeVirt VirtualMachines and NodePort services for hosts in groups['molecule'].
     options:
+      mp_kubevirt_run_isolation:
+        type: bool
+        default: true
+        description: Persist run-scoped names in the Molecule ephemeral directory; set false for fixed names.
+      mp_kubevirt_cleanup_timeout:
+        type: int
+        default: 120
+        description: Seconds to wait for isolated resources to disappear during destroy.
       mp_kubevirt_role_defaults:
         type: dict
         description: >-
@@ -41,6 +49,14 @@ argument_specs:
   destroy:
     short_description: Delete KubeVirt VirtualMachines and NodePort services.
     options:
+      mp_kubevirt_run_isolation:
+        type: bool
+        default: true
+        description: Persist run-scoped names in the Molecule ephemeral directory; set false for fixed names.
+      mp_kubevirt_cleanup_timeout:
+        type: int
+        default: 120
+        description: Seconds to wait for isolated resources to disappear during destroy.
       mp_kubevirt_role_defaults:
         type: dict
   prepare:

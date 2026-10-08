@@ -7,7 +7,8 @@ concurrency:
 
 on: # yamllint disable-line rule:truthy
   pull_request:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
   # TO-DO: Below is an example cron scheduler. Uncomment and tweak it as per your requirement
   # schedule:
@@ -132,6 +133,18 @@ jobs:
           # to confirm the scenario actually exercised create/prepare/converge/verify.
           pytest tests/integration -v -k default -s -o addopts=""
 
+      - name: Verify overlapping runs and failed cleanup
+        working-directory: ansible_collections/david_igou/molecule_provisioners
+        env:
+          RUN_KUBEVIRT_ISOLATION: "1"
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
+        run: |
+          # This step bypasses Molecule/pytest-ansible's collection-path setup.
+          # Keep both the checkout and the dependencies installed above visible.
+          export ANSIBLE_COLLECTIONS_PATH="${ANSIBLE_COLLECTIONS_PATH}:${HOME}/.ansible/collections"
+          pytest tests/integration/kubevirt/test_run_isolation.py -v -s -o addopts=""
+
       - name: Stop VM watcher and dump trace
         if: always()
         run: |
@@ -177,7 +190,7 @@ jobs:
       - name: Install qemu + cloud-image-utils
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils ovmf
 
       - name: Install ansible + molecule + pytest plumbing
         working-directory: ansible_collections/david_igou/molecule_provisioners
@@ -191,6 +204,12 @@ jobs:
         run: |
           ansible-galaxy collection install \
             containers.podman kubernetes.core community.crypto community.general
+
+      - name: Exercise BIOS and UEFI CPU selection through the QEMU provisioner
+        working-directory: ansible_collections/david_igou/molecule_provisioners
+        env:
+          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
+        run: pytest tests/integration/qemu/test_qemu_unit.py -m 'not slow' -o addopts=""
 
       - name: Cache base qcow2 images
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4

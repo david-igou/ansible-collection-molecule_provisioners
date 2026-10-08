@@ -1,0 +1,18 @@
+---
+- name: "Read ownership of {{ run_resource.kind }}/{{ run_resource.name }}"
+  kubernetes.core.k8s_info:
+    api_version: "{{ run_resource.api }}"
+    kind: "{{ run_resource.kind }}"
+    name: "{{ run_resource.name }}"
+    namespace: "{{ run_host.value.namespace }}"
+  register: __mp_kubevirt_owned
+
+- name: Require matching run ownership before touching existing resources
+  ansible.builtin.assert:
+    that: >-
+      (__mp_kubevirt_owned.resources[0].metadata.labels | default({})).get(
+        'molecule-provisioners.igou.io/run-id', '') == __mp_kubevirt_run.id
+    fail_msg: >-
+      Refusing to touch {{ run_resource.kind }}/{{ run_resource.name }}:
+      run ownership does not match saved state.
+  when: __mp_kubevirt_owned.resources | length > 0

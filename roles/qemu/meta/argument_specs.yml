@@ -1,0 +1,83 @@
+---
+argument_specs:
+  main:
+    short_description: Use tasks_from=create, destroy, or prepare for lifecycle operations.
+    options: {}
+  create:
+    short_description: Create local QEMU guests for hosts in the molecule inventory group.
+    options:
+      mp_qemu_role_defaults:
+        type: dict
+        description: >-
+          Per-host defaults, overridden by mp_defaults.qemu and then mp.qemu.
+          The image is required in the merged specification, not in this defaults map.
+        options:
+          image:
+            type: str
+            description: Base disk image URL or local path.
+          image_checksum:
+            type: str
+            description: Optional checksum in the form algorithm:digest.
+          cpus:
+            type: int
+            default: 2
+            description: Number of guest virtual CPUs.
+          memory:
+            type: int
+            default: 1024
+            description: Guest memory in MiB.
+          ssh_user:
+            type: str
+            default: cloud-user
+            description: Guest account created by cloud-init for SSH access.
+          firmware:
+            type: str
+            default: bios
+            choices:
+              - bios
+              - uefi
+            description: Guest firmware type.
+          cpu_model:
+            type: str
+            default: ""
+            description: >-
+              QEMU CPU model. Empty or omitted selects host under KVM and
+              Nehalem under TCG for both BIOS and UEFI guests.
+          disk_size:
+            type: str
+            description: Optional overlay size accepted by qemu-img resize.
+          extra_args:
+            type: list
+            elements: str
+            description: Additional arguments appended to the QEMU command.
+      mp_qemu_ssh_key_path:
+        type: path
+        description: SSH key path, defaulting to identity_file in the ephemeral directory.
+      mp_qemu_image_cache_dir:
+        type: path
+        description: Base image cache, defaulting to molecule-qemu under XDG_CACHE_HOME or ~/.cache.
+      mp_qemu_slirp_port_base:
+        type: int
+        default: 2222
+        description: First local SSH port; each host adds its inventory index.
+      mp_qemu_ovmf_code:
+        type: path
+        default: /usr/share/edk2/ovmf/OVMF_CODE.fd
+        description: Read-only OVMF firmware for UEFI guests.
+      mp_qemu_ovmf_vars:
+        type: path
+        default: /usr/share/edk2/ovmf/OVMF_VARS.fd
+        description: OVMF variable template copied for each UEFI guest.
+  destroy:
+    short_description: Stop local QEMU guests and remove their ephemeral artifacts.
+    options:
+      mp_qemu_role_defaults:
+        type: dict
+        description: Per-host defaults used when reconstructing the specification.
+  prepare:
+    short_description: Wait for SSH access to the provisioned guests.
+    options:
+      mp_qemu_wait_timeout:
+        type: int
+        default: 180
+        description: Maximum seconds to wait for a guest connection.

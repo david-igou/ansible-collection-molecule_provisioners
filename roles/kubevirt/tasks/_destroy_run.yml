@@ -1,0 +1,27 @@
+---
+# Check all hosts first, so a foreign resource prevents any partial cleanup.
+- name: Check resource ownership before cleanup
+  ansible.builtin.include_tasks: _check_run_host.yml
+  loop: "{{ __mp_kubevirt_run.hosts | dict2items }}"
+  loop_control:
+    loop_var: run_host
+    label: "{{ run_host.key }}"
+
+- name: Delete this run's resources and wait for descendants
+  ansible.builtin.include_tasks: _destroy_run_host.yml
+  loop: "{{ __mp_kubevirt_run.hosts | dict2items }}"
+  loop_control:
+    loop_var: run_host
+    label: "{{ run_host.key }}"
+
+# State is the last file removed. A failed API deletion or finalizer timeout
+# leaves the original identity available to an explicit destroy/retry.
+- name: Remove stale runtime connection inventory
+  ansible.builtin.file:
+    path: "{{ molecule_ephemeral_directory }}/inventory/molecule_runtime.yml"
+    state: absent
+
+- name: Remove run state after successful cleanup
+  ansible.builtin.file:
+    path: "{{ molecule_ephemeral_directory }}/kubevirt_run.yml"
+    state: absent

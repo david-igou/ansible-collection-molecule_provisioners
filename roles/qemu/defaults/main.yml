@@ -34,3 +34,5 @@ mp_qemu_role_defaults:
   memory: 1024
   ssh_user: cloud-user
   firmware: bios
+  # Empty selects host under KVM, Nehalem under TCG (BIOS and UEFI).
+  cpu_model: ""

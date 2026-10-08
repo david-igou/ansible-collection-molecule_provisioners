@@ -19,11 +19,13 @@ HARNESS = Path(__file__).parent / "render_harness.yml"
 VALIDATE_HARNESS = Path(__file__).parent / "validate_harness.yml"
 
 
-def _run_harness(harness: Path, host_spec: dict[str, Any]) -> subprocess.CompletedProcess:
+def _run_harness(harness: Path, host_spec: dict[str, Any], run=None) -> subprocess.CompletedProcess:
     """Run an ansible-playbook harness with host_spec, return the completed process."""
     with tempfile.TemporaryDirectory() as tmp:
         output_path = Path(tmp) / "rendered.yml"
         extra_vars = {"host_spec": host_spec, "output_path": str(output_path)}
+        if run is not None:
+            extra_vars["__mp_kubevirt_run"] = run
         proc = subprocess.run(
             [
                 "ansible-playbook",
@@ -45,8 +47,8 @@ def _run_harness(harness: Path, host_spec: dict[str, Any]) -> subprocess.Complet
 def render_vm() -> Callable[[dict[str, Any]], dict[str, Any]]:
     """Return a function that renders a VM from a per-host spec dict."""
 
-    def _render(host_spec: dict[str, Any]) -> dict[str, Any]:
-        proc = _run_harness(HARNESS, host_spec)
+    def _render(host_spec: dict[str, Any], run=None) -> dict[str, Any]:
+        proc = _run_harness(HARNESS, host_spec, run)
         assert (
             proc.returncode == 0
         ), f"render harness failed:\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"

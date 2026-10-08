@@ -23,6 +23,20 @@
   loop_control:
     label: "{{ item }}"
 
+- name: Load any saved run identity
+  ansible.builtin.include_tasks: _load_run.yml
+
+- name: Initialize or resume run isolation
+  ansible.builtin.include_tasks: _init_run.yml
+
+- name: Check isolated resources before provisioning
+  ansible.builtin.include_tasks: _check_run_host.yml
+  loop: "{{ __mp_kubevirt_run.hosts | dict2items }}"
+  loop_control:
+    loop_var: run_host
+    label: "{{ run_host.key }}"
+  when: mp_kubevirt_run_isolation | bool
+
 # Only ssh-connection hosts consume the cloud-init-injected key. Skip keygen
 # entirely when NO host needs ssh (e.g. an all-Windows psrp/winrm scenario) —
 # a Windows golden has no cloud-init to consume the key anyway.
@@ -65,8 +79,11 @@
       apiVersion: v1
       kind: Service
       metadata:
-        name: "{{ item }}"
+        name: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}"
         namespace: "{{ _mp_specs[item].namespace }}"
+        labels: >-
+          {{ {'molecule-provisioners.igou.io/run-id': __mp_kubevirt_run.id}
+             if mp_kubevirt_run_isolation | bool else {} }}
       spec:
         # Build the ports list as a SINGLE Jinja dict-literal expression so
         # `_guest_port | int` stays a real int. A quoted `"{{ _guest_port | int }}"`
@@ -84,7 +101,7 @@
             ]
           }}
         selector:
-          kubevirt.io/domain: "{{ item }}"
+          kubevirt.io/domain: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}"
         type: NodePort
   when: (_mp_specs[item].ssh_service.type | default('NodePort')) == 'NodePort'
   loop: "{{ groups['molecule'] }}"
