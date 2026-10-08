@@ -58,12 +58,12 @@ Shared defaults can be hoisted into `mp_defaults.qemu` in `inventory/group_vars/
 
 See `defaults/main.yml`:
 
+- `mp_qemu_image_download_timeout` — timeout for each base-image download request (default `60` seconds).
+- `mp_qemu_image_download_retries` — retries after a failed request (default `5`, with a `5` second delay between attempts). Checksum failures also exhaust this budget and never populate the cache.
 - `mp_qemu_ssh_key_path` — where the per-run SSH keypair is written (default: `{{ molecule_ephemeral_directory }}/identity_file`).
 - `mp_qemu_wait_timeout` — `wait_for_connection` ceiling for prepare (default `180`; TCG boots are slow).
 - `mp_qemu_slirp_port_base` — base host port for SLIRP `hostfwd` (default `2222`; per-host port = base + host index).
 - `mp_qemu_image_cache_dir` — base image cache root (default honours `XDG_CACHE_HOME`, else `~/.cache/molecule-qemu`).
-- `mp_qemu_image_download_timeout` — timeout for each base-image download request (default `60` seconds).
-- `mp_qemu_image_download_retries` — retries after a failed request (default `5`, with a `5` second delay between attempts). Checksum failures also exhaust this budget and never populate the cache.
 - `mp_qemu_role_defaults` — the per-host field defaults (cpus/memory/ssh_user/firmware). Only `image` is required and is therefore absent from this dict.
 - `mp_qemu_ovmf_code` / `mp_qemu_ovmf_vars` — paths to the OVMF firmware images (defaults: `/usr/share/edk2/ovmf/OVMF_CODE.fd` and `/usr/share/edk2/ovmf/OVMF_VARS.fd`). Only consumed when a host sets `firmware: uefi`. Per-VM writable copies of `OVMF_VARS.fd` are created in `molecule_ephemeral_directory`; `OVMF_CODE.fd` is mounted read-only.
 
