@@ -23,10 +23,12 @@ argument_specs:
           connection (default ssh), and ssh_service.type. Layered as: this dict <- mp_defaults.kubevirt
           <- hostvars[item].mp.kubevirt. Per-host hostvars accepts a much wider
           schema (boot_source, cpu, memory_limit, scheduling, extras, vm_overrides,
-          cloud_init, interfaces, networks); see roles/kubevirt/README.md.
+          cloud_init, interfaces, networks, vm_definition); see roles/kubevirt/README.md.
       mp_kubevirt_ssh_key_path:
         type: path
-        description: Where the SSH keypair is generated (defaults to molecule_ephemeral_directory/identity_file).
+        description: >-
+          SSH private key path; generated for simple-variable guests and supplied
+          by the caller for full definitions. Defaults to molecule_ephemeral_directory/identity_file.
       mp_kubevirt_allowed_ssh_service_types:
         type: list
         elements: str
@@ -72,6 +74,17 @@ argument_specs:
         description: >-
           wait_for_connection timeout (seconds) for Windows (psrp/winrm) hosts.
           Generous by default to cover OOBE specialize + FirstLogonCommands.
+  definition:
+    short_description: Validate a full per-host VirtualMachine definition.
+    options:
+      vm_definition:
+        type: dict
+        required: true
+        no_log: true
+        description: >-
+          Desired-state kubevirt.io/v1 VirtualMachine manifest replacing generated
+          VM configuration. Mutually exclusive with simple VM parameters and
+          vm_overrides. Identity remains managed by the provisioner.
   customization:
     short_description: Validate per-host cloud-init and network configuration before provisioning.
     options:

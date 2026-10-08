@@ -1,0 +1,75 @@
+---
+- name: Select the managed VM identity
+  ansible.builtin.set_fact:
+    __mp_kubevirt_vm_name: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}"
+    __mp_kubevirt_vm: "{{ _mp_specs[item].vm_definition }}"
+
+- name: Resolve full-definition DataVolume identities
+  ansible.builtin.include_tasks: _data_volume_names.yml
+
+- name: Initialize full-definition disk rendering
+  ansible.builtin.set_fact:
+    __mp_kubevirt_definition_disks: []
+    __mp_kubevirt_definition_volumes: []
+
+- name: Render embedded DataVolume identities and ownership
+  vars:
+    _owner_labels: >-
+      {{ {'molecule-provisioners.igou.io/run-id': __mp_kubevirt_run.id}
+         if (__mp_kubevirt_run.hosts | default({})) | length > 0 else {} }}
+    _metadata:
+      name: "{{ __mp_kubevirt_data_volume_map[data_volume.metadata.name] }}"
+      labels: "{{ (data_volume.metadata.labels | default({})) | combine(_owner_labels) }}"
+    _disk: "{{ data_volume | combine({'metadata': _metadata}, recursive=True) }}"
+  ansible.builtin.set_fact:
+    __mp_kubevirt_definition_disks: "{{ __mp_kubevirt_definition_disks + [_disk] }}"
+  loop: "{{ __mp_kubevirt_vm.spec.dataVolumeTemplates | default([]) }}"
+  loop_control:
+    loop_var: data_volume
+    label: "{{ data_volume.metadata.name }}"
+
+- name: Rewrite references to embedded DataVolumes
+  vars:
+    _reference: "{{ volume.dataVolume.name | default(volume.persistentVolumeClaim.claimName | default('')) }}"
+    _patch: >-
+      {{ ({'dataVolume': {'name': __mp_kubevirt_data_volume_map[_reference]}}
+          if volume.dataVolume is defined
+          else {'persistentVolumeClaim': {'claimName': __mp_kubevirt_data_volume_map[_reference]}})
+         if _reference in __mp_kubevirt_data_volume_map else {} }}
+  ansible.builtin.set_fact:
+    __mp_kubevirt_definition_volumes: >-
+      {{ __mp_kubevirt_definition_volumes + [volume | combine(_patch, recursive=True)] }}
+  loop: "{{ __mp_kubevirt_vm.spec.template.spec.volumes | default([]) }}"
+  loop_control:
+    loop_var: volume
+    label: "{{ volume.name }}"
+
+- name: Apply managed disk identities without adding VM defaults
+  vars:
+    _patch:
+      spec:
+        dataVolumeTemplates: "{{ __mp_kubevirt_definition_disks }}"
+        template:
+          spec:
+            volumes: "{{ __mp_kubevirt_definition_volumes }}"
+  ansible.builtin.set_fact:
+    __mp_kubevirt_vm: "{{ __mp_kubevirt_vm | combine(_patch, recursive=True) }}"
+  when: __mp_kubevirt_definition_disks | length > 0
+
+- name: Apply managed identity and ownership to the full definition
+  vars:
+    _labels: >-
+      {{ {'kubevirt.io/domain': __mp_kubevirt_vm_name}
+         | combine({'molecule-provisioners.igou.io/run-id': __mp_kubevirt_run.id}
+                   if (__mp_kubevirt_run.hosts | default({})) | length > 0 else {}) }}
+    _patch:
+      metadata:
+        name: "{{ __mp_kubevirt_vm_name }}"
+        namespace: "{{ _mp_specs[item].namespace | default('molecule') }}"
+        labels: "{{ _labels }}"
+      spec:
+        template:
+          metadata:
+            labels: "{{ _labels }}"
+  ansible.builtin.set_fact:
+    __mp_kubevirt_vm: "{{ __mp_kubevirt_vm | combine(_patch, recursive=True) }}"

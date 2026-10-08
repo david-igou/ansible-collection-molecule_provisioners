@@ -25,8 +25,15 @@
     _default_networks:
       - name: default
         pod: {}
+    _definition_guest: "{{ _mp_specs[item].vm_definition.spec.template.spec | default({}) }}"
+    _definition_networks: >-
+      {{ _definition_guest.networks | default([])
+         or (_default_networks
+             if _definition_guest.domain.devices.autoattachPodInterface | default(true) | bool else []) }}
     _networks: >-
-      {{ (_mp_specs[item].networks | default(_default_networks)) + (_mp_specs[item].extra_networks | default([])) }}
+      {{ _definition_networks if _mp_specs[item].vm_definition is defined
+         else ((_mp_specs[item].networks | default(_default_networks))
+               + (_mp_specs[item].extra_networks | default([]))) }}
   ansible.builtin.set_fact:
     __mp_kubevirt_pod_network_name: >-
       {{ (_networks | selectattr('pod', 'defined') | first).name }}
@@ -77,7 +84,7 @@
     # string-coerces to "31234" on ansible-core 2.16/2.17 (native types only on
     # 2.19+) — see CLAUDE.md. Keep these as dict literals inside `{{ }}`.
     #
-    # ssh: cloud-init injected an SSH key; connect as ssh_user with that key.
+    # ssh: use the generated key or the caller's full-definition key.
     _ssh_entry: >-
       {{
         {

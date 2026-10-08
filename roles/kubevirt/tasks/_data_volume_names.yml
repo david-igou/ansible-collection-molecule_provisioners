@@ -1,0 +1,32 @@
+---
+# Shared by state recording and full-definition rendering. External references
+# are deliberately absent from this map.
+- name: Reset managed DataVolume names
+  ansible.builtin.set_fact:
+    __mp_kubevirt_data_volume_map: {}
+
+- name: Record the curated boot DataVolume name
+  ansible.builtin.set_fact:
+    __mp_kubevirt_data_volume_map:
+      boot: "{{ __mp_kubevirt_vm_name }}-boot"
+  when:
+    - _mp_specs[item].vm_definition is not defined
+    - >-
+      (_mp_specs[item].boot_source.type | default(''))
+      in ['data_volume_url', 'data_volume_pvc', 'data_volume_source_ref']
+
+- name: Map full-definition DataVolume names
+  vars:
+    _name: >-
+      {{ __mp_kubevirt_vm_name[:40] ~ '-dv-'
+         ~ ((__mp_kubevirt_vm_name ~ '/' ~ data_volume.metadata.name) | hash('sha256'))[:16]
+         if mp_kubevirt_run_isolation | default((__mp_kubevirt_run.hosts | default({})) | length > 0) | bool
+         else data_volume.metadata.name }}
+  ansible.builtin.set_fact:
+    __mp_kubevirt_data_volume_map: >-
+      {{ __mp_kubevirt_data_volume_map | combine({data_volume.metadata.name: _name}) }}
+  loop: "{{ _mp_specs[item].vm_definition.spec.dataVolumeTemplates | default([]) }}"
+  loop_control:
+    loop_var: data_volume
+    label: "{{ data_volume.metadata.name }}"
+  no_log: true

@@ -1,0 +1,4 @@
+---
+minor_changes:
+  - kubevirt - Added ``vm_definition`` to provision a complete VirtualMachine manifest without generated VM defaults or override merging.
+  - kubevirt - Preserved run isolation for full definitions by renaming embedded DataVolumes and their references, recording every managed disk for ownership checks and cleanup.

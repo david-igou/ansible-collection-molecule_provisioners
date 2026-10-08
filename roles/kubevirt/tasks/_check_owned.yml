@@ -1,5 +1,5 @@
 ---
-- name: "Read ownership of {{ run_resource.kind }}/{{ run_resource.name }}"
+- name: "Read resource ownership: {{ run_resource.kind ~ '/' ~ run_resource.name }}"
   kubernetes.core.k8s_info:
     api_version: "{{ run_resource.api }}"
     kind: "{{ run_resource.kind }}"

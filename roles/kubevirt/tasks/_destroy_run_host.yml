@@ -21,10 +21,13 @@
   retries: "{{ [1, ((mp_kubevirt_cleanup_timeout | int) / 2) | round(0, 'ceil') | int] | max }}"
   delay: 2
   loop: >-
-    {{ [{'api': 'kubevirt.io/v1', 'kind': 'VirtualMachineInstance', 'name': run_host.value.name}]
-       + ([{'api': 'cdi.kubevirt.io/v1beta1', 'kind': 'DataVolume', 'name': run_host.value.name ~ '-boot'},
-           {'api': 'v1', 'kind': 'PersistentVolumeClaim', 'name': run_host.value.name ~ '-boot'}]
-          if run_host.value.disk else []) }}
+    {{ [{'api': 'kubevirt.io/v1', 'kind': 'VirtualMachineInstance', 'name': run_host.value.name}] }}
   loop_control:
     loop_var: run_resource
     label: "{{ run_resource.kind }}/{{ run_resource.name }}"
+
+- name: Wait for all managed disks to disappear
+  ansible.builtin.include_tasks: _wait_data_volume.yml
+  loop: "{{ run_host.value.data_volumes | default([run_host.value.name ~ '-boot'] if run_host.value.disk else []) }}"
+  loop_control:
+    loop_var: data_volume_name

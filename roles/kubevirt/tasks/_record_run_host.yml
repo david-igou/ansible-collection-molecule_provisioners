@@ -1,0 +1,34 @@
+---
+- name: Select the isolated VM name
+  vars:
+    _prefix: "{{ (item | lower | regex_replace('[^a-z0-9-]', '-') | trim('-'))[:32] | default('vm', true) }}"
+    _digest: "{{ (item | hash('sha256'))[:8] }}"
+  ansible.builtin.set_fact:
+    __mp_kubevirt_vm_name: "{{ _prefix }}-{{ _digest }}-{{ __mp_kubevirt_run.id }}"
+
+- name: Resolve managed DataVolume names
+  ansible.builtin.include_tasks: _data_volume_names.yml
+
+- name: Record names and cleanup requirements for each host
+  vars:
+    _resource:
+      name: "{{ __mp_kubevirt_vm_name }}"
+      namespace: "{{ _mp_specs[item].namespace }}"
+      service: "{{ (_mp_specs[item].ssh_service.type | default('NodePort')) == 'NodePort' }}"
+      disk: "{{ __mp_kubevirt_data_volume_map | length > 0 }}"
+      data_volumes: "{{ __mp_kubevirt_data_volume_map.values() | list | sort }}"
+  ansible.builtin.set_fact:
+    __mp_kubevirt_run: "{{ __mp_kubevirt_run | combine({'hosts': {item: _resource}}, recursive=True) }}"
+  when: not __mp_kubevirt_run_file.stat.exists
+
+- name: Reject changes to cleanup requirements during an isolated run
+  vars:
+    _saved: "{{ __mp_kubevirt_run.hosts[item] }}"
+    _saved_disks: "{{ _saved.data_volumes | default([_saved.name ~ '-boot'] if _saved.disk else []) }}"
+  ansible.builtin.assert:
+    that:
+      - _saved.namespace == _mp_specs[item].namespace
+      - _saved.service == ((_mp_specs[item].ssh_service.type | default('NodePort')) == 'NodePort')
+      - (_saved_disks | sort) == (__mp_kubevirt_data_volume_map.values() | list | sort)
+    fail_msg: Destroy the saved run before changing its namespace, Service mode or disk ownership.
+  when: __mp_kubevirt_run_file.stat.exists

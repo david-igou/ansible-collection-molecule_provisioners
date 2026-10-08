@@ -22,7 +22,7 @@
       instance: "{{ host_spec }}"
   tasks:
     - name: Include the renderer
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../roles/kubevirt/tasks/_build_vm.yml"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../roles/kubevirt/tasks/_render_vm.yml"
 
     - name: Dump rendered VM to output_path
       ansible.builtin.copy:

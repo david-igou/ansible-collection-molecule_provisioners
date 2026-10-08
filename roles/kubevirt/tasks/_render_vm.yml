@@ -1,0 +1,8 @@
+---
+- name: Render a full VirtualMachine definition
+  ansible.builtin.include_tasks: _build_vm_definition.yml
+  when: _mp_specs[item].vm_definition is defined
+
+- name: Render a VirtualMachine from simple variables
+  ansible.builtin.include_tasks: _build_vm.yml
+  when: _mp_specs[item].vm_definition is not defined

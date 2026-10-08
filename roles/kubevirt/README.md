@@ -31,7 +31,7 @@ The cluster-scoped `nodes` permission is used to pick the NodePort connection IP
 
 | `tasks_from` | What it does |
 | --- | --- |
-| `create` | Merges per-host specs, generates a keypair for SSH connections or explicit key injection, creates each VirtualMachine and its Service in NodePort mode, and writes runtime connection details into the inventory file. |
+| `create` | Merges per-host specs, generates a keypair for simple-variable SSH guests or explicit key injection, creates each VirtualMachine and its Service in NodePort mode, and writes runtime connection details into the inventory file. Full definitions use caller-provided guest access. |
 | `destroy` | Deletes the run's VirtualMachines and NodePort Services, waits for generated resources to disappear, then removes local run state and runtime inventory. Fixed-name mode deletes resources using the original inventory names. |
 | `prepare` | `wait_for_connection` against each created host (honors the per-host connection plugin: ssh/psrp/winrm). Windows hosts get the longer `mp_kubevirt_windows_wait_timeout`. |
 
@@ -47,8 +47,9 @@ mp_backend: kubevirt
 Each run saves `kubevirt_run.yml` (mode `0600`) in its Molecule ephemeral
 directory **before** creating infrastructure. The file contains only the run
 ID and host-to-resource mapping. VMs and NodePort Services use a normalized host
-prefix, a host-name digest and a random run suffix; generated DataVolumes/PVCs
-add `-boot`. Names stay within Kubernetes limits even for long inventory names.
+prefix, a host-name digest and a random run suffix. Curated boot DataVolumes/PVCs
+add `-boot`; full-definition disk names use the format described below.
+Names stay within Kubernetes limits even for long inventory names.
 Logical inventory hosts, groups and consumer variables are unchanged. Runtime
 connection inventory still uses names such as `instance`.
 
@@ -123,7 +124,7 @@ all:
 `instance` stays the Ansible inventory name. The VM and Service receive names
 such as `instance-5e8c03a9-825bbd211b673a09` automatically.
 
-The full per-host schema:
+The simple-variable per-host settings (use `vm_definition` instead for a full manifest):
 
 ```yaml
 all:
@@ -199,6 +200,112 @@ all:
 ```
 
 Set shared defaults in `mp_defaults.kubevirt` in `inventory/group_vars/molecule.yml`. Field resolution: role defaults ← `mp_defaults.kubevirt` ← `hostvars[item].mp.kubevirt`.
+
+## Full VirtualMachine definitions
+
+Set `mp.kubevirt.vm_definition` to a desired-state `kubevirt.io/v1`
+`VirtualMachine` manifest when the scenario needs complete control over the VM.
+The role skips its VM generator: it does not add compute settings, disks,
+interfaces, cloud-init, or `spec.running`, and it does not merge `vm_overrides`.
+KubeVirt validates the supplied spec against the cluster's installed API.
+
+The role still manages resource identity, connection inventory, prepare, and
+destroy. `namespace`, `ssh_user`, `connection`, `ssh_service`, `connection_ip`,
+`admin_user`, and `admin_password` remain outside the manifest. Only connection
+and namespace defaults apply in this mode. VM-building parameters such as
+`boot_source`, `memory`, `cloud_init`, `sysprep_secret`, the scheduling/networking
+parameters, `extra_*`, and `vm_overrides` are mutually exclusive with
+`vm_definition`, including values inherited from `mp_defaults.kubevirt`.
+
+For SSH, supply an existing private key at `mp_kubevirt_ssh_key_path` before
+create, and arrange for the guest to accept its public key. The role does not
+generate or inject a key for full definitions. In a mixed scenario, the same
+key is used by the simple-variable guests; use an Ed25519 key for that case.
+Secrets and other external dependencies must exist before provisioning.
+
+This example assumes `molecule-bootstrap` contains cloud-init `userdata` that
+configures the `ubuntu` user's SSH access with the supplied key and installs
+Python. NodePort management is the default:
+
+```yaml
+---
+all:
+  children:
+    molecule:
+      vars:
+        mp_backend: kubevirt
+        mp_kubevirt_ssh_key_path: /path/to/scenario-key
+      hosts:
+        ubuntu-test:
+          mp:
+            kubevirt:
+              namespace: molecule
+              ssh_user: ubuntu
+              vm_definition:
+                apiVersion: kubevirt.io/v1
+                kind: VirtualMachine
+                spec:
+                  runStrategy: RerunOnFailure
+                  template:
+                    spec:
+                      domain:
+                        cpu:
+                          cores: 2
+                        resources:
+                          requests:
+                            memory: 2Gi
+                        devices:
+                          rng: {}
+                          interfaces:
+                            - name: management
+                              masquerade: {}
+                          disks:
+                            - name: root
+                              disk:
+                                bus: virtio
+                            - name: seed
+                              disk:
+                                bus: virtio
+                      networks:
+                        - name: management
+                          pod: {}
+                      volumes:
+                        - name: root
+                          containerDisk:
+                            image: quay.io/containerdisks/ubuntu:24.04
+                        - name: seed
+                          cloudInitNoCloud:
+                            secretRef:
+                              name: molecule-bootstrap
+```
+
+`metadata.name` is optional and always replaced with the managed VM name:
+the inventory host name in fixed-name mode, or the generated name under run
+isolation. Omit `metadata.namespace`, or match `mp.kubevirt.namespace`.
+The role sets the domain selector and, in isolated mode, ownership labels on
+the VM and its template while retaining other labels and annotations.
+Omit `status`; this parameter describes desired state rather than an API dump.
+
+Under run isolation, each `spec.dataVolumeTemplates` name becomes the first
+40 characters of the managed VM name plus `-dv-` and a 16-character SHA-256
+digest of the managed VM name and original disk name. Matching `dataVolume`
+and `persistentVolumeClaim` volume references are rewritten. Template names
+must be unique. Fixed-name mode retains their original names. External PVCs,
+external DataVolumes, and CDI source references keep their names and remain
+caller-owned. Destroy checks ownership and waits for all template-created
+DataVolumes and PVCs to disappear; saved runs from earlier versions still work.
+
+NodePort and PodIP management require pod networking in the full definition
+(including KubeVirt's automatic pod interface when networking is omitted).
+For Multus-only guests, use `ssh_service.type: None` with `connection_ip`.
+The guest must be running and reachable for prepare to succeed; a `Halted`
+or `Manual` strategy requires the caller to start it before prepare.
+
+To load an existing manifest from a file, supply a mapping through inventory:
+
+```yaml
+vm_definition: "{{ lookup('ansible.builtin.file', inventory_dir ~ '/vm.yml') | from_yaml }}"
+```
 
 ## Boot sources
 
