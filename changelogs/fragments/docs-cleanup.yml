@@ -3,4 +3,5 @@ doc_changes:
   - >-
     Removed agent plans and design notes and documented that agent working files
     belong outside the repository. Updated consumer and backend guidance and
-    converted YAML examples to block style.
+    converted YAML examples to block style
+    (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/69).
