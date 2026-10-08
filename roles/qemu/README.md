@@ -26,10 +26,18 @@ all:
               memory: 1024                                                   # optional MiB, role default 1024
               ssh_user: ubuntu                                               # optional, role default cloud-user
               firmware: bios                                                 # optional, role default 'bios'; 'uefi' loads OVMF pflash
-              cpu_model: host                                                # optional; defaults to 'host' under KVM, 'Nehalem' under TCG. Set explicitly to override (e.g. 'EPYC', 'Skylake-Server', 'Westmere'). Nehalem is the oldest named model that satisfies the x86-64-v2 ABI glibc requires on RHEL/Rocky/CentOS 9+.
+              cpu_model: ""                                                  # optional; empty/omitted selects 'host' under KVM, 'Nehalem' under TCG for both BIOS and UEFI
               disk_size: ""                                                  # optional; resizes the overlay and grows root on first boot via cloud-init growpart
               extra_args: []                                                 # optional; raw qemu-system CLI args appended to argv (BIOS and UEFI). Must be a flat list of strings — quote elements containing '='. Canonical use is extra NICs.
 ```
+
+### Selecting the guest CPU
+
+`cpu_model` overrides QEMU's CPU selection per guest. Empty or omitted selects
+`host` under KVM and `Nehalem` under TCG for both firmware types. Nehalem provides
+the x86-64-v2 instructions required by RHEL/Rocky/CentOS 9+ without relying on
+the unavailable `qemu64-v2` name in some QEMU builds. Named models such as
+`Westmere` or `EPYC` can be selected explicitly when the controller supports them.
 
 ### Adding extra NICs with `extra_args`
 
@@ -62,7 +70,7 @@ See `defaults/main.yml`:
 - `mp_qemu_wait_timeout` — `wait_for_connection` ceiling for prepare (default `180`; TCG boots are slow).
 - `mp_qemu_slirp_port_base` — base host port for SLIRP `hostfwd` (default `2222`; per-host port = base + host index).
 - `mp_qemu_image_cache_dir` — base image cache root (default honours `XDG_CACHE_HOME`, else `~/.cache/molecule-qemu`).
-- `mp_qemu_role_defaults` — the per-host field defaults (cpus/memory/ssh_user/firmware). Only `image` is required and is therefore absent from this dict.
+- `mp_qemu_role_defaults` — the per-host field defaults (cpus/memory/ssh_user/firmware/cpu_model). Only `image` is required and is therefore absent from this dict.
 - `mp_qemu_ovmf_code` / `mp_qemu_ovmf_vars` — paths to the OVMF firmware images (defaults: `/usr/share/edk2/ovmf/OVMF_CODE.fd` and `/usr/share/edk2/ovmf/OVMF_VARS.fd`). Only consumed when a host sets `firmware: uefi`. Per-VM writable copies of `OVMF_VARS.fd` are created in `molecule_ephemeral_directory`; `OVMF_CODE.fd` is mounted read-only.
 
 ## Compressed and non-qcow2 images

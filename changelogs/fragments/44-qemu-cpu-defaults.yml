@@ -1,0 +1,6 @@
+---
+bugfixes:
+  - >-
+    qemu - used Nehalem as the TCG CPU default for both BIOS and UEFI guests,
+    avoiding launch failures on builds without qemu64-v2, and documented the
+    cpu_model option in the role argument specification and public contract.
