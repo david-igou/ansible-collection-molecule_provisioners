@@ -1,6 +1,6 @@
 # `david_igou.molecule_provisioners.qemu`
 
-Molecule provisioner role for QEMU virtual machines (process driver, SLIRP networking). Not invoked directly — invoked via the collection's top-level `playbooks/{create,destroy,prepare}.yml` dispatchers, which read `mp_backend` from the molecule group's hostvars.
+Molecule provisioner role for QEMU virtual machines (process driver, SLIRP networking). Use the collection's `playbooks/{create,destroy,prepare}.yml` dispatchers to invoke this role. They select the backend using `mp_backend` from the molecule group's hostvars.
 
 ## Entry points
 
@@ -60,7 +60,7 @@ This adds a second NIC the guest kernel enumerates on boot. `extra_args` is a
 raw escape hatch — its elements are passed to `qemu-system-x86_64` verbatim, so
 any qemu flag works, not just networking.
 
-Shared defaults can be hoisted into `mp_defaults.qemu` in `inventory/group_vars/molecule.yml` (overrides role defaults; per-host fields override mp_defaults). Field resolution order in the role: role defaults <- `mp_defaults.qemu` <- `hostvars[item].mp.qemu`.
+Set shared defaults in `mp_defaults.qemu` in `inventory/group_vars/molecule.yml`. Field resolution order: role defaults <- `mp_defaults.qemu` <- `hostvars[item].mp.qemu`.
 
 ## Role-level overrides
 

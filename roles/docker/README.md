@@ -1,6 +1,6 @@
 # `david_igou.molecule_provisioners.docker`
 
-Molecule provisioner role for docker containers. Not invoked directly — invoked via the collection's top-level `playbooks/{create,destroy,prepare}.yml` dispatchers, which read `mp_backend` from the molecule group's hostvars.
+Molecule provisioner role for docker containers. Use the collection's `playbooks/{create,destroy,prepare}.yml` dispatchers to invoke this role. They select the backend using `mp_backend` from the molecule group's hostvars.
 
 ## Entry points
 
@@ -33,23 +33,37 @@ all:
               runtime: <str>                   # optional
               platform: <str>                  # optional
               capabilities: []                 # optional
-              security_opts: [<str>]           # optional
-              sysctls: {<k>: <v>}              # optional
-              ulimits: [<str>]                 # optional
-              devices: [<str>]                 # optional
+              security_opts:                  # optional
+                - <str>
+              sysctls:                        # optional
+                <k>: <v>
+              ulimits:                        # optional
+                - <str>
+              devices:                        # optional
+                - <str>
               volumes: []                      # optional
-              mounts: [<dict>]                 # optional
-              tmpfs: [<str>]                   # optional
+              mounts:                         # optional, list of mount mappings
+                - type: bind
+                  source: /path/on/controller
+                  target: /path/in/container
+              tmpfs:                          # optional
+                - <str>
               shm_size: <str>                  # optional
-              networks: [{name: <str>}]        # optional; role creates/deletes the network
+              networks:                       # optional; role creates/deletes the network
+                - name: <str>
               network_mode: <str>              # optional
               networks_cli_compatible: true    # optional, role default true
               purge_networks: <bool>           # optional
-              dns_servers: [<str>]             # optional
-              etc_hosts: {<host>: <ip>}        # optional
-              exposed_ports: [<str>]           # optional
-              published_ports: [<str>]         # optional
-              links: [<str>]                   # optional
+              dns_servers:                    # optional
+                - <str>
+              etc_hosts:                      # optional
+                <host>: <ip>
+              exposed_ports:                  # optional
+                - <str>
+              published_ports:                # optional
+                - <str>
+              links:                          # optional
+                - <str>
               env: {}                          # optional
               labels: {}                       # optional
               restart_policy: <str>            # optional
@@ -63,7 +77,7 @@ all:
               keep_volumes: true               # optional, role default true
 ```
 
-Shared defaults can be hoisted into `mp_defaults.docker` in `inventory/group_vars/molecule.yml` (overrides role defaults; per-host fields override mp_defaults). Field resolution order in the role: role defaults <- `mp_defaults.docker` <- `hostvars[item].mp.docker`.
+Set shared defaults in `mp_defaults.docker` in `inventory/group_vars/molecule.yml`. Field resolution order: role defaults <- `mp_defaults.docker` <- `hostvars[item].mp.docker`.
 
 ## Connection user
 

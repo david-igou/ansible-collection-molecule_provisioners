@@ -2,7 +2,7 @@
 
 Reusable [Molecule](https://ansible.readthedocs.io/projects/molecule/) provisioner playbooks and roles for testing Ansible collections.
 
-Stop redefining `create.yml`/`destroy.yml`/`prepare.yml` per repo. Install this collection, write three one-line files in your scenario, and switch backends with one env var.
+Install this collection and import its `create.yml`/`destroy.yml`/`prepare.yml` playbooks from three one-line scenario files. Switch backends with one environment variable.
 
 KubeVirt runs use isolated resource names by default. Set
 `mp_kubevirt_run_isolation: false` in `inventory/group_vars/molecule.yml` when
@@ -10,18 +10,25 @@ fixed names are required. See the
 [KubeVirt role](roles/kubevirt/README.md#concurrent-runs-in-a-shared-namespace) for
 retry, cleanup and lost-state recovery.
 
-## Supported backends (v1.1)
+## Supported backends
 
 | Backend | When to use |
 | --- | --- |
 | `podman` (default) | Containers, fastest CI loop |
 | `kubevirt` | Real VMs in a Kubernetes cluster (requires KubeVirt) |
 | `qemu` | Real VMs via direct `qemu-system` process (no libvirtd) |
-| `docker` | Containers, when a local docker daemon is what's available |
+| `docker` | Containers using a local Docker daemon |
+
+See the [Podman](roles/podman/README.md), [KubeVirt](roles/kubevirt/README.md),
+[QEMU](roles/qemu/README.md), and [Docker](roles/docker/README.md) role READMEs
+for their settings and requirements. KubeVirt also supports Windows guests over
+PSRP or WinRM.
 
 ## Installing
 
 The collection is published on [Ansible Galaxy](https://galaxy.ansible.com/ui/repo/published/david_igou/molecule_provisioners/).
+This README describes `main`. For a pinned release, use the documentation at
+its matching [release tag](https://github.com/david-igou/ansible-collection-molecule_provisioners/tags).
 **Pin an exact version** so test runs stay deterministic — a floating `main`
 can change provisioner behavior between runs with no change on your side.
 
@@ -35,7 +42,7 @@ per-scenario `collections.yml` that drifts independently:
 ```yaml
 collections:
   - name: david_igou.molecule_provisioners
-    version: 0.0.1-alpha
+    version: 0.0.5-alpha
 ```
 
 **2. Wire it into every scenario once via `extensions/molecule/config.yml`:**
@@ -91,7 +98,14 @@ ansible:
 
 scenario:
   name: default
-  test_sequence: [dependency, syntax, create, prepare, converge, verify, destroy]
+  test_sequence:
+    - dependency
+    - syntax
+    - create
+    - prepare
+    - converge
+    - verify
+    - destroy
 
 verifier:
   name: ansible
@@ -101,12 +115,12 @@ verifier:
 
 ```yaml
 - name: Provision molecule instances
-  import_playbook: david_igou.molecule_provisioners.create
+  ansible.builtin.import_playbook: david_igou.molecule_provisioners.create
 ```
 
 (Mirror this for `destroy.yml` and `prepare.yml`. Names are required by ansible-lint 26.4+.)
 
-**`inventory/hosts.yml`** (per scenario — describes WHICH instances to test):
+**`inventory/hosts.yml`** (instances to test in this scenario):
 
 ```yaml
 all:
@@ -129,10 +143,10 @@ all:
               image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
 ```
 
-**`inventory/group_vars/molecule.yml`** (backend selector + DRY defaults):
+**`inventory/group_vars/molecule.yml`** (backend selector and shared defaults):
 
 ```yaml
-mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
+mp_backend: "{{ lookup('ansible.builtin.env', 'PROVISIONER') | default('podman', true) }}"
 
 mp_defaults:
   podman:
@@ -218,13 +232,13 @@ Notes for the VM backends (`qemu`, `kubevirt`):
 - **OVMF path (qemu UEFI only):** the role defaults to the Fedora/RHEL paths
   `mp_qemu_ovmf_code: /usr/share/edk2/ovmf/OVMF_CODE.fd` and
   `mp_qemu_ovmf_vars: /usr/share/edk2/ovmf/OVMF_VARS.fd`. Debian/Ubuntu ship OVMF
-  under `/usr/share/OVMF/`. Either override those two vars in `group_vars`, or
-  symlink the Debian paths to the role defaults:
+  under `/usr/share/OVMF/`. Override both paths in `inventory/group_vars/molecule.yml`
+  using a matching code/vars pair installed on your controller. For example,
+  with the 4M firmware files:
 
-  ```bash
-  mkdir -p /usr/share/edk2/ovmf
-  ln -sf /usr/share/OVMF/OVMF_CODE.fd /usr/share/edk2/ovmf/OVMF_CODE.fd
-  ln -sf /usr/share/OVMF/OVMF_VARS.fd /usr/share/edk2/ovmf/OVMF_VARS.fd
+  ```yaml
+  mp_qemu_ovmf_code: /usr/share/OVMF/OVMF_CODE_4M.fd
+  mp_qemu_ovmf_vars: /usr/share/OVMF/OVMF_VARS_4M.fd
   ```
 
 ## What's in the box
@@ -232,20 +246,20 @@ Notes for the VM backends (`qemu`, `kubevirt`):
 - `playbooks/{create,destroy,prepare}.yml` — top-level dispatchers; read `mp_backend` (driven by `$PROVISIONER` env var by convention), validate, dispatch.
 - `playbooks/reset.yml` — standalone purge playbook (`david_igou.molecule_provisioners.reset`); currently removes podman containers labeled `owner=molecule`.
 - `roles/podman/` — uses `containers.podman.podman_container` + `containers.podman.podman_network`.
-- `roles/kubevirt/` — generates an SSH keypair, creates `VirtualMachine` + `NodePort` Service per host, writes the molecule inventory file.
+- `roles/kubevirt/` — creates VirtualMachines and runtime connection inventory. SSH guests receive an SSH keypair; NodePort mode also creates a Service per VM.
 - `roles/qemu/` — caches base qcow2 images, builds NoCloud seed ISOs, launches per-VM `qemu-system-x86_64` processes with SLIRP `hostfwd` for SSH.
 - `roles/docker/` — uses `community.docker.docker_container` + `community.docker.docker_network`.
 
-Every backend produces a host group named `molecule` containing all platform hosts.
+Every backend writes runtime connection details for the hosts in the inventory's `molecule` group.
 
 ## Out of scope
 
 - AWS, Azure, GCP backends
-- qemu via libvirtd (use the `process` path that ships, or a future minor)
+- qemu via libvirtd
 - qemu remote / non-controller-local hosts
-- qemu NAT or bridge networking (SLIRP only in v1.1)
+- qemu NAT or bridge networking (SLIRP only)
 - LoadBalancer / ClusterIP+port-forward kubevirt service types
-- Windows/macOS guests
+- Windows guests on backends other than KubeVirt; macOS guests
 - Per-platform networks beyond `podman.podman_network` and `docker.networks`
 - Docker image build at create time, private-registry login, remote/TLS docker daemons
 - Molecule `shared_state` / shared default-scenario pattern

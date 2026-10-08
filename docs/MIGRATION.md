@@ -47,14 +47,20 @@ ansible:
 scenario:
   name: default
   test_sequence:
-    [dependency, syntax, create, prepare, converge, verify, destroy]
+    - dependency
+    - syntax
+    - create
+    - prepare
+    - converge
+    - verify
+    - destroy
 
 verifier:
   name: ansible
 ```
 
 ```yaml
-# inventory/hosts.yml — describes WHICH instances to test
+# inventory/hosts.yml — instances to test
 all:
   children:
     molecule:
@@ -71,8 +77,8 @@ all:
 ```
 
 ```yaml
-# inventory/group_vars/molecule.yml — backend selector + DRY defaults
-mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
+# inventory/group_vars/molecule.yml — backend selector and shared defaults
+mp_backend: "{{ lookup('ansible.builtin.env', 'PROVISIONER') | default('podman', true) }}"
 
 mp_defaults:
   podman:
@@ -87,7 +93,7 @@ mp_defaults:
 ```yaml
 # create.yml / destroy.yml / prepare.yml — one-liners using FQCN
 - name: Provision molecule instances
-  import_playbook: david_igou.molecule_provisioners.create
+  ansible.builtin.import_playbook: david_igou.molecule_provisioners.create
 ```
 
 ## Field-by-field translation
@@ -95,25 +101,30 @@ mp_defaults:
 | Pre-ansible-native                                                        | Ansible-native (this collection)                                                                                                                                          |
 | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `driver: name: default` + `options.ansible_connection_options.connection` | gone — the role writes `ansible_connection` per host into the runtime inventory                                                                                           |
-| `platforms[].name`                                                        | inventory host name under `groups.molecule.hosts.<name>`                                                                                                                  |
+| `platforms[].name`                                                        | inventory host name under `all.children.molecule.hosts.<name>`                                                                                                                  |
 | `platforms[].image` (podman)                                              | `hostvars[<name>].mp.podman.image`                                                                                                                                        |
-| `platforms[].image` (kubevirt containerdisk)                              | `hostvars[<name>].mp.kubevirt.boot_source` — set `{type: container_disk, image: <containerdisk-url>}`                                                                     |
+| `platforms[].image` (kubevirt containerdisk)                              | `hostvars[<name>].mp.kubevirt.boot_source` — set `type: container_disk` and `image: <containerdisk-url>`                                                                     |
 | `platforms[].command`, `.privileged`, `.volumes`, etc.                    | `hostvars[<name>].mp.podman.<field>` (or hoisted to `mp_defaults.podman` if shared)                                                                                       |
 | `platforms[].kubevirt.namespace`, `.memory`, etc.                         | `hostvars[<name>].mp.kubevirt.<field>` (or hoisted to `mp_defaults.kubevirt`)                                                                                             |
 | `provisioner.name: ansible` + `provisioner.playbooks.*`                   | `ansible.playbooks.*`                                                                                                                                                     |
-| `provisioner.env.PROVISIONER`                                             | `mp_backend` group var (this collection populates from `lookup('env', 'PROVISIONER')` in the example boilerplate, but the contract is `mp_backend`, not the env var name) |
+| `provisioner.env.PROVISIONER`                                             | `mp_backend` group var (this collection populates from `lookup('ansible.builtin.env', 'PROVISIONER')` in the example boilerplate, but the contract is `mp_backend`, not the env var name) |
 
 ## Steps
 
 ### 1. Add the dependency
 
-In `requirements.yml`:
+Pin the dependency in `extensions/molecule/requirements-test.yml`:
 
 ```yaml
 collections:
   - name: david_igou.molecule_provisioners
-    version: ">=1.0.0,<2.0.0"
+    version: 0.0.5-alpha
 ```
+
+Copy [`examples/config.yml`](examples/config.yml) to
+`extensions/molecule/config.yml` so every scenario uses this requirements file.
+These docs describe `main`; use the matching release-tag documentation when
+migrating to a pinned release.
 
 ### 2. Create the new inventory tree
 
@@ -121,11 +132,11 @@ collections:
 mkdir -p extensions/molecule/<scenario>/inventory/group_vars
 ```
 
-Translate each `platforms[]` entry into a host under `groups.molecule.hosts` in `inventory/hosts.yml` (see the After example above).
+Translate each `platforms[]` entry into a host under `all.children.molecule.hosts` in `inventory/hosts.yml` (see the After example above).
 
 ### 3. Replace the scenario's `molecule.yml`
 
-Use the boilerplate from `docs/examples/molecule.yml`. The content is identical for every consumer.
+Copy [`examples/molecule.yml`](examples/molecule.yml) and adjust the scenario name and test sequence as needed. Copy [`examples/Makefile`](examples/Makefile) and [`examples/ansible.cfg`](examples/ansible.cfg) to the collection root.
 
 ### 4. Replace the lifecycle files
 
@@ -134,18 +145,19 @@ Replace `create.yml`/`destroy.yml`/`prepare.yml` with the one-liner FQCN imports
 ### 5. Verify
 
 ```bash
-ansible-galaxy collection install -r requirements.yml
+export MOLECULE_GLOB='extensions/molecule/*/molecule.yml'
+ansible-galaxy collection install -r extensions/molecule/requirements-test.yml
 PROVISIONER=podman   molecule test -s <scenario>
 PROVISIONER=kubevirt molecule test -s <scenario>   # if you have a cluster with KubeVirt
 ```
 
 Both should pass. If a host fails with "missing mp.<backend> in inventory", you forgot to add the backend block to that host. If validation fails with "mp_backend must be one of ...", set `mp_backend` in `inventory/group_vars/molecule.yml`.
 
-## What this collection does NOT support
+## Unsupported configurations
 
 - Cloud-provider backends (AWS, Azure, GCP).
-- qemu via libvirtd, qemu+ssh remote URIs, NAT/bridge networking — v1.1 only ships the direct-process driver with SLIRP networking.
-- KubeVirt service types other than NodePort.
+- QEMU via libvirtd, qemu+ssh remote URIs, or NAT/bridge networking. The QEMU backend runs local processes with SLIRP networking.
+- KubeVirt LoadBalancer or ClusterIP+port-forward services. `NodePort`, `None`, and `PodIP` are supported; see [SSH service types](../roles/kubevirt/README.md#ssh-service-types).
 - Mixing backends within a single scenario run.
 - Molecule's `shared_state` pattern.
 
@@ -171,5 +183,6 @@ mp:
       image: quay.io/containerdisks/ubuntu:24.04
 ```
 
-Three additional boot-source modes are now available: `data_volume_url`,
-`data_volume_pvc`, `pvc`. See `roles/kubevirt/README.md#boot-sources`.
+Four additional boot-source modes are available: `data_volume_url`,
+`data_volume_pvc`, `data_volume_source_ref`, and `pvc`. See
+[Boot sources](../roles/kubevirt/README.md#boot-sources).

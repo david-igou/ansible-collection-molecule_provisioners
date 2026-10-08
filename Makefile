@@ -39,7 +39,7 @@ test-kubevirt: ## pytest-driven kubevirt self-test (needs KUBECONFIG with KubeVi
 test-docker: ## pytest-driven docker self-test
 	PROVISIONER=docker pytest tests/integration -v -k default
 
-test-qemu: ## pytest-driven qemu self-test (needs qemu-system-x86_64 + virtqemud)
+test-qemu: ## pytest-driven qemu self-test (needs QEMU + cloud-localds or genisoimage)
 	PROVISIONER=qemu pytest tests/integration -v -k default
 
 podman: ## `molecule test` against podman directly (bypasses pytest)
@@ -51,7 +51,7 @@ kubevirt: ## `molecule test` against kubevirt directly (needs KUBECONFIG with Ku
 docker: ## `molecule test` against docker directly
 	cd $(SCENARIO_DIR) && PROVISIONER=docker molecule test
 
-qemu: ## `molecule test` against qemu directly (needs qemu-system-x86_64 + virtqemud)
+qemu: ## `molecule test` against qemu directly (needs QEMU + cloud-localds or genisoimage)
 	cd $(SCENARIO_DIR) && PROVISIONER=qemu molecule test
 
 sanity: $(CANONICAL) ## Run ansible-test sanity inside a Docker container
