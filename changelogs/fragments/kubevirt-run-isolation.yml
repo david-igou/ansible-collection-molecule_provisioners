@@ -1,0 +1,3 @@
+---
+minor_changes:
+  - kubevirt - added opt-in run-scoped VM, generated disk and Service names with durable resource mapping and ownership-checked cleanup (https://github.com/david-igou/ansible-collection-molecule_provisioners/issues/59).

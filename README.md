@@ -4,6 +4,11 @@ Reusable [Molecule](https://ansible.readthedocs.io/projects/molecule/) provision
 
 Stop redefining `create.yml`/`destroy.yml`/`prepare.yml` per repo. Install this collection, write three one-line files in your scenario, and switch backends with one env var.
 
+For concurrent KubeVirt runs in a shared namespace, set
+`mp_kubevirt_run_isolation: true` in `inventory/group_vars/molecule.yml`. See the
+[KubeVirt role](roles/kubevirt/README.md#concurrent-runs-in-a-shared-namespace) for
+retry, cleanup and lost-state recovery.
+
 ## Supported backends (v1.1)
 
 | Backend | When to use |

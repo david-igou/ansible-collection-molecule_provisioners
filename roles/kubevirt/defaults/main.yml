@@ -1,6 +1,10 @@
 ---
 # Defaults for david_igou.molecule_provisioners.kubevirt.
 
+# Opt in for shared namespaces. State is retained until cleanup succeeds.
+mp_kubevirt_run_isolation: false
+mp_kubevirt_cleanup_timeout: 120
+
 # SSH keypair lives in the molecule ephemeral dir so destroy can find it.
 mp_kubevirt_ssh_key_path: "{{ molecule_ephemeral_directory }}/identity_file"
 

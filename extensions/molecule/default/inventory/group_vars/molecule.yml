@@ -4,6 +4,8 @@ mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
 # runners — ubuntu containerdisk boot + cloud-init routinely exceeds 300s
 # there (two consecutive prepare timeouts at ~310s on PR #57).
 mp_kubevirt_wait_timeout: 600
+# Exercise collection-managed isolation with the ordinary YAML inventory.
+mp_kubevirt_run_isolation: true
 mp_qemu_wait_timeout: 300
 
 mp_defaults:

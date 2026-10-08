@@ -1,43 +1,23 @@
 ---
-# Recompute namespace per host for delete (we don't trust ephemeral state to
-# survive across phases; mp_defaults provides the namespace if not per-host).
-- name: Initialize kubevirt spec map
-  ansible.builtin.set_fact:
-    _mp_specs: {}
+- name: Load any saved run identity
+  ansible.builtin.include_tasks: _load_run.yml
 
-- name: Merge per-host specs with mp_defaults and role defaults
-  ansible.builtin.set_fact:
-    _mp_specs: >-
-      {{ _mp_specs | combine({
-           item: mp_kubevirt_role_defaults
-                 | combine(mp_defaults['kubevirt'] | default({}))
-                 | combine((hostvars[item].mp | default({}))['kubevirt'] | default({}))
-         }) }}
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
+- name: Destroy resources using the saved mapping
+  ansible.builtin.include_tasks: _destroy_run.yml
+  when: __mp_kubevirt_run_file.stat.exists
 
-- name: Delete VirtualMachine in KubeVirt
-  kubernetes.core.k8s:
-    state: absent
-    api_version: kubevirt.io/v1
-    kind: VirtualMachine
-    name: "{{ item }}"
-    namespace: "{{ _mp_specs[item].namespace }}"
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
+- name: Explain an isolated destroy without saved state
+  ansible.builtin.debug:
+    msg: >-
+      No kubevirt_run.yml exists; no isolated resources will be deleted.
+      This is normal before create. If state was lost, restore it or follow
+      the label-based recovery instructions in roles/kubevirt/README.md.
+  when:
+    - mp_kubevirt_run_isolation | bool
+    - not __mp_kubevirt_run_file.stat.exists
 
-# Only NodePort mode created a Service. Guarding the delete keeps scoped
-# service accounts without `services` RBAC (None/PodIP consumers) working.
-- name: Delete NodePort SSH service
-  kubernetes.core.k8s:
-    state: absent
-    api_version: v1
-    kind: Service
-    name: "{{ item }}"
-    namespace: "{{ _mp_specs[item].namespace }}"
-  when: (_mp_specs[item].ssh_service.type | default('NodePort')) == 'NodePort'
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
+- name: Destroy legacy fixed-name resources
+  ansible.builtin.include_tasks: _destroy_fixed.yml
+  when:
+    - not mp_kubevirt_run_isolation | bool
+    - not __mp_kubevirt_run_file.stat.exists

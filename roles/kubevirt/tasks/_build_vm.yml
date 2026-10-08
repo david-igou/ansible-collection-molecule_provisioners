@@ -54,16 +54,16 @@
       apiVersion: kubevirt.io/v1
       kind: VirtualMachine
       metadata:
-        name: "{{ item }}"
+        name: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}"
         namespace: "{{ _ns }}"
         labels:
-          kubevirt.io/domain: "{{ item }}"
+          kubevirt.io/domain: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}"
       spec:
         running: true
         template:
           metadata:
             labels:
-              kubevirt.io/domain: "{{ item }}"
+              kubevirt.io/domain: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}"
           spec:
             domain:
               devices:
@@ -98,7 +98,7 @@
 - name: "Dispatch boot_source data_volume_url: {{ item }}"
   vars:
     _bs: "{{ _mp_specs[item].boot_source }}"
-    _dv_name: "{{ item }}-boot"
+    _dv_name: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}-boot"
     _http_source:
       url: "{{ _bs.url }}"
     _storage_block: >-
@@ -120,8 +120,10 @@
       dataVolume:
         name: "{{ _dv_name }}"
     __mp_data_volume_templates:
-      - metadata:
-          name: "{{ _dv_name }}"
+      - metadata: >-
+          {{ {'name': _dv_name}
+             | combine({'labels': {'molecule-provisioners.igou.io/run-id': __mp_kubevirt_run.id}}
+                       if (__mp_kubevirt_run.hosts | default({})) | length > 0 else {}) }}
         spec:
           source:
             http: "{{ _http_source }}"
@@ -131,7 +133,7 @@
 - name: "Dispatch boot_source data_volume_pvc: {{ item }}"
   vars:
     _bs: "{{ _mp_specs[item].boot_source }}"
-    _dv_name: "{{ item }}-boot"
+    _dv_name: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}-boot"
     _storage_block: >-
       {{
         {
@@ -151,8 +153,10 @@
       dataVolume:
         name: "{{ _dv_name }}"
     __mp_data_volume_templates:
-      - metadata:
-          name: "{{ _dv_name }}"
+      - metadata: >-
+          {{ {'name': _dv_name}
+             | combine({'labels': {'molecule-provisioners.igou.io/run-id': __mp_kubevirt_run.id}}
+                       if (__mp_kubevirt_run.hosts | default({})) | length > 0 else {}) }}
         spec:
           source:
             pvc:
@@ -164,7 +168,7 @@
 - name: "Dispatch boot_source data_volume_source_ref: {{ item }}"
   vars:
     _bs: "{{ _mp_specs[item].boot_source }}"
-    _dv_name: "{{ item }}-boot"
+    _dv_name: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}-boot"
     _source_ref: >-
       {{
         {
@@ -192,8 +196,10 @@
       dataVolume:
         name: "{{ _dv_name }}"
     __mp_data_volume_templates:
-      - metadata:
-          name: "{{ _dv_name }}"
+      - metadata: >-
+          {{ {'name': _dv_name}
+             | combine({'labels': {'molecule-provisioners.igou.io/run-id': __mp_kubevirt_run.id}}
+                       if (__mp_kubevirt_run.hosts | default({})) | length > 0 else {}) }}
         spec:
           sourceRef: "{{ _source_ref }}"
           storage: "{{ _storage_block }}"
@@ -326,3 +332,28 @@
          | combine(_mp_specs[item].vm_overrides | default({}),
                    recursive=True, list_merge='append') }}
   when: __mp_boot_disk is not none
+
+- name: Protect isolated resource identities from overrides
+  ansible.builtin.assert:
+    that:
+      - __mp_kubevirt_vm.metadata.name == __mp_kubevirt_run.hosts[item].name
+      - __mp_kubevirt_vm.metadata.namespace == __mp_kubevirt_run.hosts[item].namespace
+      - __mp_kubevirt_vm.spec.template.metadata.labels['kubevirt.io/domain'] == __mp_kubevirt_run.hosts[item].name
+      - (__mp_kubevirt_vm.spec.dataVolumeTemplates | default([])) == __mp_data_volume_templates
+    fail_msg: Run isolation reserves names, namespace, domain selector and generated dataVolumeTemplates.
+  when: (__mp_kubevirt_run.hosts | default({})) | length > 0
+
+- name: Stamp run ownership on the VM and its descendants
+  vars:
+    _labels:
+      molecule-provisioners.igou.io/run-id: "{{ __mp_kubevirt_run.id }}"
+    _patch:
+      metadata:
+        labels: "{{ _labels }}"
+      spec:
+        template:
+          metadata:
+            labels: "{{ _labels }}"
+  ansible.builtin.set_fact:
+    __mp_kubevirt_vm: "{{ __mp_kubevirt_vm | combine(_patch, recursive=True) }}"
+  when: (__mp_kubevirt_run.hosts | default({})) | length > 0

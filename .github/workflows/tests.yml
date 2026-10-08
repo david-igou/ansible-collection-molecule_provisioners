@@ -7,7 +7,8 @@ concurrency:
 
 on: # yamllint disable-line rule:truthy
   pull_request:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
   # TO-DO: Below is an example cron scheduler. Uncomment and tweak it as per your requirement
   # schedule:
@@ -131,6 +132,14 @@ jobs:
           # all molecule output. We need molecule's PLAY RECAP visible in CI logs
           # to confirm the scenario actually exercised create/prepare/converge/verify.
           pytest tests/integration -v -k default -s -o addopts=""
+
+      - name: Verify overlapping runs and failed cleanup
+        working-directory: ansible_collections/david_igou/molecule_provisioners
+        env:
+          RUN_KUBEVIRT_ISOLATION: "1"
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
+        run: pytest tests/integration/kubevirt/test_run_isolation.py -v -s -o addopts=""
 
       - name: Stop VM watcher and dump trace
         if: always()

@@ -1,0 +1,19 @@
+---
+- name: Recheck ownership immediately before deletion
+  ansible.builtin.include_tasks: _check_owned.yml
+
+- name: Delete with ownership and version preconditions
+  kubernetes.core.k8s:
+    state: absent
+    api_version: "{{ run_resource.api }}"
+    kind: "{{ run_resource.kind }}"
+    name: "{{ run_resource.name }}"
+    namespace: "{{ run_host.value.namespace }}"
+    delete_options:
+      propagationPolicy: Foreground
+      preconditions:
+        uid: "{{ __mp_kubevirt_owned.resources[0].metadata.uid }}"
+        resourceVersion: "{{ __mp_kubevirt_owned.resources[0].metadata.resourceVersion }}"
+    wait: true
+    wait_timeout: "{{ mp_kubevirt_cleanup_timeout }}"
+  when: __mp_kubevirt_owned.resources | length > 0

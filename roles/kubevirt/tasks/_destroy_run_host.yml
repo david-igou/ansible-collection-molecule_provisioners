@@ -1,0 +1,30 @@
+---
+- name: Delete directly managed resources
+  ansible.builtin.include_tasks: _delete_owned.yml
+  loop: >-
+    {{ [{'api': 'kubevirt.io/v1', 'kind': 'VirtualMachine', 'name': run_host.value.name}]
+       + ([{'api': 'v1', 'kind': 'Service', 'name': run_host.value.name}] if run_host.value.service else []) }}
+  loop_control:
+    loop_var: run_resource
+    label: "{{ run_resource.kind }}/{{ run_resource.name }}"
+
+# Foreground VM deletion collects the VMI and generated DataVolumes/PVCs.
+# Referenced external PVCs/extra volumes are never named here or deleted.
+- name: Wait for generated resources to disappear
+  kubernetes.core.k8s_info:
+    api_version: "{{ run_resource.api }}"
+    kind: "{{ run_resource.kind }}"
+    name: "{{ run_resource.name }}"
+    namespace: "{{ run_host.value.namespace }}"
+  register: __mp_kubevirt_remaining
+  until: __mp_kubevirt_remaining.resources | length == 0
+  retries: "{{ [1, ((mp_kubevirt_cleanup_timeout | int) / 2) | round(0, 'ceil') | int] | max }}"
+  delay: 2
+  loop: >-
+    {{ [{'api': 'kubevirt.io/v1', 'kind': 'VirtualMachineInstance', 'name': run_host.value.name}]
+       + ([{'api': 'cdi.kubevirt.io/v1beta1', 'kind': 'DataVolume', 'name': run_host.value.name ~ '-boot'},
+           {'api': 'v1', 'kind': 'PersistentVolumeClaim', 'name': run_host.value.name ~ '-boot'}]
+          if run_host.value.disk else []) }}
+  loop_control:
+    loop_var: run_resource
+    label: "{{ run_resource.kind }}/{{ run_resource.name }}"
