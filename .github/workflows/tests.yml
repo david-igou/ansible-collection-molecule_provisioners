@@ -133,7 +133,7 @@ jobs:
           # to confirm the scenario actually exercised create/prepare/converge/verify.
           pytest tests/integration -v -k default -s -o addopts=""
 
-      - name: Verify overlapping runs and failed cleanup
+      - name: Verify run isolation, full definitions and failed cleanup
         working-directory: ansible_collections/david_igou/molecule_provisioners
         env:
           RUN_KUBEVIRT_ISOLATION: "1"
@@ -143,7 +143,7 @@ jobs:
           # This step bypasses Molecule/pytest-ansible's collection-path setup.
           # Keep both the checkout and the dependencies installed above visible.
           export ANSIBLE_COLLECTIONS_PATH="${ANSIBLE_COLLECTIONS_PATH}:${HOME}/.ansible/collections"
-          pytest tests/integration/kubevirt/test_run_isolation.py -v -s -o addopts=""
+          pytest tests/integration/kubevirt -v -s -o addopts=""
 
       - name: Stop VM watcher and dump trace
         if: always()

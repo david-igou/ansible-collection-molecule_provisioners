@@ -32,8 +32,21 @@
       - run_host.value.namespace is match('^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$')
       - run_host.value.service is boolean
       - run_host.value.disk is boolean
+      - run_host.value.data_volumes | default([]) is sequence
+      - run_host.value.data_volumes | default([]) is not string
+      - run_host.value.data_volumes | default([]) is not mapping
     fail_msg: Invalid saved resource mapping; restore kubevirt_run.yml before retrying.
   loop: "{{ __mp_kubevirt_run.hosts | default({}) | dict2items }}"
   loop_control:
     loop_var: run_host
     label: "{{ run_host.key }}"
+
+- name: Validate saved DataVolume names
+  ansible.builtin.assert:
+    that: data_volume_name is match('^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$')
+    fail_msg: Invalid saved DataVolume name; restore kubevirt_run.yml before retrying.
+  loop: >-
+    {{ __mp_kubevirt_run.hosts | default({}) | dict2items
+       | map(attribute='value.data_volumes', default=[]) | flatten }}
+  loop_control:
+    loop_var: data_volume_name

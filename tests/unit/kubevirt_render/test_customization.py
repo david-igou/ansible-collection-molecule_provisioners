@@ -218,7 +218,8 @@ def test_customization_preserves_isolated_names_and_ownership(render_vm):
     assert yaml.safe_load(_cloud_init(vm)["userData"])["hostname"] == "bootstrap"
 
 
-def test_podip_uses_configured_network_not_status_order(tmp_path):
+@pytest.mark.parametrize("full_definition", [False, True])
+def test_podip_uses_configured_network_not_status_order(tmp_path, full_definition):
     role = Path(__file__).parents[3] / "roles/kubevirt/tasks/_create_vm_dictionary.yml"
     tasks = yaml.safe_load(role.read_text())
     discovery = next(
@@ -235,11 +236,25 @@ def test_podip_uses_configured_network_not_status_order(tmp_path):
                 "mp_kubevirt_ssh_key_path": "/tmp/test-key",
                 "__mp_kubevirt_runtime_hosts": {},
                 "_mp_specs": {
-                    "instance": _spec(
-                        ssh_user="cloud-user",
-                        ssh_service={"type": "PodIP"},
-                        networks=[{"name": "management", "pod": {}}],
-                    )
+                    "instance": {
+                        "ssh_user": "cloud-user",
+                        "ssh_service": {"type": "PodIP"},
+                        **(
+                            {
+                                "vm_definition": {
+                                    "spec": {
+                                        "template": {
+                                            "spec": {
+                                                "networks": [{"name": "management", "pod": {}}]
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if full_definition
+                            else {"networks": [{"name": "management", "pod": {}}]}
+                        ),
+                    }
                 },
                 "__mp_kubevirt_vmi": {
                     "resources": [
@@ -285,6 +300,8 @@ def test_podip_uses_configured_network_not_status_order(tmp_path):
         ({"connection": "psrp"}, False),
         ({"connection": "psrp", "cloud_init": {"enabled": True, "inject_ssh_key": True}}, True),
         ({"connection": "ssh", "cloud_init": {"enabled": False}}, True),
+        ({"connection": "ssh", "vm_definition": {}}, False),
+        ({"connection": "psrp", "vm_definition": {}}, False),
     ],
 )
 def test_actual_key_generation_decision(tmp_path, host_spec, expected):

@@ -15,39 +15,16 @@
     - mp_kubevirt_run_isolation | bool
     - not __mp_kubevirt_run_file.stat.exists
 
-- name: Record names and cleanup requirements for each host
-  vars:
-    _prefix: "{{ (item | lower | regex_replace('[^a-z0-9-]', '-') | trim('-'))[:32] | default('vm', true) }}"
-    _digest: "{{ (item | hash('sha256'))[:8] }}"
-    _resource:
-      name: "{{ _prefix }}-{{ _digest }}-{{ __mp_kubevirt_run.id }}"
-      namespace: "{{ _mp_specs[item].namespace }}"
-      service: "{{ (_mp_specs[item].ssh_service.type | default('NodePort')) == 'NodePort' }}"
-      disk: "{{ _mp_specs[item].boot_source.type in ['data_volume_url', 'data_volume_pvc', 'data_volume_source_ref'] }}"
-  ansible.builtin.set_fact:
-    __mp_kubevirt_run: "{{ __mp_kubevirt_run | combine({'hosts': {item: _resource}}, recursive=True) }}"
-  loop: "{{ groups['molecule'] }}"
-  when:
-    - mp_kubevirt_run_isolation | bool
-    - not __mp_kubevirt_run_file.stat.exists
-
 - name: Reject changes to the host set during an isolated run
   ansible.builtin.assert:
     that: (__mp_kubevirt_run.hosts.keys() | list | sort) == (groups['molecule'] | sort)
     fail_msg: Destroy the saved run before changing its inventory hosts.
-  when: mp_kubevirt_run_isolation | bool
+  when:
+    - mp_kubevirt_run_isolation | bool
+    - __mp_kubevirt_run_file.stat.exists
 
-- name: Reject changes to cleanup requirements during an isolated run
-  ansible.builtin.assert:
-    that:
-      - __mp_kubevirt_run.hosts[item].namespace == _mp_specs[item].namespace
-      - >-
-        __mp_kubevirt_run.hosts[item].service ==
-        ((_mp_specs[item].ssh_service.type | default('NodePort')) == 'NodePort')
-      - >-
-        __mp_kubevirt_run.hosts[item].disk == (_mp_specs[item].boot_source.type
-        in ['data_volume_url', 'data_volume_pvc', 'data_volume_source_ref'])
-    fail_msg: Destroy the saved run before changing its namespace, Service mode or disk ownership.
+- name: Record or validate each host's isolated resources
+  ansible.builtin.include_tasks: _record_run_host.yml
   loop: "{{ groups['molecule'] }}"
   when: mp_kubevirt_run_isolation | bool
 

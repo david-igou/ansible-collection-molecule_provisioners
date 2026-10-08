@@ -1,22 +1,6 @@
 ---
-# Compute per-host merged specs.
-# Order: role defaults <- mp_defaults.kubevirt <- hostvars[item].mp.kubevirt.
-- name: Initialize kubevirt spec map
-  ansible.builtin.set_fact:
-    _mp_specs: {}
-
-- name: Merge per-host specs with mp_defaults and role defaults
-  ansible.builtin.set_fact:
-    _mp_specs: >-
-      {{ _mp_specs | combine({
-           item: mp_kubevirt_role_defaults
-                 | combine(mp_defaults['kubevirt'] | default({}))
-                 | combine(hostvars[item].mp['kubevirt'])
-         }) }}
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
-  no_log: true
+- name: Resolve per-host kubevirt configuration
+  ansible.builtin.include_tasks: _spec_merge.yml
 
 - name: Validate per-host specs
   ansible.builtin.include_tasks: _validate.yml
@@ -40,14 +24,32 @@
 
 # SSH connections use this key even when cloud-init injection is disabled.
 # Explicit injection also needs a key; ordinary all-Windows scenarios skip it.
+- name: Check the caller's SSH key for full definitions
+  ansible.builtin.stat:
+    path: "{{ mp_kubevirt_ssh_key_path }}"
+  register: __mp_kubevirt_full_definition_key
+  when: >-
+    _mp_specs.values() | selectattr('vm_definition', 'defined')
+    | selectattr('connection', 'equalto', 'ssh') | list | length > 0
+
+- name: Require an existing SSH key for full definitions
+  ansible.builtin.assert:
+    that:
+      - __mp_kubevirt_full_definition_key.stat.isreg | default(false)
+      - __mp_kubevirt_full_definition_key.stat.size | default(0) > 0
+    fail_msg: >-
+      vm_definition does not inject SSH access. Provide a private key at
+      mp_kubevirt_ssh_key_path and configure the guest to accept its public key.
+  when: __mp_kubevirt_full_definition_key is not skipped
+
 - name: Determine whether any host needs an SSH key
   ansible.builtin.set_fact:
     __mp_kubevirt_any_ssh: >-
-      {{ _mp_specs.values()
+      {{ _mp_specs.values() | rejectattr('vm_definition', 'defined')
          | map(attribute='connection', default='ssh')
          | select('equalto', 'ssh')
          | list | length > 0
-         or (_mp_specs.values()
+         or (_mp_specs.values() | rejectattr('vm_definition', 'defined')
              | map(attribute='cloud_init.inject_ssh_key', default=false)
              | map('bool') | select('equalto', true) | list | length > 0) }}
 
@@ -55,6 +57,7 @@
   community.crypto.openssh_keypair:
     path: "{{ mp_kubevirt_ssh_key_path }}"
     type: ed25519
+    regenerate: "{{ 'never' if __mp_kubevirt_full_definition_key is not skipped else omit }}"
   register: __mp_kubevirt_ssh_keypair
   when: __mp_kubevirt_any_ssh | bool
 

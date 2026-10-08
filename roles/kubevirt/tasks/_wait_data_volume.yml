@@ -1,0 +1,19 @@
+---
+- name: Wait for managed DataVolume and claim deletion
+  kubernetes.core.k8s_info:
+    api_version: "{{ run_resource.api }}"
+    kind: "{{ run_resource.kind }}"
+    name: "{{ data_volume_name }}"
+    namespace: "{{ run_host.value.namespace }}"
+  register: __mp_kubevirt_remaining
+  until: __mp_kubevirt_remaining.resources | length == 0
+  retries: "{{ [1, ((mp_kubevirt_cleanup_timeout | int) / 2) | round(0, 'ceil') | int] | max }}"
+  delay: 2
+  loop:
+    - api: cdi.kubevirt.io/v1beta1
+      kind: DataVolume
+    - api: v1
+      kind: PersistentVolumeClaim
+  loop_control:
+    loop_var: run_resource
+    label: "{{ run_resource.kind }}/{{ data_volume_name }}"

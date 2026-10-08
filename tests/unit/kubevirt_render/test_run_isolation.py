@@ -154,3 +154,45 @@ def test_long_inventory_names_have_distinct_bounded_resource_names(tmp_path):
     assert all(len(name + "-boot") <= 63 for name in resource_names)
     proc = _state(tmp_path, _mp_specs={name: spec for name in names})
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_full_definition_records_every_disk_and_rejects_changed_ownership(tmp_path):
+    spec = {
+        "namespace": "molecule",
+        "vm_definition": {
+            "spec": {
+                "dataVolumeTemplates": [
+                    {"metadata": {"name": "boot"}},
+                    {"metadata": {"name": "scratch"}},
+                ],
+            },
+        },
+    }
+    proc = _state(tmp_path, host_spec=spec)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    state_path = tmp_path / "kubevirt_run.yml"
+    original = state_path.read_bytes()
+    state = yaml.safe_load(original)
+    assert state["hosts"]["instance"]["disk"] is True
+    assert len(set(state["hosts"]["instance"]["data_volumes"])) == 2
+    proc = _state(tmp_path, host_spec=spec)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert state_path.read_bytes() == original
+    spec["vm_definition"]["spec"]["dataVolumeTemplates"].pop()
+    proc = _state(tmp_path, host_spec=spec)
+    assert proc.returncode != 0
+    assert "Destroy the saved run" in proc.stdout
+    assert state_path.read_bytes() == original
+
+
+def test_existing_curated_run_state_without_disk_list_resumes(tmp_path):
+    proc = _state(tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    path = tmp_path / "kubevirt_run.yml"
+    state = yaml.safe_load(path.read_text())
+    state["hosts"]["instance"].pop("data_volumes")
+    path.write_text(yaml.safe_dump(state))
+    original = path.read_bytes()
+    proc = _state(tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert yaml.safe_load(path.read_bytes()) == yaml.safe_load(original)

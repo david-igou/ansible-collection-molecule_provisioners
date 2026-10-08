@@ -1,0 +1,109 @@
+---
+- name: Load the full-definition argument specification
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/meta/argument_specs.yml"
+    name: __mp_kubevirt_argument_specs
+
+- name: Validate the full-definition parameter
+  ansible.builtin.validate_argument_spec:
+    argument_spec: "{{ __mp_kubevirt_argument_specs.argument_specs.definition.options }}"
+    provided_arguments:
+      vm_definition: "{{ _mp_specs[item].vm_definition }}"
+  no_log: true
+
+- name: Inspect full-definition shape without exposing bootstrap data
+  vars:
+    _vm: "{{ _mp_specs[item].vm_definition }}"
+  ansible.builtin.set_fact:
+    __mp_kubevirt_definition_valid: >-
+      {{ _vm is mapping and _vm.apiVersion | default('') == 'kubevirt.io/v1'
+         and _vm.kind | default('') == 'VirtualMachine'
+         and _vm.metadata | default({}) is mapping
+         and _vm.spec | default(none) is mapping
+         and _vm.spec.template | default(none) is mapping
+         and _vm.spec.template.metadata | default({}) is mapping
+         and _vm.spec.template.spec | default(none) is mapping
+         and 'status' not in _vm }}
+  no_log: true
+
+- name: Require a desired-state VirtualMachine definition
+  ansible.builtin.assert:
+    that: __mp_kubevirt_definition_valid
+    fail_msg: >-
+      vm_definition must be a kubevirt.io/v1 VirtualMachine mapping with
+      spec.template.spec and optional metadata mappings; omit status.
+
+- name: Reject simple VM parameters alongside a full definition
+  vars:
+    _conflicts:
+      - boot_source
+      - cpu
+      - memory
+      - memory_limit
+      - instancetype
+      - preference
+      - node_selector
+      - tolerations
+      - affinity
+      - cloud_init
+      - sysprep_secret
+      - interfaces
+      - networks
+      - extra_disks
+      - extra_volumes
+      - extra_interfaces
+      - extra_networks
+      - vm_overrides
+  ansible.builtin.assert:
+    that: _mp_specs[item].keys() | intersect(_conflicts) | length == 0
+    fail_msg: >-
+      vm_definition is mutually exclusive with simple VM parameters and
+      vm_overrides, including settings inherited from mp_defaults.kubevirt.
+      Keep namespace and connection settings outside the definition.
+
+- name: Inspect namespace and embedded disk declarations
+  vars:
+    _vm: "{{ _mp_specs[item].vm_definition }}"
+    _disks: "{{ _vm.spec.dataVolumeTemplates | default([]) }}"
+  ansible.builtin.set_fact:
+    __mp_kubevirt_definition_disks_valid: >-
+      {{ _disks is sequence and _disks is not string and _disks is not mapping
+         and (_disks | select('mapping') | list | length) == (_disks | length)
+         and (_disks | map(attribute='metadata.name', default='')
+              | select('string') | list | length) == (_disks | length)
+         and (_disks | map(attribute='metadata.name', default='') | unique | list | length) == (_disks | length)
+         and '' not in (_disks | map(attribute='metadata.name', default='') | list)
+         and (_vm.metadata.namespace | default(_mp_specs[item].namespace | default('molecule')))
+             == (_mp_specs[item].namespace | default('molecule')) }}
+  no_log: true
+
+- name: Require unique embedded disk names and the selected namespace
+  ansible.builtin.assert:
+    that: __mp_kubevirt_definition_disks_valid
+    fail_msg: >-
+      dataVolumeTemplates must be a list of mappings with unique metadata.name values.
+      Omit metadata.namespace or match mp.kubevirt.namespace.
+
+- name: Inspect management networks in the full definition
+  vars:
+    _guest: "{{ _mp_specs[item].vm_definition.spec.template.spec }}"
+    _default_networks:
+      - name: default
+        pod: {}
+    _networks: >-
+      {{ _guest.networks | default([])
+         or (_default_networks if _guest.domain.devices.autoattachPodInterface | default(true) | bool else []) }}
+  ansible.builtin.set_fact:
+    __mp_kubevirt_definition_management_valid: >-
+      {{ _networks is sequence and _networks is not string and _networks is not mapping
+         and (_networks | selectattr('pod', 'defined') | list | length) == 1 }}
+  no_log: true
+  when: (_mp_specs[item].ssh_service.type | default('NodePort')) in ['NodePort', 'PodIP']
+
+- name: Require pod networking for NodePort and PodIP management
+  ansible.builtin.assert:
+    that: __mp_kubevirt_definition_management_valid
+    fail_msg: >-
+      NodePort and PodIP management require a pod network in vm_definition.
+      For other networking, set ssh_service.type=None and connection_ip.
+  when: (_mp_specs[item].ssh_service.type | default('NodePort')) in ['NodePort', 'PodIP']

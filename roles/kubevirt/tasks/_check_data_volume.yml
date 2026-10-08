@@ -1,0 +1,27 @@
+---
+- name: Check managed DataVolume ownership
+  vars:
+    run_resource:
+      api: cdi.kubevirt.io/v1beta1
+      kind: DataVolume
+      name: "{{ data_volume_name }}"
+  ansible.builtin.include_tasks: _check_owned.yml
+
+- name: Check managed DataVolume claim
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: PersistentVolumeClaim
+    name: "{{ data_volume_name }}"
+    namespace: "{{ run_host.value.namespace }}"
+  register: __mp_kubevirt_claim
+
+- name: Require claim ownership by this run's DataVolume
+  ansible.builtin.assert:
+    that:
+      - __mp_kubevirt_owned.resources | length == 1
+      - >-
+        (__mp_kubevirt_claim.resources[0].metadata.ownerReferences | default([])
+         | selectattr('uid', 'equalto', __mp_kubevirt_owned.resources[0].metadata.uid)
+         | list | length) > 0
+    fail_msg: Refusing to adopt or clean up a claim owned by another run.
+  when: __mp_kubevirt_claim.resources | length > 0

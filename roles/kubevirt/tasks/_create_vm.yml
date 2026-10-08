@@ -4,7 +4,7 @@
 
 - name: "Render VirtualMachine spec: {{ item }}"
   ansible.builtin.include_tasks:
-    file: _build_vm.yml
+    file: _render_vm.yml
     apply:
       no_log: true
 

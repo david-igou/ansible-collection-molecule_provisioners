@@ -13,7 +13,6 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 import yaml
 
-
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_KUBEVIRT_ISOLATION") != "1",
     reason="requires explicitly enabled KubeVirt integration environment",
@@ -101,7 +100,7 @@ class Run:
             assert proc.returncode != 0, proc.stdout
         return proc
 
-    def verify_guest(self):
+    def verify_guest(self, expected_hostname=None):
         """Exercise prepare, converge and verify using the original host/groups."""
         self.play("prepare")
         playbook = self.directory / "verify.yml"
@@ -121,6 +120,16 @@ class Run:
             "          - consumer_marker == 'kept-from-yaml'\n"
             "          - (result.content | b64decode) == consumer_marker\n",
         )
+        if expected_hostname:
+            with playbook.open("a") as stream:
+                stream.write(
+                    "    - name: Read guest hostname\n"
+                    "      ansible.builtin.command: hostname\n"
+                    "      changed_when: false\n      register: guest_hostname\n"
+                    "    - name: Verify caller bootstrap executed\n"
+                    "      ansible.builtin.assert:\n        that:\n"
+                    f"          - guest_hostname.stdout == '{expected_hostname}'\n",
+                )
         proc = subprocess.run(
             [
                 "ansible-playbook",

@@ -246,7 +246,7 @@ Notes for the VM backends (`qemu`, `kubevirt`):
 - `playbooks/{create,destroy,prepare}.yml` — top-level dispatchers; read `mp_backend` (driven by `$PROVISIONER` env var by convention), validate, dispatch.
 - `playbooks/reset.yml` — standalone purge playbook (`david_igou.molecule_provisioners.reset`); currently removes podman containers labeled `owner=molecule`.
 - `roles/podman/` — uses `containers.podman.podman_container` + `containers.podman.podman_network`.
-- `roles/kubevirt/` — creates VirtualMachines and runtime connection inventory. SSH guests receive an SSH keypair; NodePort mode also creates a Service per VM.
+- `roles/kubevirt/` — creates VirtualMachines from simple variables or a full `vm_definition` and writes runtime connection inventory. Simple-variable SSH guests receive an SSH keypair; full definitions use caller-provided access. NodePort mode also creates a Service per VM. See the [full-definition example](roles/kubevirt/README.md#full-virtualmachine-definitions).
 - `roles/qemu/` — caches base qcow2 images, builds NoCloud seed ISOs, launches per-VM `qemu-system-x86_64` processes with SLIRP `hostfwd` for SSH.
 - `roles/docker/` — uses `community.docker.docker_container` + `community.docker.docker_network`.
 
