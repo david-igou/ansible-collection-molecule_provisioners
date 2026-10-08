@@ -1,0 +1,15 @@
+---
+- name: Exercise image download retries and cache reuse
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Load QEMU role defaults
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../../../roles/qemu/defaults/main.yml"
+
+    - name: Download and cache the image
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_cache_image.yml"
+
+    - name: Reuse the cached image without another request
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_cache_image.yml"
