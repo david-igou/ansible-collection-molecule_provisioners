@@ -66,6 +66,8 @@ Shared defaults can be hoisted into `mp_defaults.qemu` in `inventory/group_vars/
 
 See `defaults/main.yml`:
 
+- `mp_qemu_image_download_timeout` — timeout for each base-image download request (default `60` seconds).
+- `mp_qemu_image_download_retries` — retries after a failed request (default `5`, with a `5` second delay between attempts). Checksum failures also exhaust this budget and never populate the cache.
 - `mp_qemu_ssh_key_path` — where the per-run SSH keypair is written (default: `{{ molecule_ephemeral_directory }}/identity_file`).
 - `mp_qemu_wait_timeout` — `wait_for_connection` ceiling for prepare (default `180`; TCG boots are slow).
 - `mp_qemu_slirp_port_base` — base host port for SLIRP `hostfwd` (default `2222`; per-host port = base + host index).

@@ -31,12 +31,21 @@
         state: directory
         mode: "0755"
 
+    # Cloud-image mirrors (cloud.debian.org especially) intermittently
+    # stall longer than get_url's default 10s read timeout before serving
+    # the first byte; without a longer timeout + retries that fails the
+    # whole scenario on an otherwise-healthy mirror.
     - name: Download base image to neutral staging name (idempotent, cached)
       ansible.builtin.get_url:
         url: "{{ _mp_qemu_image.key }}"
         dest: "{{ _mp_qemu_img_dir }}/disk.download"
         checksum: "{{ _mp_qemu_image.value | default(omit, true) }}"
         mode: "0644"
+        timeout: "{{ mp_qemu_image_download_timeout }}"
+      register: _mp_qemu_download
+      until: _mp_qemu_download is succeeded
+      retries: "{{ mp_qemu_image_download_retries }}"
+      delay: 5
 
     - name: Detect MIME type of downloaded image
       ansible.builtin.command:
