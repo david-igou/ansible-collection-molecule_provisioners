@@ -103,6 +103,11 @@ all:
               extra_interfaces: <list> # appended after default masquerade
               extra_networks: <list> # appended after default pod
               vm_overrides: <dict> # escape hatch: deep-merge into whole VM, lists append
+            qemu: # required when mp_backend == qemu
+              image: <str> # required; upstream URL or local disk image
+              cpu_model: <str> # optional; omitted/empty selects host under KVM, Nehalem under TCG (BIOS and UEFI)
+              # optional: image_checksum, cpus, memory, ssh_user, firmware,
+              #   disk_size, extra_args; see roles/qemu/README.md
             docker: # required when mp_backend == docker
               image: <str> # required
               # optional: command, command_handling, override_command, hostname,

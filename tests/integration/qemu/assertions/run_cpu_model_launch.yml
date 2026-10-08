@@ -1,0 +1,36 @@
+---
+- name: Exercise the real QEMU launch tasks and clean up on failure
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  tasks:
+    - name: Exercise CPU selection through the provisioner
+      block:
+        - name: Create the paused guest
+          ansible.builtin.include_role:
+            name: david_igou.molecule_provisioners.qemu
+            tasks_from: create
+
+        - name: Read the guest process ID
+          ansible.builtin.slurp:
+            src: "{{ molecule_ephemeral_directory }}/cpu-test.pid"
+          register: __cpu_test_pid
+
+        - name: Read the running guest command line
+          ansible.builtin.slurp:
+            src: "/proc/{{ __cpu_test_pid.content | b64decode | trim }}/cmdline"
+          register: __cpu_test_cmdline
+
+        - name: Verify the CPU model used by the running guest
+          vars:
+            __cpu_test_argv: >-
+              {{ (__cpu_test_cmdline.content | b64decode).split('AA==' | b64decode) }}
+          ansible.builtin.assert:
+            that:
+              - __cpu_test_argv[__cpu_test_argv.index('-cpu') + 1] == expected_cpu_model
+            fail_msg: "The running QEMU guest did not use {{ expected_cpu_model }}."
+      always:
+        - name: Destroy the test guest
+          ansible.builtin.include_role:
+            name: david_igou.molecule_provisioners.qemu
+            tasks_from: destroy

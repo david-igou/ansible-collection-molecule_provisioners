@@ -190,7 +190,7 @@ jobs:
       - name: Install qemu + cloud-image-utils
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils ovmf
 
       - name: Install ansible + molecule + pytest plumbing
         working-directory: ansible_collections/david_igou/molecule_provisioners
@@ -204,6 +204,12 @@ jobs:
         run: |
           ansible-galaxy collection install \
             containers.podman kubernetes.core community.crypto community.general
+
+      - name: Exercise BIOS and UEFI CPU selection through the QEMU provisioner
+        working-directory: ansible_collections/david_igou/molecule_provisioners
+        env:
+          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
+        run: pytest tests/integration/qemu/test_qemu_unit.py -m 'not slow' -o addopts=""
 
       - name: Cache base qcow2 images
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
