@@ -3,9 +3,13 @@
 # This file is included from create.yml in a loop over groups['molecule'].
 
 - name: "Render VirtualMachine spec: {{ item }}"
-  ansible.builtin.include_tasks: _build_vm.yml
+  ansible.builtin.include_tasks:
+    file: _build_vm.yml
+    apply:
+      no_log: true
 
 - name: "Apply VirtualMachine: {{ item }}"
   kubernetes.core.k8s:
     state: present
     definition: "{{ __mp_kubevirt_vm }}"
+  no_log: true

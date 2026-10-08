@@ -177,7 +177,16 @@ all:
               tolerations: []
               affinity: {}
 
-              # Appended to defaults (containerdisk + cloudinitdisk + default pod net)
+              # Optional bootstrap and primary networking; see sections below.
+              cloud_init: {}
+              interfaces:
+                - name: default
+                  masquerade: {}
+              networks:
+                - name: default
+                  pod: {}
+
+              # Appended after the selected boot/bootstrap disks and networks
               extra_disks: []
               extra_volumes: []
               extra_interfaces: []
@@ -342,12 +351,148 @@ see the RBAC section above.
 > `create.yml`, create the Secret *before* `import_playbook:
 > david_igou.molecule_provisioners.create`.
 
+## Custom cloud-init
+
+SSH guests still receive NoCloud media with the generated public key, the
+`ssh_user` account, passwordless sudo, and `/bin/bash`. PSRP/WinRM guests omit
+cloud-init unless `cloud_init.enabled: true` is supplied.
+
+`cloud_init.user_data` accepts a cloud-config mapping. The role merges the
+management user by name, retaining the generated key alongside custom keys.
+Other users, packages, files, and bootstrap commands are passed through.
+For example, this installs Python before the prepare phase can complete its
+Ansible connection check:
+
+```yaml
+mp:
+  kubevirt:
+    boot_source:
+      type: container_disk
+      image: quay.io/containerdisks/ubuntu:24.04
+    ssh_user: ubuntu
+    cloud_init:
+      user_data:
+        packages:
+          - python3
+        hostname: molecule-guest
+```
+
+`cloud_init.network_data` accepts a cloud-init network-config mapping. This
+example supplies a static address on an additional test NIC while the pod
+interface remains available for management:
+
+```yaml
+cloud_init:
+  network_data:
+    version: 2
+    ethernets:
+      management:
+        match:
+          macaddress: "52:54:00:12:34:01"
+        dhcp4: true
+      test:
+        match:
+          macaddress: "52:54:00:12:34:02"
+        set-name: test0
+        addresses:
+          - 192.0.2.10/24
+interfaces:
+  - name: default
+    masquerade: {}
+    macAddress: "52:54:00:12:34:01"
+extra_interfaces:
+  - name: test-lan
+    bridge: {}
+    macAddress: "52:54:00:12:34:02"
+extra_networks:
+  - name: test-lan
+    multus:
+      networkName: test-lan
+```
+
+NetworkAttachmentDefinitions belong to the caller. Choose unique MAC addresses
+for interfaces sharing the same test LAN.
+
+Existing same-namespace Secrets can supply user data (`userdata` key) or network
+data (`networkdata` key):
+
+```yaml
+cloud_init:
+  user_data_secret: molecule-bootstrap
+  network_data_secret: molecule-network
+  inject_ssh_key: false
+```
+
+Inline data and its corresponding Secret reference are mutually exclusive.
+The role neither reads nor changes these Secrets, and destroy leaves them
+alone. Create them before provisioning. User-data Secrets require
+`inject_ssh_key: false`; the caller must arrange SSH access using the key at
+`mp_kubevirt_ssh_key_path`. That path remains the runtime inventory's private
+key, even when injection is disabled. Pre-existing Ed25519 keys at that path are reused.
+Network-data Secrets can be combined with the default generated SSH bootstrap.
+
+Set `cloud_init.enabled: false` to omit the cloud-init disk and volume. Set
+`inject_ssh_key: false` to use your user-data mapping unchanged. These choices
+require the image or caller to provide working management access. Inline data
+is stored in the VM spec; use Secret references for sensitive bootstrap data.
+Provisioning logs suppress the rendered cloud-init data.
+
+The prepare phase waits for Ansible connectivity, not all cloud-init commands.
+If converge depends on completed bootstrap, have the scenario wait for
+`cloud-init status --wait` after importing the collection's prepare playbook.
+See [KubeVirt startup scripts](https://kubevirt.io/user-guide/user_workloads/startup_scripts/).
+
+## Primary interfaces and networks
+
+`interfaces` and `networks` replace the default masquerade/pod lists with raw
+KubeVirt interface/network definitions. Names must match one-to-one and remain
+unique after appending `extra_interfaces` and `extra_networks`.
+
+For example, keep pod management while selecting a different guest NIC model:
+
+```yaml
+interfaces:
+  - name: management
+    masquerade: {}
+    model: e1000
+networks:
+  - name: management
+    pod: {}
+```
+
+For a Multus-only guest, use explicit addressing and skip the management
+Service. This fragment belongs under `mp.kubevirt`:
+
+```yaml
+interfaces:
+  - name: test-lan
+    bridge: {}
+networks:
+  - name: test-lan
+    multus:
+      networkName: test-lan
+ssh_service:
+  type: "None"
+connection_ip: 192.0.2.10
+```
+
+The caller supplies the existing NetworkAttachmentDefinition and guest address
+through DHCP, cloud-init network data, or image configuration. The controller
+must be able to reach that address. NodePort and PodIP management require a pod
+network; PodIP resolves its address by configured network name rather than VMI
+status ordering. A changed binding must still support the chosen access method.
+
+Supplying both lists as `[]` also disables KubeVirt's automatic pod interface.
+Such guests need a caller-provided lifecycle that does not wait for guest
+connectivity. These settings do not alter run-scoped names or cleanup ownership.
+See [KubeVirt interfaces and networks](https://kubevirt.io/user-guide/network/interfaces_and_networks/).
+
 ## Escape hatch and foot-guns
 
 `vm_overrides` is deep-merged into the whole VirtualMachine object with `list_merge='append'`. Fixed-name mode permits unrestricted overrides. Run isolation reserves resource identity fields; the following changes can still break connectivity:
 
 - **Don't set `spec.running: false`.** The prepare phase calls `wait_for_connection` against the NodePort SSH service; a stopped VM never becomes reachable.
-- **Don't replace the `cloudinitdisk` volume.** The role injects an SSH public key via cloud-init `users:`. If you must edit it, replicate the block and keep `temporary_ssh_public_key`.
+- **Use `cloud_init` to customize bootstrap.** A `vm_overrides` volume with the same name appends a duplicate rather than replacing the existing volume. Use `interfaces`/`networks` to replace primary networking.
 - **Don't change `metadata.labels.kubevirt.io/domain` or the SSH Service's selector.** The NodePort routes by this label.
 
 When `instancetype` is set, the renderer **omits** `domain.cpu` and `domain.resources` from the rendered spec — KubeVirt rejects conflicting fields. Setting `cpu:`/`memory_limit:` alongside `instancetype:` is silently ignored (a debug message is emitted at validate time).
@@ -377,7 +522,7 @@ Three modes are supported:
 
 - **`NodePort`** (default): the role creates a `NodePort` Service per VM and resolves `ansible_host` to a cluster Node InternalIP (or to `connection_ip` if set).
 - **`None`**: no Service is created. `connection_ip` is required (the role asserts this at validate time). `ansible_port` defaults to the guest port implied by the connection type — `22` for `ssh`, `5986` for `psrp`/`winrm` — override per-host with `ssh_service.port`. Use this for setups where access is provided by an external Route/Ingress, or where the controller can talk to pod IPs directly.
-- **`PodIP`**: no Service is created and no `connection_ip` is needed — the role waits for the VMI to report its pod-network address (`status.interfaces[0].ipAddress`, the masquerade/virt-launcher pod IP) and connects there directly. Only works when the controller runs **inside the cluster** (e.g. an OpenShift Dev Spaces workspace or CI pod). This is the least-privilege mode: the driving ServiceAccount needs neither `services` nor cluster-wide `nodes` RBAC — just VMs/VMIs in the target namespace. Port defaults as in `None` mode (`ssh_service.port` override honored). Lookup bounds: `mp_kubevirt_podip_lookup_retries` (60) × `mp_kubevirt_podip_lookup_delay` (5s).
+- **`PodIP`**: no Service is created and no `connection_ip` is needed — the role waits for the VMI to report the configured pod network's IP and connects there directly. Only works when the controller runs **inside the cluster** (e.g. an OpenShift Dev Spaces workspace or CI pod). This is the least-privilege mode: the driving ServiceAccount needs neither `services` nor cluster-wide `nodes` RBAC — just VMs/VMIs in the target namespace. Port defaults as in `None` mode (`ssh_service.port` override honored). Lookup bounds: `mp_kubevirt_podip_lookup_retries` (60) × `mp_kubevirt_podip_lookup_delay` (5s).
 
 ```yaml
 mp:

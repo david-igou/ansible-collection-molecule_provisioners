@@ -16,6 +16,7 @@
   loop: "{{ groups['molecule'] }}"
   loop_control:
     label: "{{ item }}"
+  no_log: true
 
 - name: Validate per-host specs
   ansible.builtin.include_tasks: _validate.yml
@@ -37,16 +38,18 @@
     label: "{{ run_host.key }}"
   when: mp_kubevirt_run_isolation | bool
 
-# Only ssh-connection hosts consume the cloud-init-injected key. Skip keygen
-# entirely when NO host needs ssh (e.g. an all-Windows psrp/winrm scenario) —
-# a Windows golden has no cloud-init to consume the key anyway.
-- name: Determine whether any host uses an ssh connection
+# SSH connections use this key even when cloud-init injection is disabled.
+# Explicit injection also needs a key; ordinary all-Windows scenarios skip it.
+- name: Determine whether any host needs an SSH key
   ansible.builtin.set_fact:
     __mp_kubevirt_any_ssh: >-
       {{ _mp_specs.values()
          | map(attribute='connection', default='ssh')
          | select('equalto', 'ssh')
-         | list | length > 0 }}
+         | list | length > 0
+         or (_mp_specs.values()
+             | map(attribute='cloud_init.inject_ssh_key', default=false)
+             | map('bool') | select('equalto', true) | list | length > 0) }}
 
 - name: Generate SSH key pair
   community.crypto.openssh_keypair:

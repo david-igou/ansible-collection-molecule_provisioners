@@ -22,8 +22,8 @@ argument_specs:
           Per-host field defaults. Currently includes namespace, ssh_user, memory,
           connection (default ssh), and ssh_service.type. Layered as: this dict <- mp_defaults.kubevirt
           <- hostvars[item].mp.kubevirt. Per-host hostvars accepts a much wider
-          schema (boot_source, cpu, memory_limit, scheduling, extras, vm_overrides);
-          see roles/kubevirt/README.md.
+          schema (boot_source, cpu, memory_limit, scheduling, extras, vm_overrides,
+          cloud_init, interfaces, networks); see roles/kubevirt/README.md.
       mp_kubevirt_ssh_key_path:
         type: path
         description: Where the SSH keypair is generated (defaults to molecule_ephemeral_directory/identity_file).
@@ -72,3 +72,39 @@ argument_specs:
         description: >-
           wait_for_connection timeout (seconds) for Windows (psrp/winrm) hosts.
           Generous by default to cover OOBE specialize + FirstLogonCommands.
+  customization:
+    short_description: Validate per-host cloud-init and network configuration before provisioning.
+    options:
+      cloud_init:
+        type: dict
+        default: {}
+        description: Guest bootstrap configuration; NoCloud is enabled by default for SSH guests.
+        options:
+          enabled:
+            type: bool
+            description: Attach cloud-init media; defaults to true for SSH and false for PSRP/WinRM.
+          inject_ssh_key:
+            type: bool
+            description: Merge generated SSH access into user data; defaults to true for SSH guests.
+          user_data:
+            type: dict
+            no_log: true
+            description: Cloud-config mapping; mutually exclusive with user_data_secret.
+          user_data_secret:
+            type: str
+            description: Existing same-namespace Secret containing userdata; requires inject_ssh_key false.
+          network_data:
+            type: dict
+            no_log: true
+            description: Cloud-init network-config mapping; mutually exclusive with network_data_secret.
+          network_data_secret:
+            type: str
+            description: Existing same-namespace Secret containing networkdata.
+      interfaces:
+        type: list
+        elements: dict
+        description: KubeVirt interfaces replacing the default masquerade interface; extras still append.
+      networks:
+        type: list
+        elements: dict
+        description: KubeVirt networks replacing the default pod network; extras still append.

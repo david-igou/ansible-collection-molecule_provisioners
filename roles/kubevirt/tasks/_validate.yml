@@ -139,3 +139,6 @@
   when:
     - _mp_specs[item].instancetype is defined
     - (_mp_specs[item].cpu is defined or _mp_specs[item].memory_limit is defined)
+
+- name: Validate guest bootstrap and networking
+  ansible.builtin.include_tasks: _validate_customization.yml

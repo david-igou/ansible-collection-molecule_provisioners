@@ -16,6 +16,30 @@
 #                    cdrom whose volume references the Secret (unattend.xml).
 # CRITICAL KubeVirt gotcha: the sysprep volume field is `secret.name` — the API
 # silently drops `secretName` and the VMI wedges Pending.
+- name: Build cloud-init configuration
+  vars:
+    _cloud_init: "{{ _mp_specs[item].cloud_init | default({}) }}"
+    _connection: "{{ _mp_specs[item].connection | default('ssh') }}"
+    _ssh_user: "{{ _mp_specs[item].ssh_user | default('cloud-user') }}"
+    _inject_ssh_key: "{{ _cloud_init.inject_ssh_key | default(_connection == 'ssh') }}"
+    _cloud_init_ssh_user:
+      name: "{{ _ssh_user }}"
+      ssh_authorized_keys:
+        - "{{ temporary_ssh_public_key | default('') }}"
+      sudo: ALL=(ALL) NOPASSWD:ALL
+      shell: /bin/bash
+    _cloud_init_default_data: |
+      #cloud-config
+      users:
+        - name: {{ _ssh_user }}
+          ssh_authorized_keys:
+            - {{ temporary_ssh_public_key | default('') }}
+          sudo: ALL=(ALL) NOPASSWD:ALL
+          shell: /bin/bash
+      chpasswd:
+        expire: false
+  ansible.builtin.include_tasks: _build_cloud_init.yml
+
 - name: "Build base VM skeleton: {{ item }}"
   vars:
     _spec: "{{ _mp_specs[item] }}"
@@ -27,28 +51,21 @@
       - name: cloudinitdisk
         disk:
           bus: virtio
-    _cloudinit_volumes:
-      - name: cloudinitdisk
-        cloudInitNoCloud:
-          userData: |
-            #cloud-config
-            users:
-              - name: {{ _ssh_user }}
-                ssh_authorized_keys:
-                  - {{ temporary_ssh_public_key }}
-                sudo: ALL=(ALL) NOPASSWD:ALL
-                shell: /bin/bash
-            chpasswd:
-              expire: false
     _sysprep_disks: >-
       {{ [{'name': 'sysprep', 'cdrom': {'bus': 'sata'}}] if _has_sysprep else [] }}
     _sysprep_volumes: >-
       {{ [{'name': 'sysprep', 'sysprep': {'secret': {'name': _spec.sysprep_secret}}}]
          if _has_sysprep else [] }}
     _base_disks: >-
-      {{ (_cloudinit_disks if _connection == 'ssh' else []) + _sysprep_disks }}
+      {{ (_cloudinit_disks if __mp_cloud_init_volumes | length > 0 else []) + _sysprep_disks }}
     _base_volumes: >-
-      {{ (_cloudinit_volumes if _connection == 'ssh' else []) + _sysprep_volumes }}
+      {{ __mp_cloud_init_volumes + _sysprep_volumes }}
+    _default_interfaces:
+      - name: default
+        masquerade: {}
+    _default_networks:
+      - name: default
+        pod: {}
   ansible.builtin.set_fact:
     __mp_base:
       apiVersion: kubevirt.io/v1
@@ -68,12 +85,8 @@
             domain:
               devices:
                 disks: "{{ _base_disks }}"
-                interfaces:
-                  - name: default
-                    masquerade: {}
-            networks:
-              - name: default
-                pod: {}
+                interfaces: "{{ _spec.interfaces | default(_default_interfaces) }}"
+            networks: "{{ _spec.networks | default(_default_networks) }}"
             volumes: "{{ _base_volumes }}"
 
 - name: "Reset boot-source facts: {{ item }}"
@@ -332,6 +345,14 @@
          | combine(_mp_specs[item].vm_overrides | default({}),
                    recursive=True, list_merge='append') }}
   when: __mp_boot_disk is not none
+
+- name: Disable automatic pod networking when no networks are configured
+  ansible.builtin.set_fact:
+    __mp_kubevirt_vm: >-
+      {{ __mp_kubevirt_vm | combine(
+           {'spec': {'template': {'spec': {'domain': {'devices': {'autoattachPodInterface': false}}}}}},
+           recursive=True) }}
+  when: __mp_kubevirt_vm.spec.template.spec.networks | length == 0
 
 - name: Protect isolated resource identities from overrides
   ansible.builtin.assert:

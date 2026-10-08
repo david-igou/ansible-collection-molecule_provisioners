@@ -31,7 +31,7 @@ mp_kubevirt_allowed_ssh_service_types:
   - PodIP
 
 # PodIP mode: retries x delay bound the wait for the VMI to report
-# status.interfaces[0].ipAddress after the VirtualMachine is created.
+# the configured pod network's IP after the VirtualMachine is created.
 mp_kubevirt_podip_lookup_retries: 60
 mp_kubevirt_podip_lookup_delay: 5
 
@@ -44,11 +44,19 @@ mp_kubevirt_allowed_connections:
   - winrm
 
 # Per-host field defaults. Layered as: this dict <- mp_defaults.kubevirt <- hostvars[item].mp.kubevirt.
-# Only `image` is required and is therefore not present here.
+# boot_source is required and is therefore not present here.
 mp_kubevirt_role_defaults:
   namespace: molecule
   ssh_user: cloud-user
   memory: 1Gi
   connection: ssh
+  # Empty cloud_init keeps the connection-dependent bootstrap defaults.
+  cloud_init: {}
+  interfaces:
+    - name: default
+      masquerade: {}
+  networks:
+    - name: default
+      pod: {}
   ssh_service:
     type: NodePort

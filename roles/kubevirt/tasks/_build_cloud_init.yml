@@ -1,0 +1,66 @@
+---
+# User data is a cloud-config mapping. Merge the management user by name so
+# custom users do not duplicate it or discard the generated public key.
+- name: Initialize cloud-init configuration
+  ansible.builtin.set_fact:
+    __mp_cloud_init_config: "{{ _cloud_init.user_data | default({}) }}"
+    __mp_cloud_init_users: []
+    __mp_cloud_init_has_ssh_user: false
+    __mp_cloud_init_volumes: []
+  no_log: true
+
+- name: Merge generated SSH access into custom users
+  ansible.builtin.set_fact:
+    __mp_cloud_init_users: >-
+      {{ __mp_cloud_init_users +
+         [(_cloud_init_ssh_user | combine(cloud_user, recursive=True, list_merge='append'))
+          if cloud_user is mapping and cloud_user.name | default('') == _ssh_user
+          else cloud_user] }}
+    __mp_cloud_init_has_ssh_user: >-
+      {{ __mp_cloud_init_has_ssh_user or
+         (cloud_user is mapping and cloud_user.name | default('') == _ssh_user) }}
+  loop: "{{ __mp_cloud_init_config.users | default([]) }}"
+  loop_control:
+    loop_var: cloud_user
+  when: _inject_ssh_key | bool
+  no_log: true
+
+- name: Add the management user when not supplied
+  ansible.builtin.set_fact:
+    __mp_cloud_init_users: "{{ __mp_cloud_init_users + [_cloud_init_ssh_user] }}"
+  when:
+    - _inject_ssh_key | bool
+    - not __mp_cloud_init_has_ssh_user
+  no_log: true
+
+- name: Preserve SSH defaults in custom cloud-config
+  ansible.builtin.set_fact:
+    __mp_cloud_init_config: >-
+      {{ {'chpasswd': {'expire': false}}
+         | combine(__mp_cloud_init_config, recursive=True)
+         | combine({'users': __mp_cloud_init_users}) }}
+  when: _inject_ssh_key | bool
+  no_log: true
+
+- name: Assemble cloud-init data and Secret references
+  vars:
+    _cloud_config_header: |
+      #cloud-config
+    _user_data: >-
+      {{ _cloud_init_default_data
+         if _cloud_init.user_data is not defined and _inject_ssh_key | bool
+         else _cloud_config_header + (__mp_cloud_init_config | to_nice_yaml(indent=2)) }}
+    _user_payload: >-
+      {{ {'secretRef': {'name': _cloud_init.user_data_secret}}
+         if _cloud_init.user_data_secret is defined else {'userData': _user_data} }}
+    _network_payload: >-
+      {{ {'networkDataSecretRef': {'name': _cloud_init.network_data_secret}}
+         if _cloud_init.network_data_secret is defined
+         else ({'networkData': _cloud_init.network_data | to_nice_yaml(indent=2)}
+               if _cloud_init.network_data is defined else {}) }}
+  ansible.builtin.set_fact:
+    __mp_cloud_init_volumes:
+      - name: cloudinitdisk
+        cloudInitNoCloud: "{{ _user_payload | combine(_network_payload) }}"
+  when: _cloud_init.enabled | default(_connection == 'ssh') | bool
+  no_log: true

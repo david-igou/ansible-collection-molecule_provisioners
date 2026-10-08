@@ -7,8 +7,17 @@
     item: instance
     _mp_specs:
       instance: "{{ host_spec }}"
-    mp_kubevirt_allowed_ssh_service_types: ["NodePort", "None"]
-    mp_kubevirt_allowed_connections: ["ssh", "psrp", "winrm"]
+    mp_kubevirt_allowed_ssh_service_types:
+      - NodePort
+      - "None"
+      - PodIP
+    mp_kubevirt_allowed_connections:
+      - ssh
+      - psrp
+      - winrm
   tasks:
     - name: Include the validator
-      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../roles/kubevirt/tasks/_validate.yml"
+      ansible.builtin.include_role:
+        # Test the checkout without requiring an installed collection.
+        name: "{{ playbook_dir }}/../../../roles/kubevirt" # noqa role-name[path]
+        tasks_from: _validate

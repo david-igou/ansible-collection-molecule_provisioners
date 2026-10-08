@@ -1,0 +1,92 @@
+---
+- name: Load the customization argument specification
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/meta/argument_specs.yml"
+    name: __mp_kubevirt_argument_specs
+
+- name: Validate cloud-init and replacement network parameters
+  ansible.builtin.validate_argument_spec:
+    argument_spec: "{{ __mp_kubevirt_argument_specs.argument_specs.customization.options }}"
+    provided_arguments: >-
+      {{ _mp_specs[item] | dict2items
+         | selectattr('key', 'in', ['cloud_init', 'interfaces', 'networks']) | items2dict }}
+
+- name: Check cloud-init data sources
+  vars:
+    _cloud_init: "{{ _mp_specs[item].cloud_init | default({}) }}"
+    _inject_ssh_key: >-
+      {{ _cloud_init.inject_ssh_key | default((_mp_specs[item].connection | default('ssh')) == 'ssh') }}
+  ansible.builtin.assert:
+    that:
+      - not (_cloud_init.user_data is defined and _cloud_init.user_data_secret is defined)
+      - not (_cloud_init.network_data is defined and _cloud_init.network_data_secret is defined)
+      - _cloud_init.user_data_secret is not defined or not (_inject_ssh_key | bool)
+      - _cloud_init.user_data_secret is not defined or _cloud_init.user_data_secret | length > 0
+      - _cloud_init.network_data_secret is not defined or _cloud_init.network_data_secret | length > 0
+    fail_msg: >-
+      Host '{{ item }}': inline data and its Secret reference are mutually exclusive;
+      Secret names must be non-empty. user_data_secret requires inject_ssh_key=false
+      because the role cannot modify referenced Secret data.
+
+- name: Inspect cloud-config users without exposing their data
+  vars:
+    _users: "{{ _mp_specs[item].cloud_init.user_data.users | default([]) }}"
+    _ssh_user: "{{ _mp_specs[item].ssh_user | default('cloud-user') }}"
+    _management_users: >-
+      {{ _users | select('mapping') | selectattr('name', 'defined')
+         | selectattr('name', 'equalto', _ssh_user) | list }}
+    _management_keys: >-
+      {{ (_management_users | first).ssh_authorized_keys | default([])
+         if _management_users | length > 0 else [] }}
+  ansible.builtin.set_fact:
+    __mp_cloud_init_users_valid: >-
+      {{ _users is sequence and _users is not string and _users is not mapping
+         and _management_users | length <= 1
+         and _management_keys is sequence and _management_keys is not string
+         and _management_keys is not mapping }}
+  no_log: true
+
+- name: Check cloud-config users
+  ansible.builtin.assert:
+    that: __mp_cloud_init_users_valid
+    fail_msg: >-
+      Cloud-config users must be a list, must not duplicate the management user,
+      and must supply that user's ssh_authorized_keys as a list.
+
+- name: Check interface and network pairing
+  vars:
+    _default_interfaces:
+      - name: default
+        masquerade: {}
+    _default_networks:
+      - name: default
+        pod: {}
+    _interfaces: >-
+      {{ (_mp_specs[item].interfaces | default(_default_interfaces))
+         + (_mp_specs[item].extra_interfaces | default([])) }}
+    _networks: >-
+      {{ (_mp_specs[item].networks | default(_default_networks)) + (_mp_specs[item].extra_networks | default([])) }}
+    _interface_names: "{{ _interfaces | map(attribute='name', default='') | list }}"
+    _network_names: "{{ _networks | map(attribute='name', default='') | list }}"
+  ansible.builtin.assert:
+    that:
+      - "'' not in _interface_names and '' not in _network_names"
+      - _interface_names | unique | length == _interface_names | length
+      - _network_names | unique | length == _network_names | length
+      - _interface_names | sort == _network_names | sort
+    fail_msg: "Host '{{ item }}': interface and network names must match and be unique."
+
+- name: Check management access for custom networks
+  vars:
+    _default_networks:
+      - name: default
+        pod: {}
+    _networks: >-
+      {{ (_mp_specs[item].networks | default(_default_networks)) + (_mp_specs[item].extra_networks | default([])) }}
+  ansible.builtin.assert:
+    that: _networks | selectattr('pod', 'defined') | list | length == 1
+    fail_msg: >-
+      Host '{{ item }}': NodePort and PodIP management require a pod network.
+      For Multus-only guests, set ssh_service.type=None and connection_ip
+      to a controller-reachable guest address.
+  when: (_mp_specs[item].ssh_service.type | default('NodePort')) in ['NodePort', 'PodIP']
