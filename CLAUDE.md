@@ -95,7 +95,7 @@ all:
                 port: 22 # optional in None/PodIP mode; default 22 (5986 for psrp/winrm)
               connection_ip: <str> # optional with NodePort, REQUIRED with None. Skips cluster-scoped Node lookup for this host
               # Guest connection (Windows support):
-              connection: ssh # optional, 'ssh' (default) | 'psrp' | 'winrm'. psrp/winrm drop cloud-init, target 5986.
+              connection: ssh # optional, 'ssh' (default) | 'psrp' | 'winrm'. psrp/winrm omit cloud-init by default, target 5986.
               admin_user: <str> # psrp/winrm only, default 'Administrator'
               admin_password: <str> # psrp/winrm only, REQUIRED (sensitive; no_log). Local admin the unattend set.
               sysprep_secret: <str> # optional; sysprep cdrom references sysprep.secret.name
@@ -114,7 +114,7 @@ all:
               affinity: <dict>
               cloud_init: # optional; empty block keeps connection-dependent defaults
                 enabled: <bool> # defaults to true for ssh, false for psrp/winrm
-                inject_ssh_key: <bool> # defaults to true for ssh; false with user_data_secret
+                inject_ssh_key: <bool> # defaults to true for ssh; user_data_secret requires false
                 user_data: <dict> # cloud-config mapping; management user/key merged by name
                 user_data_secret: <str> # existing Secret with userdata; exclusive with user_data
                 network_data: <dict> # cloud-init network-config mapping

@@ -31,7 +31,7 @@ The cluster-scoped `nodes` permission is used to pick the NodePort connection IP
 
 | `tasks_from` | What it does |
 | --- | --- |
-| `create` | Merges per-host specs, generates a keypair when any host uses SSH, creates each VirtualMachine and its Service in NodePort mode, and writes runtime connection details into the inventory file. |
+| `create` | Merges per-host specs, generates a keypair for SSH connections or explicit key injection, creates each VirtualMachine and its Service in NodePort mode, and writes runtime connection details into the inventory file. |
 | `destroy` | Deletes the run's VirtualMachines and NodePort Services, waits for generated resources to disappear, then removes local run state and runtime inventory. Fixed-name mode deletes resources using the original inventory names. |
 | `prepare` | `wait_for_connection` against each created host (honors the per-host connection plugin: ssh/psrp/winrm). Windows hosts get the longer `mp_kubevirt_windows_wait_timeout`. |
 
@@ -309,9 +309,11 @@ mp:
 
 What changes when `connection != ssh`:
 
-- **No cloud-init.** The renderer omits the `cloudinitdisk` disk/volume entirely
+- **No cloud-init by default.** The renderer omits the `cloudinitdisk` disk/volume
+  unless `cloud_init.enabled: true` is supplied
   (Windows goldens have no cloud-init, and a stray cloudinit disk shifts disk
-  ordering and confuses boot). No SSH keypair is generated when *no* host uses ssh.
+  ordering and confuses boot). No SSH keypair is generated when *no* host uses SSH
+  or explicitly enables `cloud_init.inject_ssh_key`.
 - **Sysprep volume.** When `sysprep_secret` is set, a `cdrom` disk named `sysprep`
   plus a volume referencing `sysprep.secret.name` is attached after
   the boot disk. The field is `secret.name` — the API
