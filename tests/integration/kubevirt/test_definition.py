@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+from hashlib import sha256
 
 import pytest
 import yaml
@@ -81,7 +82,7 @@ def test_full_definitions_boot_resume_and_cleanup_independently(tmp_path):
     runs = [full_definition_run(tmp_path / name, namespace) for name in ("full-one", "full-two")]
     try:
         for run in runs:
-            original_key = (run.ephemeral / "identity_file").read_bytes()
+            original_key_digest = sha256((run.ephemeral / "identity_file").read_bytes()).hexdigest()
             run.play("create")
             vm = _object(resources, run)
             assert vm.spec.runStrategy == "RerunOnFailure"
@@ -92,7 +93,10 @@ def test_full_definitions_boot_resume_and_cleanup_independently(tmp_path):
             uid = vm.metadata.uid
             run.play("create")
             assert _object(resources, run).metadata.uid == uid
-            assert (run.ephemeral / "identity_file").read_bytes() == original_key
+            assert (
+                sha256((run.ephemeral / "identity_file").read_bytes()).hexdigest()
+                == original_key_digest
+            )
         assert (
             runs[0].state["hosts"]["instance"]["name"] != runs[1].state["hosts"]["instance"]["name"]
         )

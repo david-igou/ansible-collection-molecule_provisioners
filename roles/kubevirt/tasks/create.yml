@@ -57,7 +57,7 @@
   community.crypto.openssh_keypair:
     path: "{{ mp_kubevirt_ssh_key_path }}"
     type: ed25519
-    regenerate: never
+    regenerate: "{{ 'never' if __mp_kubevirt_full_definition_key is not skipped else omit }}"
   register: __mp_kubevirt_ssh_keypair
   when: __mp_kubevirt_any_ssh | bool
 
