@@ -1,0 +1,6 @@
+---
+doc_changes:
+  - >-
+    Removed agent plans and design notes and documented that agent working files
+    belong outside the repository. Updated consumer and backend guidance and
+    converted YAML examples to block style.

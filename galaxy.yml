@@ -53,5 +53,4 @@ build_ignore:
   - changelogs/.plugin-cache.yaml
   - changelogs/fragments
   - devfile.yaml
-  - docs/superpowers
   - requirements.txt

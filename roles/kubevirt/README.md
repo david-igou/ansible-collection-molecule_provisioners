@@ -1,6 +1,6 @@
 # `david_igou.molecule_provisioners.kubevirt`
 
-Molecule provisioner role for KubeVirt VMs. Not invoked directly — invoked via the collection's top-level `playbooks/{create,destroy,prepare}.yml` dispatchers, which read `mp_backend` from the molecule group's hostvars.
+Molecule provisioner role for KubeVirt VMs. Use the collection's `playbooks/{create,destroy,prepare}.yml` dispatchers to invoke this role. They select the backend using `mp_backend` from the molecule group's hostvars.
 
 Requires:
 
@@ -9,29 +9,30 @@ Requires:
 
 ### RBAC required by the service account in `KUBECONFIG`
 
-The minimal verb set with the default `container_disk` boot source:
+Permissions for the default `container_disk` boot source and `NodePort` mode,
+including retries and cleanup:
 
 | Scope | Resource | Verbs |
 | --- | --- | --- |
 | cluster | `nodes` | `get`, `list` |
-| namespace (`mp.kubevirt.namespace`, default `molecule`) | `virtualmachines.kubevirt.io` | `create`, `get`, `delete` |
-| namespace | `services` | `create`, `get`, `delete` |
+| namespace (`mp.kubevirt.namespace`, default `molecule`) | `virtualmachines.kubevirt.io` | `create`, `get`, `patch`, `delete` |
+| namespace | `services` | `create`, `get`, `patch`, `delete` |
 | namespace | `virtualmachineinstances.kubevirt.io` | `get` |
 
 `secrets` access is **not** required in `container_disk` mode — the role injects the SSH key via cloud-init userData on the VM spec, not as a Kubernetes Secret. The `data_volume_url` / `data_volume_pvc` / `data_volume_source_ref` modes additionally need `datavolumes.cdi.kubevirt.io [create, get, delete]` in `mp.kubevirt.namespace`.
 
 `data_volume_source_ref` clones a golden image across namespaces (the `DataSource` and its backing PVC live in the OS-images namespace, e.g. `openshift-virtualization-os-images`). CDI enforces a cross-namespace authorization check for this: the service account in `KUBECONFIG` additionally needs `create` on the **`datavolumes/source`** subresource in the **source** namespace (`source_ref.namespace`), on top of the `datavolumes [create, get, delete]` grant in `mp.kubevirt.namespace`. Without it, the DataVolume is created but stalls and the CDI controller reports an authorization/`clone` error. (`data_volume_pvc` needs the same `datavolumes/source create` in its `source.namespace` when cloning cross-namespace.)
 
-The cluster-scoped `nodes` requirement is currently the tight spot for least-privilege namespaced setups (it's used to pick the NodePort connection IP). See [issue #30](https://github.com/david-igou/ansible-collection-molecule_provisioners/issues/30) for an opt-out via `mp.kubevirt.connection_ip`.
+The cluster-scoped `nodes` permission is used to pick the NodePort connection IP. Set `mp.kubevirt.connection_ip` to skip that lookup; see [issue #30](https://github.com/david-igou/ansible-collection-molecule_provisioners/issues/30).
 
-> **OpenShift note:** prefer `oc auth can-i …` over `kubectl auth can-i …` to preflight these. OpenShift adds a separate authorization layer that `kubectl`'s SubjectAccessReview can return false negatives for; `oc` is authoritative.
+> **OpenShift note:** use `oc auth can-i …` to check these permissions against your target cluster and identity.
 
 ## Entry points
 
 | `tasks_from` | What it does |
 | --- | --- |
-| `create` | Computes per-host merged specs, generates an SSH keypair, creates VirtualMachine + NodePort Service per host in `groups['molecule']`, writes runtime connection details (`ansible_host`, `ansible_port`, etc.) into the runtime inventory file. |
-| `destroy` | Deletes VirtualMachine and NodePort Service per host. |
+| `create` | Merges per-host specs, generates a keypair when any host uses SSH, creates each VirtualMachine and its Service in NodePort mode, and writes runtime connection details into the inventory file. |
+| `destroy` | Deletes the run's VirtualMachines and NodePort Services, waits for generated resources to disappear, then removes local run state and runtime inventory. Fixed-name mode deletes resources using the original inventory names. |
 | `prepare` | `wait_for_connection` against each created host (honors the per-host connection plugin: ssh/psrp/winrm). Windows hosts get the longer `mp_kubevirt_windows_wait_timeout`. |
 
 ## Concurrent runs in a shared namespace
@@ -144,7 +145,7 @@ all:
               ssh_user: cloud-user             # role default 'cloud-user' (ssh connection)
               ssh_service:
                 type: NodePort                 # 'NodePort', 'None', or 'PodIP'
-                port: 22                       # only consulted when type=None; default 22
+                port: 22                       # consulted in None/PodIP mode; default 22
                                                # (5986 for psrp/winrm connections)
               connection_ip: 192.0.2.10        # optional with NodePort, REQUIRED with None.
                                                # When set, skips the cluster-scoped Node
@@ -168,8 +169,8 @@ all:
               memory_limit: 2Gi                # → resources.limits.memory
 
               # Compute presets (alternative to cpu/memory; suppresses both)
-              instancetype: u1.medium          # str OR {name, kind}
-              preference: fedora               # str OR {name, kind}
+              instancetype: u1.medium          # string or mapping with name and kind
+              preference: fedora               # string or mapping with name and kind
 
               # Scheduling
               node_selector:
@@ -197,7 +198,7 @@ all:
               vm_overrides: {}
 ```
 
-Shared defaults can be hoisted into `mp_defaults.kubevirt` in `inventory/group_vars/molecule.yml`. Field resolution: role defaults ← `mp_defaults.kubevirt` ← `hostvars[item].mp.kubevirt`.
+Set shared defaults in `mp_defaults.kubevirt` in `inventory/group_vars/molecule.yml`. Field resolution: role defaults ← `mp_defaults.kubevirt` ← `hostvars[item].mp.kubevirt`.
 
 ## Boot sources
 
@@ -282,11 +283,9 @@ from the attached removable media. The unattend sets a local administrator
 password; Ansible then connects over **WinRM-over-HTTPS** (port 5986, NTLM,
 certificate validation off) as that admin.
 
-> **Security scope — cert validation off is intentional here.** These are
-> ephemeral, network-isolated Molecule test guests whose self-signed WinRM
-> certificate was minted seconds earlier by the unattend at first boot, so there
-> is no trust anchor to validate against and nothing durable to protect. This is
-> a deliberate test-scope behavior — **do not copy `ansible_psrp_cert_validation:
+> **Security scope:** the connection disables certificate validation for
+> ephemeral Molecule guests using self-signed WinRM certificates. The role does
+> not enforce network isolation. **Do not copy `ansible_psrp_cert_validation:
 > ignore` / `ansible_winrm_server_cert_validation: ignore` into a production
 > connection configuration**, where a validated certificate chain is expected.
 
@@ -314,9 +313,9 @@ What changes when `connection != ssh`:
   (Windows goldens have no cloud-init, and a stray cloudinit disk shifts disk
   ordering and confuses boot). No SSH keypair is generated when *no* host uses ssh.
 - **Sysprep volume.** When `sysprep_secret` is set, a `cdrom` disk named `sysprep`
-  plus a volume `{sysprep: {secret: {name: <sysprep_secret>}}}` is attached, after
-  the boot disk. **CRITICAL KubeVirt gotcha:** the field is `secret.name` — the API
-  silently drops `secretName` and the VMI wedges `Pending`. (`sysprep_secret` is
+  plus a volume referencing `sysprep.secret.name` is attached after
+  the boot disk. The field is `secret.name` — the API
+  silently drops `secretName` and the VMI stays `Pending`. (`sysprep_secret` is
   valid for any connection, but is primarily used with psrp/winrm.)
 - **Service targets 5986.** The per-VM NodePort Service (still keyed `ssh_service`
   in the schema — the name is **historical**, it predates Windows support and is
@@ -327,7 +326,7 @@ What changes when `connection != ssh`:
   (or `winrm`) with `ansible_user`/`ansible_password` (the admin credentials),
   `ansible_psrp_auth: ntlm` / `ansible_winrm_transport: ntlm`,
   `ansible_psrp_cert_validation: ignore` / `ansible_winrm_server_cert_validation:
-  ignore`, and generous connection/read timeouts. The file is written `0600` with
+  ignore`, and configured connection/read timeouts. The file is written `0600` with
   `no_log` because the password now lands on disk.
 - **Longer prepare wait.** `prepare` uses `wait_for_connection` (which honors the
   connection plugin) but with `mp_kubevirt_windows_wait_timeout` (default **900s**)
@@ -487,7 +486,7 @@ Such guests need a caller-provided lifecycle that does not wait for guest
 connectivity. These settings do not alter run-scoped names or cleanup ownership.
 See [KubeVirt interfaces and networks](https://kubevirt.io/user-guide/network/interfaces_and_networks/).
 
-## Escape hatch and foot-guns
+## VirtualMachine overrides
 
 `vm_overrides` is deep-merged into the whole VirtualMachine object with `list_merge='append'`. Fixed-name mode permits unrestricted overrides. Run isolation reserves resource identity fields; the following changes can still break connectivity:
 
@@ -499,7 +498,7 @@ When `instancetype` is set, the renderer **omits** `domain.cpu` and `domain.reso
 
 ## Skipping the Node lookup
 
-By default the role lists cluster `Node`s once to pick an `InternalIP` for the NodePort connection. This needs cluster-scoped `nodes [get,list]` RBAC. Namespace-scoped service accounts can opt out by setting `connection_ip` on every host — the role then skips the Node lookup entirely:
+By default the role lists cluster `Node`s once to pick an `InternalIP` for the NodePort connection. This needs cluster-scoped `nodes [get,list]` RBAC. Namespace-scoped service accounts can opt out by setting `connection_ip` on every NodePort host — the role then skips the Node lookup entirely:
 
 ```yaml
 mp:
@@ -510,11 +509,11 @@ mp:
     connection_ip: 192.0.2.10 # e.g. cluster ingress IP, controller-reachable Node IP, etc.
 ```
 
-If even one host omits `connection_ip`, the Node lookup still runs (the rest of the cluster nodes is unchanged); only the host with `connection_ip` set bypasses it for its own `ansible_host`.
+If any NodePort host omits `connection_ip`, the Node lookup runs. `None` and `PodIP` hosts do not trigger it; a NodePort host with `connection_ip` still uses its own address.
 
 ## Role-level overrides
 
-See `defaults/main.yml` (`mp_kubevirt_role_defaults`, `mp_kubevirt_ssh_key_path`, `mp_kubevirt_wait_timeout`, `mp_kubevirt_windows_wait_timeout`, `mp_kubevirt_allowed_ssh_service_types`, `mp_kubevirt_allowed_connections`).
+See `defaults/main.yml` (`mp_kubevirt_role_defaults`, `mp_kubevirt_ssh_key_path`, `mp_kubevirt_wait_timeout`, `mp_kubevirt_windows_wait_timeout`, `mp_kubevirt_allowed_ssh_service_types`, `mp_kubevirt_allowed_connections`, `mp_kubevirt_run_isolation`, `mp_kubevirt_cleanup_timeout`, `mp_kubevirt_podip_lookup_retries`, `mp_kubevirt_podip_lookup_delay`).
 
 ## SSH service types
 
@@ -522,7 +521,7 @@ Three modes are supported:
 
 - **`NodePort`** (default): the role creates a `NodePort` Service per VM and resolves `ansible_host` to a cluster Node InternalIP (or to `connection_ip` if set).
 - **`None`**: no Service is created. `connection_ip` is required (the role asserts this at validate time). `ansible_port` defaults to the guest port implied by the connection type — `22` for `ssh`, `5986` for `psrp`/`winrm` — override per-host with `ssh_service.port`. Use this for setups where access is provided by an external Route/Ingress, or where the controller can talk to pod IPs directly.
-- **`PodIP`**: no Service is created and no `connection_ip` is needed — the role waits for the VMI to report the configured pod network's IP and connects there directly. Only works when the controller runs **inside the cluster** (e.g. an OpenShift Dev Spaces workspace or CI pod). This is the least-privilege mode: the driving ServiceAccount needs neither `services` nor cluster-wide `nodes` RBAC — just VMs/VMIs in the target namespace. Port defaults as in `None` mode (`ssh_service.port` override honored). Lookup bounds: `mp_kubevirt_podip_lookup_retries` (60) × `mp_kubevirt_podip_lookup_delay` (5s).
+- **`PodIP`**: no Service is created and no `connection_ip` is needed — the role waits for the VMI to report the configured pod network's IP and connects there directly. Only works when the controller runs **inside the cluster** (e.g. an OpenShift Dev Spaces workspace or CI pod). The driving ServiceAccount needs neither `services` nor cluster-wide `nodes` RBAC; it still needs the VM/VMI and boot-source permissions listed above. Port defaults as in `None` mode (`ssh_service.port` override honored). Lookup bounds: `mp_kubevirt_podip_lookup_retries` (60) × `mp_kubevirt_podip_lookup_delay` (5s).
 
 ```yaml
 mp:

@@ -169,6 +169,10 @@ cython_debug/
 # Claude Code working state
 .claude/
 
+# Agent working notes and local writing samples
+/docs/superpowers/
+.unslop/
+
 # Collection build artifacts
 *.tar.gz
 

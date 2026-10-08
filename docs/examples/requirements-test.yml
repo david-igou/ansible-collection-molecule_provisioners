@@ -4,4 +4,4 @@
 # Copy to: extensions/molecule/requirements-test.yml
 collections:
   - name: david_igou.molecule_provisioners
-    version: 0.0.1-alpha
+    version: 0.0.5-alpha

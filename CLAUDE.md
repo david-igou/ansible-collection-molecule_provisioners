@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project type
 
-Ansible Collection `david_igou.molecule_provisioners`. Provides reusable Molecule provisioner playbooks and roles (podman, kubevirt) so other collections can test themselves without copy-pasting `create.yml`/`destroy.yml`/`prepare.yml` per repo. Targets `ansible-core >= 2.15`.
+Ansible Collection `david_igou.molecule_provisioners`. Provides reusable Molecule provisioner playbooks and roles (podman, kubevirt, qemu, docker) so other collections can test themselves without copy-pasting `create.yml`/`destroy.yml`/`prepare.yml` per repo. Targets `ansible-core >= 2.15`.
 
-This project is in early alpha stages and breaking changes will be a regular occurance. There is no need to bump a version if they are being implemented.
+This project is in alpha. Breaking changes do not require a version bump during alpha.
+
+Follow `AGENTS.md`. Keep agent plans, design notes, session logs, and writing-tool state outside this repository.
 
 The collection FQCN appears throughout (`david_igou.molecule_provisioners.create`, etc.). Tooling requires it to live at `ansible_collections/david_igou/molecule_provisioners/` somewhere on `ANSIBLE_COLLECTIONS_PATH`. If working outside that layout, symlink the repo into Ansible's default search path:
 
@@ -15,9 +17,9 @@ mkdir -p "$HOME/.ansible/collections/ansible_collections/david_igou"
 ln -snf "$PWD" "$HOME/.ansible/collections/ansible_collections/david_igou/molecule_provisioners"
 ```
 
-`ansible-galaxy collection list` should then show `david_igou.molecule_provisioners 1.0.0` without setting `ANSIBLE_COLLECTIONS_PATH`.
+`ansible-galaxy collection list` should then show `david_igou.molecule_provisioners` with the version declared in `galaxy.yml`, without setting `ANSIBLE_COLLECTIONS_PATH`.
 
-## Architecture (one-paragraph version)
+## Architecture
 
 Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) read `mp_backend` from the molecule group's hostvars (`hostvars[groups['molecule'][0]].mp_backend`), validate the inventory shape, and `include_role` into one of the backend roles (`roles/podman`, `roles/kubevirt`, `roles/qemu`, `roles/docker`). Each role uses `tasks_from` for lifecycle dispatch and starts with a 3-level merge (role defaults <- `mp_defaults.<backend>` <- `hostvars[item].mp.<backend>`) before looping `groups['molecule']`. Consumers' scenario `create.yml`/`destroy.yml`/`prepare.yml` are one-liners that `import_playbook: david_igou.molecule_provisioners.<phase>`. The molecule.yml itself uses molecule's ansible-native shape (`ansible:` block — no `driver:`, no `platforms:`, no `provisioner:`).
 
@@ -30,16 +32,23 @@ Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) 
 - `roles/kubevirt/tasks/{create,destroy,prepare,_create_vm,_create_vm_dictionary,_build_vm,_validate}.yml` — kubevirt lifecycle. `_create_vm*.yml` are per-host helpers included in a loop over `groups['molecule']`.
 - `roles/docker/tasks/{create,destroy,prepare,_spec_merge,_validate,_networks}.yml` — docker lifecycle. `_networks.yml` is shared between create and destroy.
 - `roles/<backend>/defaults/main.yml` — role-level defaults including the `mp_<backend>_role_defaults` dict that feeds the merge.
-- `extensions/molecule/default/` — single self-test scenario carrying both backends' specs per host. Discovered by `pytest_ansible.molecule_scenario` fixture in `tests/integration/test_integration.py`. The kubevirt-backend run is cluster-agnostic — it talks to whatever `KUBECONFIG` points at, as long as KubeVirt is installed there. CI provisions kind + KubeVirt with `useEmulation` before running it.
+- `extensions/molecule/default/` — self-test scenario carrying all four backends' specs per host. Discovered by `pytest_ansible.molecule_scenario` fixture in `tests/integration/test_integration.py`. The kubevirt-backend run talks to the cluster selected by `KUBECONFIG`, which must have KubeVirt installed. CI provisions kind + KubeVirt with `useEmulation` before running it.
 - `docs/examples/` — copy-paste starter for consumers: `molecule.yml` boilerplate, `inventory/` shape, plus the deterministic-setup files (`requirements-test.yml` pinned to the Galaxy version, `config.yml` wiring it into every scenario, `ansible.cfg`, and a `MOLECULE_GLOB` `Makefile`).
 - `AGENTS.md` — carries the ansible-creator agents.md reference plus a one-pass determinism checklist for agents adding a scenario in a consumer repo (pin version, centralize via `config.yml`, run from root with `MOLECULE_GLOB`, commit `ansible.cfg`).
 - `docs/MIGRATION.md` — translating from molecule's pre-ansible-native `platforms:` shape to this collection.
 
 ## Do not depend on `molecule-plugins`
 
-This collection must never list `molecule-plugins` (or any of its extras like `molecule-plugins[podman]`, `molecule-plugins[kubevirt]`) in `requirements.txt`, `test-requirements.txt`, CI install steps, or scenario `molecule.yml` `driver:` blocks. Both scenarios use `driver: name: default` and delegate the lifecycle to the playbooks shipped here — the whole point of the collection is to replace those plugins, not consume them. If you copy a CI step from another repo and it pulls `molecule-plugins`, strip it.
+This collection must never list `molecule-plugins` (or any of its extras like `molecule-plugins[podman]`, `molecule-plugins[kubevirt]`) in `requirements.txt`, `test-requirements.txt`, CI install steps, or scenario `molecule.yml` `driver:` blocks. Scenarios use Molecule's ansible-native configuration and delegate the lifecycle to this collection's playbooks. If you copy a CI step from another repo and it pulls `molecule-plugins`, strip it.
 
 ## Common commands
+
+Run Python tools in a project-local virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
 
 | Task                                                                                | Command                                                                 |
 | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -48,6 +57,7 @@ This collection must never list `molecule-plugins` (or any of its extras like `m
 | Run podman self-test                                                                | `PROVISIONER=podman pytest tests/integration -v -k default`             |
 | Run kubevirt self-test (requires `$KUBECONFIG` pointing at a cluster with KubeVirt) | `PROVISIONER=kubevirt pytest tests/integration -v -k default`           |
 | Run docker self-test                                                                | `PROVISIONER=docker pytest tests/integration -v -k default`             |
+| Run QEMU self-test (requires QEMU and a NoCloud seed-ISO tool)                        | `PROVISIONER=qemu pytest tests/integration -v -k default -o addopts=""`  |
 | Run a single scenario directly                                                      | `cd extensions/molecule/default && PROVISIONER=<backend> molecule test` |
 | Ansible sanity                                                                      | `ansible-test sanity --docker` (run from the symlink path)              |
 | Build collection artifact                                                           | `ansible-galaxy collection build`                                       |
@@ -55,7 +65,7 @@ This collection must never list `molecule-plugins` (or any of its extras like `m
 
 `pyproject.toml` configures pytest with `-n 2` (xdist parallel). The `kubevirt` CI job overrides this with `-o addopts="" -s` so molecule's `PLAY RECAP` output is visible in the runner log — xdist captures stdout per-worker, which made it impossible to tell whether the scenario was actually exercising the lifecycle.
 
-## Public contract (the thing we don't break without a major bump)
+## Public inventory schema
 
 The inventory shape consumers ship:
 
@@ -81,14 +91,14 @@ all:
               namespace: <str> # optional, role default 'molecule'
               ssh_user: <str> # optional, role default 'cloud-user' (ssh connection)
               ssh_service:
-                type: NodePort # optional, 'NodePort' (default, creates Service) or 'None' (skip Service; requires connection_ip)
-                port: 22 # optional, only consulted when type=None; default 22 (5986 for psrp/winrm)
+                type: NodePort # optional: NodePort (default), None, or PodIP
+                port: 22 # optional in None/PodIP mode; default 22 (5986 for psrp/winrm)
               connection_ip: <str> # optional with NodePort, REQUIRED with None. Skips cluster-scoped Node lookup for this host
               # Guest connection (Windows support):
               connection: ssh # optional, 'ssh' (default) | 'psrp' | 'winrm'. psrp/winrm drop cloud-init, target 5986.
               admin_user: <str> # psrp/winrm only, default 'Administrator'
               admin_password: <str> # psrp/winrm only, REQUIRED (sensitive; no_log). Local admin the unattend set.
-              sysprep_secret: <str> # optional, attach a KubeVirt sysprep cdrom volume {sysprep: {secret: {name: <str>}}}
+              sysprep_secret: <str> # optional; sysprep cdrom references sysprep.secret.name
               # Optional curated knobs:
               cpu:
                 cores: <int>
@@ -97,7 +107,7 @@ all:
                 model: <str>
               memory: <str> # role default '1Gi' → requests.memory
               memory_limit: <str> # → limits.memory
-              instancetype: <str-or-dict> # str OR {name, kind}; suppresses cpu/resources
+              instancetype: <str-or-dict> # string or mapping with name and kind; suppresses cpu/resources
               preference: <str-or-dict>
               node_selector: <dict>
               tolerations: <list>
@@ -139,8 +149,6 @@ Plus:
 - `mp_defaults.<backend>.<field>` is an optional group-var layer between role defaults and per-host hostvars.
 - `molecule.yml` uses molecule's ansible-native shape (`ansible:` block).
 
-Breaking changes to the above keys → major version bump. New optional fields → minor.
-
 ## When updating provisioner logic
 
 1. Make changes in the role (`roles/<backend>/tasks/`).
@@ -155,7 +163,7 @@ Breaking changes to the above keys → major version bump. New optional fields �
 
 ## Lint conventions
 
-`.ansible-lint` skips `var-naming[no-role-prefix]` because the collection uses an `mp_*` prefix on user-facing variables (collection-wide), which lint expects to be role-prefixed (`podman_*`, `kubevirt_*`). The collection-wide prefix is intentional — it makes vars discoverable across both roles.
+`.ansible-lint` skips `var-naming[no-role-prefix]` because the collection uses an `mp_*` prefix on user-facing variables (collection-wide), which lint expects to be role-prefixed (`podman_*`, `kubevirt_*`). The `mp_*` prefix applies to all four backends.
 
 `ansible-lint` 26.4+ requires `name:` on every play-level entry, including `import_playbook`. All scenario lifecycle one-liners and `docs/examples/` files include short imperative names.
 
@@ -167,7 +175,7 @@ Runs `update-docs` (collection_prep), `prettier`, `isort`, `black`, `flake8`, pl
 
 ## CI
 
-`.github/workflows/tests.yml` runs the reusable workflows from `ansible/ansible-content-actions` (changelog, build-import, ansible-lint, sanity, unit-galaxy) plus `unit-source`, an `integration-podman` job that exercises the default scenario via pytest with `PROVISIONER=podman`, and an `integration-kubevirt` job that exercises the same scenario with `PROVISIONER=kubevirt` on an in-CI kind cluster with KubeVirt in `useEmulation` mode. `release.yml` publishes to Galaxy on GitHub release.
+`.github/workflows/tests.yml` runs reusable changelog, build-import, ansible-lint, sanity, and unit-galaxy workflows, plus `unit-source`. Integration jobs exercise all four backends. KubeVirt runs on kind with `useEmulation`; QEMU runs under TCG and also tests CPU selection through actual guest launches. `release.yml` publishes to Galaxy on GitHub release.
 
 ## Running CI locally
 
@@ -195,12 +203,12 @@ podman run --rm -v "$PWD:/work" -w /work python:3.11-slim bash -c '
 '
 ```
 
-Swap the version pin for `>=2.16,<2.17` to cover the collection's stated floor.
+Swap the version pin for `>=2.16,<2.17` to check ansible-core 2.16, or `>=2.15,<2.16` for the collection's stated floor.
 
-Why this matters for the kubevirt renderer: ansible-core 2.19+ preserves Python `None` through `{{ x | default(none) }}`-style templating, but 2.16/2.17 string-coerce it to `"None"`. A `_var is not none` gate that works on the devcontainer's bleeding-edge ansible-core will silently leak content into the rendered VM on the supported floor. Run at least one cell of the matrix in a clean container before pushing a renderer change.
+ansible-core 2.19+ preserves Python `None` through `{{ x | default(none) }}`-style templating, but 2.16/2.17 string-coerce it to `"None"`. A `_var is not none` gate that works on the devcontainer's bleeding-edge ansible-core will silently leak content into the rendered VM on the supported floor. Run at least one cell of the matrix in a clean container before pushing a renderer change.
 
-## Out of scope (per the v1.0 spec)
+## Out of scope
 
-libvirt / cloud backends, LoadBalancer kubevirt service types, Molecule `shared_state` pattern. See `docs/superpowers/specs/2026-05-08-molecule-provisioners-design.md` for the design discussion.
+Libvirt and cloud backends, LoadBalancer/ClusterIP+port-forward KubeVirt service types, and Molecule's `shared_state` pattern. See the [README](README.md#out-of-scope) for the full list.
 
-(Windows guests on the kubevirt backend — `connection: psrp|winrm`, sysprep-specialized goldens — are now **supported**; the v1.0 out-of-scope line was retired. See `roles/kubevirt/README.md` → "Windows guests".)
+Windows guests are supported on KubeVirt through PSRP or WinRM and sysprep-specialized golden images. See [Windows guests](roles/kubevirt/README.md#windows-guests-psrp--winrm).
