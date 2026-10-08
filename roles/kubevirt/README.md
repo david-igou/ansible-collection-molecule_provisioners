@@ -230,11 +230,12 @@ Python. NodePort management is the default:
 ```yaml
 ---
 all:
+  vars:
+    mp_kubevirt_ssh_key_path: /path/to/scenario-key
   children:
     molecule:
       vars:
         mp_backend: kubevirt
-        mp_kubevirt_ssh_key_path: /path/to/scenario-key
       hosts:
         ubuntu-test:
           mp:
@@ -306,6 +307,10 @@ To load an existing manifest from a file, supply a mapping through inventory:
 ```yaml
 vm_definition: "{{ lookup('ansible.builtin.file', inventory_dir ~ '/vm.yml') | from_yaml }}"
 ```
+
+Set `mp_kubevirt_ssh_key_path` in `all.vars`, `group_vars/all`, or extra vars so
+the controller-side create play can see it. The default remains
+`{{ molecule_ephemeral_directory }}/identity_file`.
 
 ## Boot sources
 
