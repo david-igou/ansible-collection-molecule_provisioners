@@ -178,6 +178,41 @@
           This usually means group_vars/molecule.yml's mp_defaults didn't
           reach the create dispatcher.
 
+- name: Verify KubeVirt guest bootstrap and primary networking
+  hosts: molecule
+  gather_facts: false
+  vars:
+    _mp_backend: "{{ lookup('env', 'PROVISIONER') | default('podman', true) }}"
+  tasks:
+    - name: Skip other backends
+      ansible.builtin.meta: end_play
+      when: _mp_backend != 'kubevirt'
+
+    - name: Wait for guest bootstrap to complete
+      ansible.builtin.command: cloud-init status --wait
+      changed_when: false
+
+    - name: Gather guest network and hostname facts
+      ansible.builtin.setup:
+
+    - name: Check custom hostname and management interface
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname == 'mp-bootstrap'
+          - "'mpnet0' in ansible_facts.interfaces"
+          - ansible_facts.mpnet0.macaddress == '52:54:00:63:64:01'
+        fail_msg: Custom cloud-init hostname or network configuration did not reach the guest.
+
+    - name: Read guest IP forwarding state
+      ansible.builtin.command: sysctl -n net.ipv4.ip_forward
+      register: __mp_guest_forwarding
+      changed_when: false
+
+    - name: Check the bootstrap command took effect
+      ansible.builtin.assert:
+        that: __mp_guest_forwarding.stdout == '1'
+        fail_msg: The cloud-init bootstrap command did not enable IP forwarding.
+
 - name: Verify — qemu guest received the extra_args NIC
   hosts: molecule
   gather_facts: true

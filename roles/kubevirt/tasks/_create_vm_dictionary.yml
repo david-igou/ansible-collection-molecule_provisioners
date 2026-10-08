@@ -20,6 +20,18 @@
 # PodIP mode reads the VMI's pod-network address (masquerade interface =
 # virt-launcher pod IP), which appears in VMI status once the launcher pod is
 # up. Bounded by mp_kubevirt_podip_lookup_retries x _delay.
+- name: Identify the configured pod network for management
+  vars:
+    _default_networks:
+      - name: default
+        pod: {}
+    _networks: >-
+      {{ (_mp_specs[item].networks | default(_default_networks)) + (_mp_specs[item].extra_networks | default([])) }}
+  ansible.builtin.set_fact:
+    __mp_kubevirt_pod_network_name: >-
+      {{ (_networks | selectattr('pod', 'defined') | first).name }}
+  when: (_mp_specs[item].ssh_service.type | default('NodePort')) == 'PodIP'
+
 - name: "Look up VMI pod IP for: {{ item }}"
   kubernetes.core.k8s_info:
     api_version: kubevirt.io/v1
@@ -29,8 +41,11 @@
   register: __mp_kubevirt_vmi
   until:
     - __mp_kubevirt_vmi.resources | length > 0
-    - (__mp_kubevirt_vmi.resources[0].status.interfaces | default([]) | length) > 0
-    - (__mp_kubevirt_vmi.resources[0].status.interfaces[0].ipAddress | default('')) | length > 0
+    - >-
+      (__mp_kubevirt_vmi.resources[0].status.interfaces | default([])
+       | selectattr('name', 'defined')
+       | selectattr('name', 'equalto', __mp_kubevirt_pod_network_name)
+       | map(attribute='ipAddress', default='') | reject('equalto', '') | list | length) > 0
   retries: "{{ mp_kubevirt_podip_lookup_retries }}"
   delay: "{{ mp_kubevirt_podip_lookup_delay }}"
   when: (_mp_specs[item].ssh_service.type | default('NodePort')) == 'PodIP'
@@ -50,7 +65,9 @@
          if _service_mode in ['None', 'PodIP']
          else (__mp_kubevirt_svc.resources[0].spec.ports[0].nodePort) }}
     _ansible_host: >-
-      {{ __mp_kubevirt_vmi.resources[0].status.interfaces[0].ipAddress
+      {{ (__mp_kubevirt_vmi.resources[0].status.interfaces
+          | selectattr('name', 'defined')
+          | selectattr('name', 'equalto', __mp_kubevirt_pod_network_name) | first).ipAddress
          if _service_mode == 'PodIP'
          else (_mp_specs[item].connection_ip | default(__mp_kubevirt_node_ip)) }}
     _admin_user: "{{ _mp_specs[item].admin_user | default('Administrator') }}"

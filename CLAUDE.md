@@ -90,7 +90,11 @@ all:
               admin_password: <str> # psrp/winrm only, REQUIRED (sensitive; no_log). Local admin the unattend set.
               sysprep_secret: <str> # optional, attach a KubeVirt sysprep cdrom volume {sysprep: {secret: {name: <str>}}}
               # Optional curated knobs:
-              cpu: { cores, sockets, threads, model }
+              cpu:
+                cores: <int>
+                sockets: <int>
+                threads: <int>
+                model: <str>
               memory: <str> # role default '1Gi' → requests.memory
               memory_limit: <str> # → limits.memory
               instancetype: <str-or-dict> # str OR {name, kind}; suppresses cpu/resources
@@ -98,10 +102,19 @@ all:
               node_selector: <dict>
               tolerations: <list>
               affinity: <dict>
+              cloud_init: # optional; empty block keeps connection-dependent defaults
+                enabled: <bool> # defaults to true for ssh, false for psrp/winrm
+                inject_ssh_key: <bool> # defaults to true for ssh; false with user_data_secret
+                user_data: <dict> # cloud-config mapping; management user/key merged by name
+                user_data_secret: <str> # existing Secret with userdata; exclusive with user_data
+                network_data: <dict> # cloud-init network-config mapping
+                network_data_secret: <str> # existing Secret with networkdata; exclusive with network_data
+              interfaces: <list> # replaces default interface; KubeVirt objects paired with networks by name
+              networks: <list> # replaces default pod network; Multus-only requires None + connection_ip
               extra_disks: <list> # appended to [containerdisk, cloudinitdisk]
               extra_volumes: <list> # appended to [containerdisk, cloudinitdisk]
-              extra_interfaces: <list> # appended after default masquerade
-              extra_networks: <list> # appended after default pod
+              extra_interfaces: <list> # appended after interfaces (default masquerade if omitted)
+              extra_networks: <list> # appended after networks (default pod if omitted)
               vm_overrides: <dict> # escape hatch: deep-merge into whole VM, lists append
             qemu: # required when mp_backend == qemu
               image: <str> # required; upstream URL or local disk image
