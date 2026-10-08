@@ -1,0 +1,17 @@
+---
+- name: Exercise durable KubeVirt run state without a cluster
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    _mp_specs:
+      instance: "{{ host_spec }}"
+  tasks:
+    - name: Load lifecycle defaults
+      ansible.builtin.include_vars: "{{ playbook_dir }}/../../../roles/kubevirt/defaults/main.yml"
+
+    - name: Load saved run
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../roles/kubevirt/tasks/_load_run.yml"
+
+    - name: Initialize or resume run
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../roles/kubevirt/tasks/_init_run.yml"

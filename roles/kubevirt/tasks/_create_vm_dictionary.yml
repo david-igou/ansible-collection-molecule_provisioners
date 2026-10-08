@@ -7,7 +7,7 @@
   kubernetes.core.k8s_info:
     api_version: v1
     kind: Service
-    name: "{{ item }}"
+    name: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}"
     namespace: "{{ _mp_specs[item].namespace }}"
   register: __mp_kubevirt_svc
   until:
@@ -24,7 +24,7 @@
   kubernetes.core.k8s_info:
     api_version: kubevirt.io/v1
     kind: VirtualMachineInstance
-    name: "{{ item }}"
+    name: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}"
     namespace: "{{ _mp_specs[item].namespace }}"
   register: __mp_kubevirt_vmi
   until:

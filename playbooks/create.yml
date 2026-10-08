@@ -26,6 +26,14 @@
         - mp_defaults is not defined
         - hostvars[groups['molecule'][0]].mp_defaults is defined
 
+    - name: Pull KubeVirt run isolation from molecule group hostvars
+      ansible.builtin.set_fact:
+        mp_kubevirt_run_isolation: "{{ hostvars[groups['molecule'][0]].mp_kubevirt_run_isolation }}"
+      when:
+        - _mp_backend == 'kubevirt'
+        - mp_kubevirt_run_isolation is not defined
+        - hostvars[groups['molecule'][0]].mp_kubevirt_run_isolation is defined
+
     - name: Validate backend
       ansible.builtin.assert:
         that: _mp_backend in mp_supported_backends

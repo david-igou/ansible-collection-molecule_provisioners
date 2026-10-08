@@ -1,0 +1,39 @@
+---
+- name: Locate KubeVirt run state
+  ansible.builtin.stat:
+    path: "{{ molecule_ephemeral_directory }}/kubevirt_run.yml"
+  register: __mp_kubevirt_run_file
+
+- name: Reset in-memory run state
+  ansible.builtin.set_fact:
+    __mp_kubevirt_run: {}
+
+- name: Load saved KubeVirt run state
+  ansible.builtin.set_fact:
+    __mp_kubevirt_run: >-
+      {{ lookup('ansible.builtin.file', molecule_ephemeral_directory ~ '/kubevirt_run.yml') | from_yaml }}
+  when: __mp_kubevirt_run_file.stat.exists
+
+- name: Validate saved run state
+  ansible.builtin.assert:
+    that:
+      - __mp_kubevirt_run.version | default(0) == 1
+      - __mp_kubevirt_run.id | default('') is match('^[a-f0-9]{16}$')
+      - __mp_kubevirt_run.hosts | default(none) is mapping
+      - __mp_kubevirt_run.hosts | length > 0
+    fail_msg: Corrupt KubeVirt run state; restore kubevirt_run.yml before retrying.
+  when: __mp_kubevirt_run_file.stat.exists
+
+- name: Validate saved resource identities
+  ansible.builtin.assert:
+    that:
+      - run_host.value.name is match('^[a-z0-9][a-z0-9-]{0,56}[a-z0-9]$')
+      - run_host.value.name.endswith('-' ~ __mp_kubevirt_run.id)
+      - run_host.value.namespace is match('^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$')
+      - run_host.value.service is boolean
+      - run_host.value.disk is boolean
+    fail_msg: Invalid saved resource mapping; restore kubevirt_run.yml before retrying.
+  loop: "{{ __mp_kubevirt_run.hosts | default({}) | dict2items }}"
+  loop_control:
+    loop_var: run_host
+    label: "{{ run_host.key }}"

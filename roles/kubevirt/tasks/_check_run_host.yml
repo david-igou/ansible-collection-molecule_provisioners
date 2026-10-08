@@ -1,0 +1,35 @@
+---
+- name: Check directly managed resources for this run
+  ansible.builtin.include_tasks: _check_owned.yml
+  loop: >-
+    {{ [{'api': 'kubevirt.io/v1', 'kind': 'VirtualMachine', 'name': run_host.value.name}]
+       + ([{'api': 'v1', 'kind': 'Service', 'name': run_host.value.name}] if run_host.value.service else [])
+       + ([{'api': 'cdi.kubevirt.io/v1beta1', 'kind': 'DataVolume', 'name': run_host.value.name ~ '-boot'}]
+          if run_host.value.disk else []) }}
+  loop_control:
+    loop_var: run_resource
+    label: "{{ run_resource.kind }}/{{ run_resource.name }}"
+
+# CDI creates the PVC and owns it via the generated DataVolume. Do not adopt a
+# pre-existing claim with the generated name, even if no VM exists yet.
+- name: Check generated boot claim
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: PersistentVolumeClaim
+    name: "{{ run_host.value.name }}-boot"
+    namespace: "{{ run_host.value.namespace }}"
+  register: __mp_kubevirt_claim
+  when: run_host.value.disk
+
+- name: Require generated claim ownership by this run's DataVolume
+  ansible.builtin.assert:
+    that:
+      - __mp_kubevirt_owned.resources | length == 1
+      - >-
+        (__mp_kubevirt_claim.resources[0].metadata.ownerReferences | default([])
+         | selectattr('uid', 'equalto', __mp_kubevirt_owned.resources[0].metadata.uid)
+         | list | length) > 0
+    fail_msg: Refusing to adopt or clean up a boot claim owned by another run.
+  when:
+    - run_host.value.disk
+    - __mp_kubevirt_claim.resources | length > 0

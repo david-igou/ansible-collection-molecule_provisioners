@@ -34,7 +34,95 @@ The cluster-scoped `nodes` requirement is currently the tight spot for least-pri
 | `destroy` | Deletes VirtualMachine and NodePort Service per host. |
 | `prepare` | `wait_for_connection` against each created host (honors the per-host connection plugin: ssh/psrp/winrm). Windows hosts get the longer `mp_kubevirt_windows_wait_timeout`. |
 
+## Concurrent runs in a shared namespace
+
+Run isolation is enabled by default. Select KubeVirt in
+`inventory/group_vars/molecule.yml`; no isolation flag is needed:
+
+```yaml
+mp_backend: kubevirt
+```
+
+Each run saves `kubevirt_run.yml` (mode `0600`) in its Molecule ephemeral
+directory **before** creating infrastructure. The file contains only the run
+ID and host-to-resource mapping. VMs and NodePort Services use a normalized host
+prefix, a host-name digest and a random run suffix; generated DataVolumes/PVCs
+add `-boot`. Names stay within Kubernetes limits even for long inventory names.
+Logical inventory hosts, groups and consumer variables are unchanged. Runtime
+connection inventory still uses names such as `instance`.
+
+Separate concurrent runs need separate Molecule ephemeral directories. Two
+processes must not simultaneously create/destroy the **same** ephemeral
+directory. Retrying create in the same directory reuses the saved identity and
+SSH key. Destroy uses saved namespaces and resource requirements, even if the
+inventory changes or isolation is subsequently disabled. Create rejects changed
+host sets, namespaces, Service modes or generated-disk ownership until destroy.
+
+VMs, VMIs, generated DataVolumes and Services carry
+`molecule-provisioners.igou.io/run-id`. Before reusing or deleting an existing
+resource, the role checks its ownership. Deletes use UID and resource-version
+preconditions and foreground garbage collection. Cleanup waits for generated
+VMIs, DataVolumes and PVCs; referenced external PVCs, Secrets and extra volumes
+are not deleted. Isolated generated-disk runs additionally need `get` on PVCs.
+Retries against existing VMs/Services need `patch` permission, as in fixed mode.
+`mp_kubevirt_cleanup_timeout` defaults to 120 seconds per deletion/wait.
+
+State and runtime inventory are removed only after cleanup succeeds. A failed
+create, interrupted Ansible process, finalizer timeout or ownership mismatch
+leaves the saved identity intact. Retry `molecule destroy` with the same scenario
+and ephemeral directory after resolving the failure. Preserve that directory
+outside short-lived CI workspaces until destroy has completed; do not run
+`molecule reset` or erase it while resources remain.
+
+If state is lost, isolated destroy performs no deletion; it never falls back to
+fixed names. Restore `kubevirt_run.yml` from a backup if possible. Otherwise,
+identify the orphan's run ID and exact resources before deleting them manually:
+
+```bash
+oc get vm,svc,dv,pvc -n molecule -l molecule-provisioners.igou.io/run-id
+oc get vm,svc,dv,pvc -n molecule -l molecule-provisioners.igou.io/run-id=<run-id>
+```
+
+Inspect the selected VM, its generated DataVolumes/PVC owner references, and
+Services. Delete only that run's exact VM/Service names with foreground
+propagation, then verify its generated descendants are gone. PVCs may be found
+through DataVolume owner references rather than the run label. Do not delete
+external claims or another run's resources. Creating after state loss starts a
+new run and does not adopt or clean up the orphan.
+
+For fixed Kubernetes names, set `mp_kubevirt_run_isolation: false` in
+`inventory/group_vars/molecule.yml`. Before upgrading, destroy existing
+fixed-name guests with the old collection version. If already upgraded, set
+the flag to `false` and destroy with the original inventory, then remove the
+override to use isolation on the next create. With isolation enabled,
+`vm_overrides` cannot change VM names, namespaces, domain selectors or generated
+`dataVolumeTemplates`; custom external volume references retain their names.
+
 ## Inputs (per-host, in inventory)
+
+Minimal `inventory/hosts.yml` (paired with `mp_backend: kubevirt` above):
+
+```yaml
+---
+all:
+  children:
+    molecule:
+      hosts:
+        instance:
+          mp:
+            kubevirt:
+              namespace: molecule
+              boot_source:
+                type: container_disk
+                image: quay.io/containerdisks/ubuntu:24.04
+              ssh_user: ubuntu
+              memory: 1Gi
+```
+
+`instance` stays the Ansible inventory name. The VM and Service receive names
+such as `instance-5e8c03a9-825bbd211b673a09` automatically.
+
+The full per-host schema:
 
 ```yaml
 all:
@@ -84,7 +172,8 @@ all:
               preference: fedora               # str OR {name, kind}
 
               # Scheduling
-              node_selector: {kubernetes.io/arch: amd64}
+              node_selector:
+                kubernetes.io/arch: amd64
               tolerations: []
               affinity: {}
 
@@ -130,7 +219,9 @@ Requires CDI installed on the cluster.
 ```yaml
 boot_source:
   type: data_volume_pvc
-  source: {name: golden-ubuntu, namespace: images}
+  source:
+    name: golden-ubuntu
+    namespace: images
   size: 10Gi                  # required
   storage_class: standard     # optional
 ```
@@ -204,7 +295,8 @@ mp:
     admin_password: "{{ lookup('ansible.builtin.env', 'WIN_ADMIN_PASSWORD') }}"
     sysprep_secret: win2k25-sysprep                    # the Secret carrying unattend.xml
     memory: 8Gi
-    cpu: {cores: 4}
+    cpu:
+      cores: 4
 ```
 
 What changes when `connection != ssh`:
@@ -252,7 +344,7 @@ see the RBAC section above.
 
 ## Escape hatch and foot-guns
 
-`vm_overrides` is deep-merged into the whole VirtualMachine object with `list_merge='append'`. There are no guardrails — overriding any of the following will break the lifecycle:
+`vm_overrides` is deep-merged into the whole VirtualMachine object with `list_merge='append'`. Fixed-name mode permits unrestricted overrides. Run isolation reserves resource identity fields; the following changes can still break connectivity:
 
 - **Don't set `spec.running: false`.** The prepare phase calls `wait_for_connection` against the NodePort SSH service; a stopped VM never becomes reachable.
 - **Don't replace the `cloudinitdisk` volume.** The role injects an SSH public key via cloud-init `users:`. If you must edit it, replicate the block and keep `temporary_ssh_public_key`.
@@ -267,7 +359,9 @@ By default the role lists cluster `Node`s once to pick an `InternalIP` for the N
 ```yaml
 mp:
   kubevirt:
-    boot_source: {type: container_disk, image: quay.io/containerdisks/ubuntu:24.04}
+    boot_source:
+      type: container_disk
+      image: quay.io/containerdisks/ubuntu:24.04
     connection_ip: 192.0.2.10 # e.g. cluster ingress IP, controller-reachable Node IP, etc.
 ```
 
@@ -288,7 +382,9 @@ Three modes are supported:
 ```yaml
 mp:
   kubevirt:
-    boot_source: {type: container_disk, image: quay.io/containerdisks/ubuntu:24.04}
+    boot_source:
+      type: container_disk
+      image: quay.io/containerdisks/ubuntu:24.04
     ssh_service:
       type: None
       port: 2222 # only if the Route/Ingress maps to a non-default port
