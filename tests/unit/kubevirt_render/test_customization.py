@@ -281,6 +281,8 @@ def test_podip_uses_configured_network_not_status_order(tmp_path):
     "host_spec, expected",
     [
         ({"connection": "psrp", "cloud_init": {}}, False),
+        ({"connection": "psrp", "cloud_init": {"inject_ssh_key": "false"}}, False),
+        ({"connection": "psrp"}, False),
         ({"connection": "psrp", "cloud_init": {"enabled": True, "inject_ssh_key": True}}, True),
         ({"connection": "ssh", "cloud_init": {"enabled": False}}, True),
     ],

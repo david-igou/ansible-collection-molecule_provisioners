@@ -48,8 +48,8 @@
          | select('equalto', 'ssh')
          | list | length > 0
          or (_mp_specs.values()
-             | selectattr('cloud_init.inject_ssh_key', 'defined')
-             | selectattr('cloud_init.inject_ssh_key') | list | length > 0) }}
+             | map(attribute='cloud_init.inject_ssh_key', default=false)
+             | map('bool') | select('equalto', true) | list | length > 0) }}
 
 - name: Generate SSH key pair
   community.crypto.openssh_keypair:
