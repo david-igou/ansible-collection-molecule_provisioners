@@ -36,7 +36,6 @@ class Run:
                     "molecule": {
                         "vars": {
                             "mp_backend": "kubevirt",
-                            "mp_kubevirt_run_isolation": True,
                             "mp_kubevirt_wait_timeout": 600,
                             "consumer_marker": "kept-from-yaml",
                             "mp_defaults": {"kubevirt": {"namespace": namespace}},

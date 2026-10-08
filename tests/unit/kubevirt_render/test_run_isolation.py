@@ -70,7 +70,6 @@ def _state(tmp_path, **overrides):
             "ssh_service": {"type": "NodePort"},
         },
         "molecule_ephemeral_directory": str(tmp_path),
-        "mp_kubevirt_run_isolation": True,
     }
     extra.update(overrides)
     return subprocess.run(

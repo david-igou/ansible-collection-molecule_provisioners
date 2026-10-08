@@ -10,8 +10,8 @@ argument_specs:
     options:
       mp_kubevirt_run_isolation:
         type: bool
-        default: false
-        description: Persist run-scoped names in the Molecule ephemeral directory.
+        default: true
+        description: Persist run-scoped names in the Molecule ephemeral directory; set false for fixed names.
       mp_kubevirt_cleanup_timeout:
         type: int
         default: 120
@@ -51,8 +51,8 @@ argument_specs:
     options:
       mp_kubevirt_run_isolation:
         type: bool
-        default: false
-        description: Persist run-scoped names in the Molecule ephemeral directory.
+        default: true
+        description: Persist run-scoped names in the Molecule ephemeral directory; set false for fixed names.
       mp_kubevirt_cleanup_timeout:
         type: int
         default: 120

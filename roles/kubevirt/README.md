@@ -36,11 +36,11 @@ The cluster-scoped `nodes` requirement is currently the tight spot for least-pri
 
 ## Concurrent runs in a shared namespace
 
-Enable isolation in `inventory/group_vars/molecule.yml`:
+Run isolation is enabled by default. Select KubeVirt in
+`inventory/group_vars/molecule.yml`; no isolation flag is needed:
 
 ```yaml
 mp_backend: kubevirt
-mp_kubevirt_run_isolation: true
 ```
 
 Each run saves `kubevirt_run.yml` (mode `0600`) in its Molecule ephemeral
@@ -90,13 +90,39 @@ through DataVolume owner references rather than the run label. Do not delete
 external claims or another run's resources. Creating after state loss starts a
 new run and does not adopt or clean up the orphan.
 
-Isolation defaults to `false` to preserve fixed-name consumers. Clean up any
-existing fixed-name guests before enabling it. With isolation enabled,
+For fixed Kubernetes names, set `mp_kubevirt_run_isolation: false` in
+`inventory/group_vars/molecule.yml`. Before upgrading, destroy existing
+fixed-name guests with the old collection version. If already upgraded, set
+the flag to `false` and destroy with the original inventory, then remove the
+override to use isolation on the next create. With isolation enabled,
 `vm_overrides` cannot change VM names, namespaces, domain selectors or generated
 `dataVolumeTemplates`; custom external volume references retain their names.
-Choose `false` when integrations require fixed Kubernetes names.
 
 ## Inputs (per-host, in inventory)
+
+Minimal `inventory/hosts.yml` (paired with `mp_backend: kubevirt` above):
+
+```yaml
+---
+all:
+  children:
+    molecule:
+      hosts:
+        instance:
+          mp:
+            kubevirt:
+              namespace: molecule
+              boot_source:
+                type: container_disk
+                image: quay.io/containerdisks/ubuntu:24.04
+              ssh_user: ubuntu
+              memory: 1Gi
+```
+
+`instance` stays the Ansible inventory name. The VM and Service receive names
+such as `instance-5e8c03a9-825bbd211b673a09` automatically.
+
+The full per-host schema:
 
 ```yaml
 all:
