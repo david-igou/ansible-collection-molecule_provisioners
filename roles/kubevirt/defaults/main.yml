@@ -50,6 +50,8 @@ mp_kubevirt_role_defaults:
   ssh_user: cloud-user
   memory: 1Gi
   connection: ssh
+  connection_vars: {}
+  application_ports: []
   # Empty cloud_init keeps the connection-dependent bootstrap defaults.
   cloud_init: {}
   interfaces:

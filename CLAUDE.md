@@ -92,10 +92,12 @@ all:
               ssh_user: <str> # optional, role default 'cloud-user' (ssh connection)
               ssh_service:
                 type: NodePort # optional: NodePort (default), None, or PodIP
-                port: 22 # optional in None/PodIP mode; default 22 (5986 for psrp/winrm)
+                port: 22 # guest port in every mode; default 22 (5986 for psrp/winrm)
               connection_ip: <str> # optional with NodePort, REQUIRED with None. Skips cluster-scoped Node lookup for this host
               # Guest connection (Windows support):
               connection: ssh # optional, 'ssh' (default) | 'psrp' | 'winrm'. psrp/winrm omit cloud-init by default, target 5986.
+              connection_vars: <dict> # override Ansible connection defaults; endpoint/plugin fields are reserved
+              application_ports: <list> # named TCP/UDP ports; publishes mp_kubevirt_endpoints
               admin_user: <str> # psrp/winrm only, default 'Administrator'
               admin_password: <str> # psrp/winrm only, REQUIRED (sensitive; no_log). Local admin the unattend set.
               sysprep_secret: <str> # optional; sysprep cdrom references sysprep.secret.name
@@ -121,11 +123,15 @@ all:
                 network_data_secret: <str> # existing Secret with networkdata; exclusive with network_data
               interfaces: <list> # replaces default interface; KubeVirt objects paired with networks by name
               networks: <list> # replaces default pod network; Multus-only requires None + connection_ip
+              boot_disk: <dict> # bus and boot_order; no duplicate boot disk
+              data_disks: <list> # managed CDI disks with size/source/storage/bus/order settings
               extra_disks: <list> # appended to [containerdisk, cloudinitdisk]
               extra_volumes: <list> # appended to [containerdisk, cloudinitdisk]
               extra_interfaces: <list> # appended after interfaces (default masquerade if omitted)
               extra_networks: <list> # appended after networks (default pod if omitted)
               vm_overrides: <dict> # escape hatch: deep-merge into whole VM, lists append
+              # Alternatively, vm_definition accepts a full desired-state VM.
+              # It excludes VM-building parameters above; connection settings remain available.
             qemu: # required when mp_backend == qemu
               image: <str> # required; upstream URL or local disk image
               cpu_model: <str> # optional; omitted/empty selects host under KVM, Nehalem under TCG (BIOS and UEFI)

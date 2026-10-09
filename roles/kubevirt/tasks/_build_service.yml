@@ -1,0 +1,38 @@
+---
+- name: Initialize management Service port
+  vars:
+    _port: >-
+      {{ _mp_specs[item].ssh_service.port
+         | default(5986 if (_mp_specs[item].connection | default('ssh')) in ['psrp', 'winrm'] else 22) }}
+  ansible.builtin.set_fact:
+    __mp_kubevirt_service_ports: >-
+      {{ [{'name': 'management', 'port': _port | int, 'targetPort': _port | int, 'protocol': 'TCP'}] }}
+
+- name: Append application Service ports
+  ansible.builtin.set_fact:
+    __mp_kubevirt_service_ports: >-
+      {{ __mp_kubevirt_service_ports +
+         [{'name': application_port.name, 'port': application_port.port | int,
+           'targetPort': application_port.target_port | default(application_port.port) | int,
+           'protocol': application_port.protocol | default('TCP')}] }}
+  loop: "{{ _mp_specs[item].application_ports | default([]) }}"
+  loop_control:
+    loop_var: application_port
+    label: "{{ application_port.name }}"
+
+- name: Build the run-owned NodePort Service
+  ansible.builtin.set_fact:
+    __mp_kubevirt_service:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}"
+        namespace: "{{ _mp_specs[item].namespace }}"
+        labels: >-
+          {{ {'molecule-provisioners.igou.io/run-id': __mp_kubevirt_run.id}
+             if (__mp_kubevirt_run.hosts | default({})) | length > 0 else {} }}
+      spec:
+        ports: "{{ __mp_kubevirt_service_ports }}"
+        selector:
+          kubevirt.io/domain: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}"
+        type: NodePort

@@ -37,6 +37,8 @@
   vars:
     _conflicts:
       - boot_source
+      - boot_disk
+      - data_disks
       - cpu
       - memory
       - memory_limit

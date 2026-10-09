@@ -70,3 +70,6 @@
       - _mp_specs[item].boot_source.name | length > 0
     fail_msg: "Host '{{ item }}' boot_source.type=pvc requires `name` (the PVC name)."
   when: _mp_specs[item].boot_source.type == 'pvc'
+
+- name: Validate generated disk settings
+  ansible.builtin.include_tasks: _validate_storage.yml

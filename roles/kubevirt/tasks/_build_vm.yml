@@ -90,10 +90,18 @@
             volumes: "{{ _base_volumes }}"
 
 - name: "Reset boot-source facts: {{ item }}"
+  vars:
+    _bs: "{{ _mp_specs[item].boot_source }}"
   ansible.builtin.set_fact:
     __mp_boot_disk: null
     __mp_boot_volume: null
     __mp_data_volume_templates: []
+    __mp_kubevirt_vm_name: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}"
+    __mp_kubevirt_boot_storage: >-
+      {{ {'resources': {'requests': {'storage': _bs.size | default('')}}}
+         | combine({'storageClassName': _bs.storage_class} if _bs.storage_class is defined else {})
+         | combine({'volumeMode': _bs.volume_mode} if _bs.volume_mode is defined else {})
+         | combine({'accessModes': _bs.access_modes} if _bs.access_modes is defined else {}) }}
 
 - name: "Dispatch boot_source: {{ item }}"
   ansible.builtin.set_fact:
@@ -114,15 +122,7 @@
     _dv_name: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}-boot"
     _http_source:
       url: "{{ _bs.url }}"
-    _storage_block: >-
-      {{
-        {
-          'resources': {'requests': {'storage': _bs.size}}
-        }
-        | combine(
-            {'storageClassName': _bs.storage_class} if _bs.storage_class is defined else {}
-          )
-      }}
+    _storage_block: "{{ __mp_kubevirt_boot_storage }}"
   ansible.builtin.set_fact:
     __mp_boot_disk:
       name: containerdisk
@@ -147,15 +147,7 @@
   vars:
     _bs: "{{ _mp_specs[item].boot_source }}"
     _dv_name: "{{ (__mp_kubevirt_run.hosts | default({})).get(item, {}).name | default(item) }}-boot"
-    _storage_block: >-
-      {{
-        {
-          'resources': {'requests': {'storage': _bs.size}}
-        }
-        | combine(
-            {'storageClassName': _bs.storage_class} if _bs.storage_class is defined else {}
-          )
-      }}
+    _storage_block: "{{ __mp_kubevirt_boot_storage }}"
   ansible.builtin.set_fact:
     __mp_boot_disk:
       name: containerdisk
@@ -190,15 +182,7 @@
           'namespace': _bs.source_ref.namespace,
         }
       }}
-    _storage_block: >-
-      {{
-        {
-          'resources': {'requests': {'storage': _bs.size}}
-        }
-        | combine(
-            {'storageClassName': _bs.storage_class} if _bs.storage_class is defined else {}
-          )
-      }}
+    _storage_block: "{{ __mp_kubevirt_boot_storage }}"
   ansible.builtin.set_fact:
     __mp_boot_disk:
       name: containerdisk
@@ -232,6 +216,30 @@
         claimName: "{{ _bs.name }}"
     __mp_data_volume_templates: []
   when: _mp_specs[item].boot_source.type == 'pvc'
+
+- name: Apply boot-disk bus and order
+  vars:
+    _boot_disk: "{{ _mp_specs[item].boot_disk | default({}) }}"
+    _patch: >-
+      {{ {'disk': {'bus': _boot_disk.bus | default('virtio')}}
+         | combine({'bootOrder': _boot_disk.boot_order | int} if _boot_disk.boot_order is defined else {}) }}
+  ansible.builtin.set_fact:
+    __mp_boot_disk: "{{ __mp_boot_disk | combine(_patch, recursive=True) }}"
+
+- name: Resolve generated data-disk identities
+  ansible.builtin.include_tasks: _data_volume_names.yml
+
+- name: Initialize managed data-disk rendering
+  ansible.builtin.set_fact:
+    __mp_managed_data_disks: []
+    __mp_managed_data_volumes: []
+
+- name: Render managed data disks
+  ansible.builtin.include_tasks: _build_data_disk.yml
+  loop: "{{ _mp_specs[item].data_disks | default([]) }}"
+  loop_control:
+    loop_var: data_disk
+    label: "{{ data_disk.name }}"
 
 - name: "Compute domain.cpu and resources (skip when instancetype is set): {{ item }}"
   vars:
@@ -306,9 +314,9 @@
           spec:
             domain:
               devices:
-                disks: "{{ _spec.extra_disks | default([]) }}"
+                disks: "{{ __mp_managed_data_disks + (_spec.extra_disks | default([])) }}"
                 interfaces: "{{ _spec.extra_interfaces | default([]) }}"
-            volumes: "{{ _spec.extra_volumes | default([]) }}"
+            volumes: "{{ __mp_managed_data_volumes + (_spec.extra_volumes | default([])) }}"
             networks: "{{ _spec.extra_networks | default([]) }}"
 
 - name: "Apply boot source + compute + instancetype to base: {{ item }}"

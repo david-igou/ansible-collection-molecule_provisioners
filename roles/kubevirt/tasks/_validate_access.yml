@@ -1,0 +1,98 @@
+---
+- name: Load the access argument specification
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/meta/argument_specs.yml"
+    name: __mp_kubevirt_argument_specs
+
+- name: Validate connection settings without exposing credentials
+  ansible.builtin.validate_argument_spec:
+    argument_spec: "{{ __mp_kubevirt_argument_specs.argument_specs.access.options }}"
+    provided_arguments: >-
+      {{ _mp_specs[item] | dict2items
+         | selectattr('key', 'in', ['connection_vars', 'application_ports', 'ssh_service']) | items2dict }}
+  no_log: true
+
+- name: Check connection override names
+  vars:
+    _keys: "{{ (_mp_specs[item].connection_vars | default({})).keys() | list }}"
+    _protected:
+      - ansible_ssh_host
+      - ansible_ssh_port
+      - ansible_psrp_host
+      - ansible_psrp_port
+      - ansible_winrm_host
+      - ansible_winrm_port
+  ansible.builtin.assert:
+    that:
+      - >-
+        (_keys | reject('match', '^ansible_(user$|password$|timeout$|pipelining$|ssh_|psrp_|winrm_)')
+         | list | length) == 0
+      - _keys | intersect(_protected) | length == 0
+    fail_msg: >-
+      connection_vars accepts ansible_user, ansible_password, ansible_timeout,
+      ansible_pipelining, and ansible_ssh_*, ansible_psrp_*, ansible_winrm_* options.
+      Host, port, and connection plugin remain managed; use connection_ip,
+      ssh_service.port, and connection instead.
+
+- name: Check the management port
+  vars:
+    _port: >-
+      {{ _mp_specs[item].ssh_service.port
+         | default(5986 if (_mp_specs[item].connection | default('ssh')) in ['psrp', 'winrm'] else 22) }}
+  ansible.builtin.assert:
+    that:
+      - _port | string is match('^[0-9]+$')
+      - _port | int >= 1 and _port | int <= 65535
+    fail_msg: ssh_service.port must be an integer from 1 through 65535.
+
+- name: Require unique application port names
+  vars:
+    _names: "{{ _mp_specs[item].application_ports | default([]) | map(attribute='name') | list }}"
+  ansible.builtin.assert:
+    that:
+      - _names | unique | length == _names | length
+      - "'management' not in _names"
+    fail_msg: application_ports names must be unique; management is reserved.
+
+- name: Check application port ranges and names
+  vars:
+    _target: "{{ application_port.target_port | default(application_port.port) }}"
+  ansible.builtin.assert:
+    that:
+      - application_port.name is match('^[a-z]([-a-z0-9]*[a-z0-9])?$')
+      - application_port.name | length <= 15
+      - application_port.port | string is match('^[0-9]+$')
+      - application_port.port | int >= 1 and application_port.port | int <= 65535
+      - _target | string is match('^[0-9]+$')
+      - _target | int >= 1 and _target | int <= 65535
+      - >-
+        (application_port.protocol | default('TCP')) != 'TCP'
+        or (application_port.port | int) !=
+           (_mp_specs[item].ssh_service.port
+            | default(5986 if (_mp_specs[item].connection | default('ssh')) in ['psrp', 'winrm'] else 22) | int)
+    fail_msg: >-
+      Application port names must be valid Service port names of at most 15 characters.
+      Ports must be integers from 1 through 65535; do not repeat the TCP management port.
+  loop: "{{ _mp_specs[item].application_ports | default([]) }}"
+  loop_control:
+    loop_var: application_port
+    label: "{{ application_port.name }}"
+
+- name: Collect application Service port identities
+  ansible.builtin.set_fact:
+    __mp_kubevirt_port_identities: []
+
+- name: Record application Service port identities
+  ansible.builtin.set_fact:
+    __mp_kubevirt_port_identities: >-
+      {{ __mp_kubevirt_port_identities
+         + [(application_port.protocol | default('TCP')) ~ '/' ~ (application_port.port | int | string)] }}
+  loop: "{{ _mp_specs[item].application_ports | default([]) }}"
+  loop_control:
+    loop_var: application_port
+    label: "{{ application_port.name }}"
+
+- name: Reject duplicate Service ports
+  ansible.builtin.assert:
+    that: __mp_kubevirt_port_identities | unique | length == __mp_kubevirt_port_identities | length
+    fail_msg: application_ports must not repeat the same port and protocol.

@@ -72,7 +72,7 @@ jobs:
         run: pytest tests/integration/podman -v -s -o addopts=""
   integration-kubevirt:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout into the canonical collection path
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -120,6 +120,15 @@ jobs:
       - name: Create molecule namespace
         run: kubectl create namespace molecule
 
+      - name: Install CDI and local-path storage for managed-disk tests
+        run: |
+          kubectl apply -f https://github.com/kubevirt/containerized-data-importer/releases/download/v1.62.0/cdi-operator.yaml
+          kubectl -n cdi rollout status deployment/cdi-operator --timeout=5m
+          kubectl apply -f https://github.com/kubevirt/containerized-data-importer/releases/download/v1.62.0/cdi-cr.yaml
+          kubectl -n cdi wait --for=condition=Available cdi/cdi --timeout=10m
+          kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.31/deploy/local-path-storage.yaml
+          kubectl -n local-path-storage rollout status deployment/local-path-provisioner --timeout=5m
+
       - name: Watch VM/VMI state in background
         run: |
           (while true; do
@@ -144,6 +153,8 @@ jobs:
         working-directory: ansible_collections/david_igou/molecule_provisioners
         env:
           RUN_KUBEVIRT_ISOLATION: "1"
+          RUN_KUBEVIRT_STORAGE: "1"
+          MP_TEST_STORAGE_CLASS: local-path
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
           ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
         run: |

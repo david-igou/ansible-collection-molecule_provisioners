@@ -23,7 +23,8 @@ argument_specs:
           connection (default ssh), and ssh_service.type. Layered as: this dict <- mp_defaults.kubevirt
           <- hostvars[item].mp.kubevirt. Per-host hostvars accepts a much wider
           schema (boot_source, cpu, memory_limit, scheduling, extras, vm_overrides,
-          cloud_init, interfaces, networks, vm_definition); see roles/kubevirt/README.md.
+          cloud_init, interfaces, networks, vm_definition, boot_disk, data_disks,
+          connection_vars, application_ports); see roles/kubevirt/README.md.
       mp_kubevirt_ssh_key_path:
         type: path
         description: >-
@@ -121,3 +122,141 @@ argument_specs:
         type: list
         elements: dict
         description: KubeVirt networks replacing the default pod network; extras still append.
+  access:
+    short_description: Validate per-host management and application access.
+    options:
+      connection_vars:
+        type: dict
+        no_log: true
+        description: Ansible connection options merged over defaults; endpoint and plugin fields are protected.
+      ssh_service:
+        type: dict
+        options:
+          type:
+            type: str
+            choices:
+              - NodePort
+              - "None"
+              - PodIP
+          port:
+            type: int
+            description: In-guest management port in every access mode; defaults to 22 or 5986.
+      application_ports:
+        type: list
+        elements: dict
+        description: Application ports on the management Service, with direct endpoints in None/PodIP mode.
+        options:
+          name:
+            type: str
+            required: true
+            description: Unique Service port name, at most 15 characters; management is reserved.
+          port:
+            type: int
+            required: true
+            description: Service port; also the guest port unless target_port is set.
+          target_port:
+            type: int
+            description: In-guest application port.
+          protocol:
+            type: str
+            description: Transport protocol; defaults to TCP.
+            choices:
+              - TCP
+              - UDP
+  storage:
+    short_description: Validate generated boot and data disks.
+    options:
+      boot_storage:
+        type: dict
+        description: Storage mode options read from the generated boot_source.
+        options:
+          volume_mode:
+            type: str
+            description: PVC volume mode; CDI uses its StorageProfile when omitted.
+            choices:
+              - Filesystem
+              - Block
+          access_modes:
+            type: list
+            elements: str
+            description: PVC access modes; CDI uses its StorageProfile when omitted.
+            choices:
+              - ReadWriteOnce
+              - ReadWriteMany
+              - ReadOnlyMany
+              - ReadWriteOncePod
+      boot_disk:
+        type: dict
+        description: Bus and optional boot order for the generated boot disk.
+        options:
+          bus:
+            type: str
+            description: Boot-disk bus; defaults to virtio.
+            choices:
+              - virtio
+              - sata
+              - scsi
+          boot_order:
+            type: int
+            description: Positive unique KubeVirt bootOrder; omitted by default.
+      data_disks:
+        type: list
+        elements: dict
+        description: Managed persistent disks backed by generated CDI DataVolume templates.
+        options:
+          name:
+            type: str
+            required: true
+            description: Unique guest disk/volume name; generated resource names remain managed.
+          size:
+            type: str
+            required: true
+            description: Requested storage quantity, such as 10Gi.
+          source:
+            type: dict
+            description: Raw CDI source mapping; defaults to a blank image when neither source nor source_ref is set.
+          source_ref:
+            type: dict
+            description: DataSource reference; mutually exclusive with source.
+            options:
+              name:
+                type: str
+                required: true
+                description: Existing DataSource name.
+              namespace:
+                type: str
+                required: true
+                description: Existing DataSource namespace; cross-namespace grants are caller-owned.
+              kind:
+                type: str
+                description: Reference kind; defaults to DataSource.
+                choices:
+                  - DataSource
+          storage_class:
+            type: str
+            description: Storage class; omitted for CDI defaults, or empty for no class.
+          volume_mode:
+            type: str
+            description: PVC volume mode; defaults come from CDI's StorageProfile.
+            choices:
+              - Filesystem
+              - Block
+          access_modes:
+            type: list
+            elements: str
+            description: PVC access modes; defaults come from CDI's StorageProfile.
+            choices:
+              - ReadWriteOnce
+              - ReadWriteMany
+              - ReadOnlyMany
+              - ReadWriteOncePod
+          bus:
+            type: str
+            description: Guest disk bus; defaults to virtio.
+            choices:
+              - virtio
+              - sata
+              - scsi
+          boot_order:
+            type: int
+            description: Positive unique KubeVirt bootOrder; omitted by default.

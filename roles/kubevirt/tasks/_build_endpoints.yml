@@ -1,0 +1,29 @@
+---
+- name: Initialize application endpoints
+  ansible.builtin.set_fact:
+    __mp_kubevirt_endpoints: {}
+
+- name: Resolve application endpoints
+  vars:
+    _service_mode: "{{ _mp_specs[item].ssh_service.type | default('NodePort') }}"
+    _guest_port: "{{ application_port.target_port | default(application_port.port) | int }}"
+    _allocated: >-
+      {{ (__mp_kubevirt_svc.resources[0].spec.ports
+          | selectattr('name', 'equalto', application_port.name) | first).nodePort
+         if _service_mode == 'NodePort' else _guest_port }}
+    _endpoint: >-
+      {{ {'host': __mp_kubevirt_runtime_hosts[item].ansible_host, 'port': _allocated | int,
+          'guest_port': _guest_port | int, 'protocol': application_port.protocol | default('TCP')}
+         | combine({'service_port': application_port.port | int} if _service_mode == 'NodePort' else {}) }}
+  ansible.builtin.set_fact:
+    __mp_kubevirt_endpoints: "{{ __mp_kubevirt_endpoints | combine({application_port.name: _endpoint}) }}"
+  loop: "{{ _mp_specs[item].application_ports | default([]) }}"
+  loop_control:
+    loop_var: application_port
+    label: "{{ application_port.name }}"
+
+- name: Publish application endpoints in runtime inventory
+  ansible.builtin.set_fact:
+    __mp_kubevirt_runtime_hosts: >-
+      {{ __mp_kubevirt_runtime_hosts | combine(
+           {item: {'mp_kubevirt_endpoints': __mp_kubevirt_endpoints}}, recursive=True) }}
