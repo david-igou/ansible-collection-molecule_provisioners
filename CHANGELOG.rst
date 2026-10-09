@@ -4,6 +4,46 @@ David\_igou Molecule\_provisioners Collection Release Notes
 
 .. contents:: Topics
 
+v0.0.6-alpha
+============
+
+Release Summary
+---------------
+
+KubeVirt runs now use isolated resource names and ownership-checked cleanup by default. This release adds full VirtualMachine definitions, cloud-init and primary network configuration, managed data disks, connection overrides, and TCP/UDP application endpoints. It also improves Podman startup diagnostics and QEMU CPU defaults and image-download retries. Hosted validation runs lint only; functional tests run locally.
+
+Minor Changes
+-------------
+
+- Standardized the collection license and license metadata on MIT (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/60).
+- kubevirt - Added ``vm_definition`` to provision a complete VirtualMachine manifest without generated VM defaults or override merging (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/70).
+- kubevirt - Added boot-disk bus/order, CDI storage modes, and managed data disks with run-scoped names and cleanup (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/72).
+- kubevirt - Added connection_vars overrides and named TCP/UDP application ports with resolved endpoints in runtime inventory (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/72).
+- kubevirt - Preserved run isolation for full definitions by renaming embedded DataVolumes and their references, recording every managed disk for ownership checks and cleanup.
+- kubevirt - added cloud-init user/network data, existing Secret references, and optional SSH key injection (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/68).
+- kubevirt - added replacement interface/network lists while retaining extra interface/network append behavior (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/68).
+- kubevirt - added run-scoped VM, generated disk and Service names with durable resource mapping and ownership-checked cleanup (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/61).
+- kubevirt - validated bootstrap and network configuration before provisioning and suppressed cloud-init data in provisioning logs.
+
+Breaking Changes / Porting Guide
+--------------------------------
+
+- kubevirt - enabled run isolation by default. Set mp_kubevirt_run_isolation=false for fixed names, and destroy existing fixed-name guests before upgrading or with isolation explicitly disabled.
+
+Bugfixes
+--------
+
+- kubevirt - Honored ssh_service.port in NodePort mode and preserved allocated NodePorts when updating the run-owned Service (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/72).
+- podman - Failed create when a container exited immediately after startup, reporting its state and exit code before writing runtime inventory (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/71).
+- qemu - the base-image download now uses a 60s timeout (was get_url's 10s default) and retries up to 5 times, tunable via ``mp_qemu_image_download_timeout`` / ``mp_qemu_image_download_retries``. cloud.debian.org intermittently stalls past 10s before serving the first byte, which previously failed whole scenarios (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/53).
+- qemu - used Nehalem as the TCG CPU default for both BIOS and UEFI guests, avoiding launch failures on builds without qemu64-v2, and documented the cpu_model option in the role argument specification and public contract (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/62).
+
+Documentation Changes
+---------------------
+
+- Removed agent plans and design notes and documented that agent working files belong outside the repository. Updated consumer and backend guidance and converted YAML examples to block style (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/69).
+- Updated example collection pins to 0.0.6-alpha and documented how to upgrade existing fixed-name KubeVirt scenarios to default run isolation.
+
 v0.0.5-alpha
 ============
 

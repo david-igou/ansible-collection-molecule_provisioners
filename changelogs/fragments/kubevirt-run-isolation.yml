@@ -1,5 +1,0 @@
----
-minor_changes:
-  - kubevirt - added run-scoped VM, generated disk and Service names with durable resource mapping and ownership-checked cleanup (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/61).
-breaking_changes:
-  - kubevirt - enabled run isolation by default. Set mp_kubevirt_run_isolation=false for fixed names, and destroy existing fixed-name guests before upgrading or with isolation explicitly disabled.

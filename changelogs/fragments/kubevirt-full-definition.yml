@@ -1,4 +1,0 @@
----
-minor_changes:
-  - kubevirt - Added ``vm_definition`` to provision a complete VirtualMachine manifest without generated VM defaults or override merging (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/70).
-  - kubevirt - Preserved run isolation for full definitions by renaming embedded DataVolumes and their references, recording every managed disk for ownership checks and cleanup.

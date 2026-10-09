@@ -2,6 +2,26 @@
 
 If you have a molecule scenario using the upstream `platforms:` + `driver:` shape (now called _pre ansible-native_ in molecule's own docs) and you want to use this collection, here is the field-by-field translation.
 
+## Upgrading from 0.0.5-alpha to 0.0.6-alpha
+
+KubeVirt run isolation is now enabled by default. Kubernetes resource names
+include a unique run suffix; logical inventory host names remain unchanged.
+Each run saves its resource mapping in the Molecule ephemeral directory and
+uses it for retries and ownership-checked cleanup.
+
+Destroy existing fixed-name guests with 0.0.5-alpha before upgrading. If you
+have already upgraded, set this in `inventory/group_vars/molecule.yml` and
+destroy with the original inventory:
+
+```yaml
+mp_kubevirt_run_isolation: false
+```
+
+Remove the override before the next create to use isolation, or keep it if
+your scenario requires fixed names. Preserve the ephemeral directory until
+destroy succeeds. The role does not adopt existing fixed-name guests into
+an isolated run. See [run isolation and recovery](../roles/kubevirt/README.md#concurrent-runs-in-a-shared-namespace).
+
 ## Before — pre-ansible-native shape
 
 ```yaml
@@ -118,7 +138,7 @@ Pin the dependency in `extensions/molecule/requirements-test.yml`:
 ```yaml
 collections:
   - name: david_igou.molecule_provisioners
-    version: 0.0.5-alpha
+    version: 0.0.6-alpha
 ```
 
 Copy [`examples/config.yml`](examples/config.yml) to

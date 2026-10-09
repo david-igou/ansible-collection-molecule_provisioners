@@ -29,7 +29,7 @@ the maintainer's reference consumer
 
 - [ ] **Pin the provisioner version.** In `extensions/molecule/requirements-test.yml`,
       pin `david_igou.molecule_provisioners` to an exact Galaxy version (e.g.
-      `0.0.5-alpha`) — never `version: main`. Copy `docs/examples/requirements-test.yml`.
+      `0.0.6-alpha`) — never `version: main`. Copy `docs/examples/requirements-test.yml`.
 - [ ] **Centralize the pin via `config.yml`.** Add `extensions/molecule/config.yml`
       pointing `dependency.options.requirements-file` at the pinned file, so every
       scenario shares one version and one bump point. Copy `docs/examples/config.yml`.
