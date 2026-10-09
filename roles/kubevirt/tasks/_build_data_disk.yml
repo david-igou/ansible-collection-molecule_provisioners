@@ -1,0 +1,29 @@
+---
+- name: Render a managed data disk and its DataVolume
+  vars:
+    _name: "{{ __mp_kubevirt_data_volume_map['disk/' ~ data_disk.name] }}"
+    _storage: >-
+      {{ {'resources': {'requests': {'storage': data_disk.size}}}
+         | combine({'storageClassName': data_disk.storage_class} if data_disk.storage_class is defined else {})
+         | combine({'volumeMode': data_disk.volume_mode} if data_disk.volume_mode is defined else {})
+         | combine({'accessModes': data_disk.access_modes} if data_disk.access_modes is defined else {}) }}
+    _source: >-
+      {{ {'sourceRef': {'name': data_disk.source_ref.name, 'namespace': data_disk.source_ref.namespace,
+                       'kind': data_disk.source_ref.kind | default('DataSource')}}
+         if data_disk.source_ref is defined else {'source': data_disk.source | default({'blank': {}})} }}
+    _labels: >-
+      {{ {'molecule-provisioners.igou.io/run-id': __mp_kubevirt_run.id}
+         if (__mp_kubevirt_run.hosts | default({})) | length > 0 else {} }}
+    _disk: >-
+      {{ {'name': data_disk.name, 'disk': {'bus': data_disk.bus | default('virtio')}}
+         | combine({'bootOrder': data_disk.boot_order | int} if data_disk.boot_order is defined else {}) }}
+    _template:
+      metadata:
+        name: "{{ _name }}"
+        labels: "{{ _labels }}"
+      spec: "{{ {'storage': _storage} | combine(_source) }}"
+  ansible.builtin.set_fact:
+    __mp_data_volume_templates: "{{ __mp_data_volume_templates + [_template] }}"
+    __mp_managed_data_disks: "{{ __mp_managed_data_disks + [_disk] }}"
+    __mp_managed_data_volumes: >-
+      {{ __mp_managed_data_volumes + [{'name': data_disk.name, 'dataVolume': {'name': _name}}] }}

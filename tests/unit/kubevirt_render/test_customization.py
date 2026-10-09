@@ -271,7 +271,10 @@ def test_podip_uses_configured_network_not_status_order(tmp_path, full_definitio
             },
             "tasks": [
                 discovery,
-                tasks[-1],
+                {
+                    "name": "Build actual runtime inventory",
+                    "ansible.builtin.include_tasks": str(role.with_name("_build_runtime.yml")),
+                },
                 {
                     "name": "Save runtime inventory",
                     "ansible.builtin.copy": {

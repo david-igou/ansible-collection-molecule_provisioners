@@ -1,0 +1,39 @@
+---
+- name: Render management and application Service ports
+  ansible.builtin.include_tasks: _build_service.yml
+
+- name: Inspect existing Service port allocations
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Service
+    name: "{{ __mp_kubevirt_service.metadata.name }}"
+    namespace: "{{ __mp_kubevirt_service.metadata.namespace }}"
+  register: __mp_kubevirt_existing_service
+
+- name: Initialize preserved Service port allocations
+  ansible.builtin.set_fact:
+    __mp_kubevirt_preserved_ports: []
+
+- name: Preserve allocated NodePorts for unchanged port identities
+  vars:
+    _existing_ports: "{{ (__mp_kubevirt_existing_service.resources | first).spec.ports | default([]) }}"
+    _existing: >-
+      {{ _existing_ports | selectattr('port', 'equalto', service_port.port)
+         | selectattr('protocol', 'equalto', service_port.protocol) | list }}
+    _allocation: >-
+      {{ {'nodePort': (_existing | first).nodePort}
+         if _existing | length > 0 and (_existing | first).nodePort is defined else {} }}
+  ansible.builtin.set_fact:
+    __mp_kubevirt_preserved_ports: "{{ __mp_kubevirt_preserved_ports + [service_port | combine(_allocation)] }}"
+  loop: "{{ __mp_kubevirt_service.spec.ports }}"
+  loop_control:
+    loop_var: service_port
+    label: "{{ service_port.name }}"
+
+- name: Apply the complete Service port list
+  kubernetes.core.k8s:
+    state: present
+    merge_type:
+      - merge
+    definition: >-
+      {{ __mp_kubevirt_service | combine({'spec': {'ports': __mp_kubevirt_preserved_ports}}, recursive=True) }}

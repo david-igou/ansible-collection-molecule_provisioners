@@ -1,0 +1,6 @@
+---
+trivial:
+  - >-
+    Moved Actions validation to one lint job and added local backend test targets
+    and disposable KubeVirt setup
+    (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/72).

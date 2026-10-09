@@ -1,0 +1,68 @@
+---
+- name: Load the storage argument specification
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/meta/argument_specs.yml"
+    name: __mp_kubevirt_argument_specs
+
+- name: Validate generated disk parameter types
+  ansible.builtin.validate_argument_spec:
+    argument_spec: "{{ __mp_kubevirt_argument_specs.argument_specs.storage.options }}"
+    provided_arguments: >-
+      {{ (_mp_specs[item] | dict2items | selectattr('key', 'in', ['boot_disk', 'data_disks']) | items2dict)
+         | combine({'boot_storage': _mp_specs[item].boot_source | dict2items
+                    | selectattr('key', 'in', ['access_modes', 'volume_mode']) | items2dict}) }}
+  no_log: true
+
+- name: Check boot order
+  ansible.builtin.assert:
+    that:
+      - _mp_specs[item].boot_disk.boot_order | string is match('^[0-9]+$')
+      - _mp_specs[item].boot_disk.boot_order | int > 0
+    fail_msg: boot_disk.boot_order must be a positive integer.
+  when: _mp_specs[item].boot_disk.boot_order is defined
+
+- name: Require unique managed disk names
+  vars:
+    _names: "{{ _mp_specs[item].data_disks | default([]) | map(attribute='name') | list }}"
+    _reserved:
+      - containerdisk
+      - cloudinitdisk
+      - sysprep
+    _external: >-
+      {{ (_mp_specs[item].extra_disks | default([])) + (_mp_specs[item].extra_volumes | default([])) }}
+  ansible.builtin.assert:
+    that:
+      - _names | unique | length == _names | length
+      - _names | intersect(_reserved) | length == 0
+      - _names | intersect(_external | map(attribute='name') | list) | length == 0
+    fail_msg: data_disks names must be unique and must not collide with boot, bootstrap, or extra disks/volumes.
+
+- name: Validate each managed data disk
+  ansible.builtin.assert:
+    that:
+      - data_disk.name is match('^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')
+      - data_disk.name | length <= 63
+      - data_disk.size | string | length > 0
+      - not (data_disk.source is defined and data_disk.source_ref is defined)
+      - data_disk.source is not defined or data_disk.source | length == 1
+      - data_disk.boot_order is not defined or data_disk.boot_order | string is match('^[0-9]+$')
+      - data_disk.boot_order is not defined or data_disk.boot_order | int > 0
+    fail_msg: >-
+      Each data disk needs a DNS label name and non-empty size, at most one CDI source
+      or source_ref, and a positive boot_order when supplied.
+  loop: "{{ _mp_specs[item].data_disks | default([]) }}"
+  loop_control:
+    loop_var: data_disk
+    label: "{{ data_disk.name }}"
+
+- name: Check disk boot-order uniqueness
+  vars:
+    _orders: >-
+      {{ (_mp_specs[item].data_disks | default([]) | selectattr('boot_order', 'defined')
+          | map(attribute='boot_order') | map('int') | list)
+         + ([_mp_specs[item].boot_disk.boot_order | int] if _mp_specs[item].boot_disk.boot_order is defined else [])
+         + (_mp_specs[item].extra_disks | default([]) | selectattr('bootOrder', 'defined')
+            | map(attribute='bootOrder') | map('int') | list) }}
+  ansible.builtin.assert:
+    that: _orders | unique | length == _orders | length
+    fail_msg: boot_order values must be unique across boot, managed data, and extra disks.

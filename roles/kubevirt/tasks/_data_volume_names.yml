@@ -1,5 +1,5 @@
 ---
-# Shared by state recording and full-definition rendering. External references
+# Shared by state recording and VM rendering. External references
 # are deliberately absent from this map.
 - name: Reset managed DataVolume names
   ansible.builtin.set_fact:
@@ -14,6 +14,19 @@
     - >-
       (_mp_specs[item].boot_source.type | default(''))
       in ['data_volume_url', 'data_volume_pvc', 'data_volume_source_ref']
+
+- name: Map generated data-disk names
+  vars:
+    _name: >-
+      {{ __mp_kubevirt_vm_name[:40] ~ '-dv-'
+         ~ ((__mp_kubevirt_vm_name ~ '/disk/' ~ data_disk.name) | hash('sha256'))[:16] }}
+  ansible.builtin.set_fact:
+    __mp_kubevirt_data_volume_map: >-
+      {{ __mp_kubevirt_data_volume_map | combine({'disk/' ~ data_disk.name: _name}) }}
+  loop: "{{ _mp_specs[item].data_disks | default([]) }}"
+  loop_control:
+    loop_var: data_disk
+    label: "{{ data_disk.name }}"
 
 - name: Map full-definition DataVolume names
   vars:

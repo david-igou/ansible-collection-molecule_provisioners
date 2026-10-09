@@ -23,6 +23,9 @@
       '{{ _mp_specs[item].ssh_service.type | default('(missing)') }}'.
       Supported: {{ mp_kubevirt_allowed_ssh_service_types | join(', ') }}.
 
+- name: Validate management access and application ports
+  ansible.builtin.include_tasks: _validate_access.yml
+
 # 'None' mode skips Service creation, so the role has no way to discover a
 # connection IP on its own — the consumer must supply one.
 - name: "Assert connection_ip is set when ssh_service.type is None: {{ item }}"
@@ -51,16 +54,23 @@
 # psrp/winrm authenticate with a local admin whose password the sysprep
 # unattend.xml set. Fail fast (before we ever start a VM) if it is missing.
 - name: "Assert admin_password is set for psrp/winrm: {{ item }}"
+  vars:
+    _connection: "{{ _mp_specs[item].connection | default('ssh') }}"
+    _options: "{{ _mp_specs[item].connection_vars | default({}) }}"
+    _auth: >-
+      {{ _options.ansible_psrp_auth | default('ntlm') if _connection == 'psrp'
+         else _options.ansible_winrm_transport | default('ntlm') }}
   ansible.builtin.assert:
     that:
-      - _mp_specs[item].admin_password is defined
-      - _mp_specs[item].admin_password | default('') | length > 0
+      - >-
+        _auth in ['kerberos', 'certificate'] or
+        (_options.ansible_password | default(_mp_specs[item].admin_password | default('')) | length) > 0
     fail_msg: >-
       Host '{{ item }}' uses connection
       '{{ _mp_specs[item].connection | default('ssh') }}' but did not set
-      admin_password. WinRM authentication needs the local admin password that
-      the sysprep unattend.xml assigned. Set mp.kubevirt.admin_password
-      (typically via a scenario group_var doing an env/op lookup).
+      a password. Set mp.kubevirt.admin_password or connection_vars.ansible_password
+      in inventory, or explicitly configure Kerberos or certificate authentication
+      with caller-provided tickets/certificates.
   # no no_log: the `that:` conditions only test presence/length (never
   # interpolate the password value) and fail_msg prints connection type, not
   # the secret — so the fail_msg stays visible when the assert trips.

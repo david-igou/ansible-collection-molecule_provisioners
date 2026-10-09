@@ -6,6 +6,28 @@ Requires:
 
 - A reachable Kubernetes cluster with KubeVirt installed and a working `KUBECONFIG`.
 - `kubernetes.core` and `community.crypto` collections (declared in `galaxy.yml`).
+- The controller's Python environment needs `kubernetes`; SSH needs `ssh` and
+  guest-side Python. Windows connection libraries are listed below.
+- CDI and a suitable storage class for generated persistent disks. The caller
+  creates the namespace, NetworkAttachmentDefinitions, image sources, and Secrets.
+
+## Contents
+
+- [Entry points](#entry-points)
+- [Concurrent runs and cleanup](#concurrent-runs-in-a-shared-namespace)
+- [Inventory and parameter reference](#inputs-per-host-in-inventory)
+- [Full VM manifests](#full-virtualmachine-definitions)
+- [Boot sources](#boot-sources)
+- [Boot and managed data disks](#boot-and-managed-data-disks)
+- [Windows guests](#windows-guests-psrp--winrm)
+- [Cloud-init](#custom-cloud-init)
+- [Networking](#primary-interfaces-and-networks)
+- [VM overrides](#virtualmachine-overrides)
+- [Connection overrides](#custom-connection-settings)
+- [Application ports and runtime inventory](#application-ports-and-runtime-inventory)
+- [Role variables](#role-level-overrides)
+- [Management access modes](#ssh-service-types)
+- [Troubleshooting and validation](#troubleshooting-and-validation)
 
 ### RBAC required by the service account in `KUBECONFIG`
 
@@ -20,6 +42,11 @@ including retries and cleanup:
 | namespace | `virtualmachineinstances.kubevirt.io` | `get` |
 
 `secrets` access is **not** required in `container_disk` mode — the role injects the SSH key via cloud-init userData on the VM spec, not as a Kubernetes Secret. The `data_volume_url` / `data_volume_pvc` / `data_volume_source_ref` modes additionally need `datavolumes.cdi.kubevirt.io [create, get, delete]` in `mp.kubevirt.namespace`.
+
+The same CDI permissions apply to `data_disks` and full-manifest
+`dataVolumeTemplates`. Isolated cleanup also needs `get` on
+`persistentvolumeclaims`. Direct PVC and external DataVolume references stay
+caller-owned. `None` and `PodIP` modes do not require Service permissions.
 
 `data_volume_source_ref` clones a golden image across namespaces (the `DataSource` and its backing PVC live in the OS-images namespace, e.g. `openshift-virtualization-os-images`). CDI enforces a cross-namespace authorization check for this: the service account in `KUBECONFIG` additionally needs `create` on the **`datavolumes/source`** subresource in the **source** namespace (`source_ref.namespace`), on top of the `datavolumes [create, get, delete]` grant in `mp.kubevirt.namespace`. Without it, the DataVolume is created but stalls and the CDI controller reports an authorization/`clone` error. (`data_volume_pvc` needs the same `datavolumes/source create` in its `source.namespace` when cloning cross-namespace.)
 
@@ -146,7 +173,7 @@ all:
               ssh_user: cloud-user             # role default 'cloud-user' (ssh connection)
               ssh_service:
                 type: NodePort                 # 'NodePort', 'None', or 'PodIP'
-                port: 22                       # consulted in None/PodIP mode; default 22
+                port: 22                       # in-guest port in every mode; default 22
                                                # (5986 for psrp/winrm connections)
               connection_ip: 192.0.2.10        # optional with NodePort, REQUIRED with None.
                                                # When set, skips the cluster-scoped Node
@@ -156,6 +183,8 @@ all:
 
               # Guest connection (see "Windows guests" below)
               connection: ssh                  # ssh (default) | psrp | winrm
+              connection_vars: {}              # Ansible connection overrides
+              application_ports: []            # named TCP/UDP application endpoints
               admin_user: Administrator        # psrp/winrm only; default 'Administrator'
               admin_password: "{{ ... }}"      # psrp/winrm only; REQUIRED (sensitive)
               sysprep_secret: win2k25-sysprep  # optional; attach a KubeVirt sysprep
@@ -194,12 +223,46 @@ all:
               extra_interfaces: []
               extra_networks: []
 
+              boot_disk: {}                    # bus and boot_order for the boot disk
+              data_disks: []                   # managed CDI disks; see storage section
+
               # Escape hatch — deep-merged into the whole VirtualMachine object
               # (lists append). Use for anything not surfaced above.
               vm_overrides: {}
 ```
 
 Set shared defaults in `mp_defaults.kubevirt` in `inventory/group_vars/molecule.yml`. Field resolution: role defaults ← `mp_defaults.kubevirt` ← `hostvars[item].mp.kubevirt`.
+
+Merging is shallow: a host's `cloud_init`, `ssh_service`, `connection_vars`, or
+other mapping replaces that mapping from shared defaults. Lists also replace
+shared lists. Within the resolved `connection_vars`, individual Ansible options
+override the role's generated connection defaults.
+
+| Per-host parameter | Default or requirement | Purpose |
+| --- | --- | --- |
+| `namespace` | `molecule`; must exist | Target namespace for managed resources. |
+| `boot_source` | Required in simple mode | Boot image or PVC; five types described below. |
+| `vm_definition` | Unset | Full desired-state VM manifest; replaces simple VM configuration. |
+| `ssh_user` | `cloud-user` | Bootstrap management user and default SSH login. |
+| `connection` | `ssh` | Select `ssh`, `psrp`, or `winrm`. |
+| `ssh_service` | `type: NodePort` | Management access mode and guest port. |
+| `connection_ip` | Required for `None` | Explicit management address; NodePort hosts can skip Node discovery. |
+| `connection_vars` | Empty mapping | Connection options overriding generated defaults. |
+| `application_ports` | Empty list | Named TCP/UDP application ports and runtime endpoints. |
+| `admin_user` | `Administrator` | Default PSRP/WinRM login. |
+| `admin_password` | Required for password authentication unless overridden | Windows login password. |
+| `sysprep_secret` | Unset | Existing same-namespace Secret containing `unattend.xml`. |
+| `cpu` | `cores: 2` | Raw KubeVirt CPU mapping; omitted with an instance type. |
+| `memory`, `memory_limit` | `1Gi`, no limit | Memory request and optional limit; omitted with an instance type. |
+| `instancetype`, `preference` | Unset | Name string or matcher mapping, including `kind`. |
+| `node_selector`, `tolerations`, `affinity` | Unset | KubeVirt scheduling settings. |
+| `cloud_init` | SSH bootstrap enabled | NoCloud user/network data or Secret references. |
+| `interfaces`, `networks` | Masquerade interface and pod network | Replace primary network definitions. |
+| `boot_disk` | Virtio bus, no explicit order | Boot-disk bus and boot order. |
+| `data_disks` | Empty list | Generated persistent data disks. |
+| `extra_disks`, `extra_volumes` | Empty lists | Append raw disk and volume definitions; external storage stays caller-owned. |
+| `extra_interfaces`, `extra_networks` | Empty lists | Append raw interface and network definitions. |
+| `vm_overrides` | Empty mapping | Recursive VM patch; lists append and isolated identity is protected. |
 
 ## Full VirtualMachine definitions
 
@@ -211,10 +274,11 @@ KubeVirt validates the supplied spec against the cluster's installed API.
 
 The role still manages resource identity, connection inventory, prepare, and
 destroy. `namespace`, `ssh_user`, `connection`, `ssh_service`, `connection_ip`,
-`admin_user`, and `admin_password` remain outside the manifest. Only connection
+`admin_user`, `admin_password`, `connection_vars`, and `application_ports` remain
+outside the manifest. Only connection
 and namespace defaults apply in this mode. VM-building parameters such as
 `boot_source`, `memory`, `cloud_init`, `sysprep_secret`, the scheduling/networking
-parameters, `extra_*`, and `vm_overrides` are mutually exclusive with
+parameters, `boot_disk`, `data_disks`, `extra_*`, and `vm_overrides` are mutually exclusive with
 `vm_definition`, including values inherited from `mp_defaults.kubevirt`.
 
 For SSH, supply an existing private key at `mp_kubevirt_ssh_key_path` before
@@ -329,7 +393,7 @@ Requires CDI installed on the cluster.
 ```yaml
 boot_source:
   type: data_volume_url
-  url: https://cloud-images.ubuntu.com/.../noble.img
+  url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
   size: 10Gi                  # required
   storage_class: standard     # optional
 ```
@@ -385,6 +449,94 @@ boot_source:
   name: existing-boot-pvc
 ```
 
+## Boot and managed data disks
+
+`boot_disk` configures the generated boot disk without appending a duplicate:
+
+```yaml
+boot_disk:
+  bus: sata
+  boot_order: 1
+```
+
+`bus` accepts `virtio` (default), `sata`, or `scsi`. `boot_order` is an optional
+positive integer rendered as KubeVirt `bootOrder`. Orders must be unique across
+the boot disk, managed data disks, and `extra_disks`. KubeVirt also validates
+orders assigned to NICs in raw interface definitions.
+
+CDI boot sources accept `volume_mode` (`Filesystem` or `Block`) and
+`access_modes` in addition to `size` and `storage_class`:
+
+```yaml
+boot_source:
+  type: data_volume_source_ref
+  source_ref:
+    name: rhel9
+    namespace: openshift-virtualization-os-images
+  size: 30Gi
+  storage_class: vm-storage
+  volume_mode: Block
+  access_modes:
+    - ReadWriteMany
+```
+
+When omitted, storage modes come from CDI's StorageProfile. Omitting
+`storage_class` lets CDI select its default; an explicit empty string requests
+no storage class. Select a class that supports the requested volume and access
+modes. Direct `pvc` boot sources use the existing claim's configuration.
+
+Use `data_disks` for persistent disks that the scenario owns. Each entry needs
+a unique `name` and `size`. The default source is a blank CDI image:
+
+```yaml
+data_disks:
+  - name: database
+    size: 10Gi
+    bus: scsi
+    storage_class: vm-storage
+    volume_mode: Filesystem
+    access_modes:
+      - ReadWriteOnce
+  - name: test-image
+    size: 4Gi
+    source:
+      http:
+        url: https://images.example.com/test-data.qcow2
+```
+
+| Data-disk field | Default or requirement |
+| --- | --- |
+| `name` | Required DNS label, at most 63 characters. Must not duplicate other disks/volumes or `containerdisk`, `cloudinitdisk`, `sysprep`. |
+| `size` | Required Kubernetes storage quantity, such as `10Gi`. |
+| `source` | Raw CDI source mapping containing one source type; defaults to `blank` when neither source field is supplied. |
+| `source_ref` | Alternative to `source`: DataSource `name`, `namespace`, optional `kind: DataSource`. |
+| `storage_class` | Omitted; CDI selects a default. |
+| `volume_mode`, `access_modes` | Omitted; CDI uses its StorageProfile. Access modes accept `ReadWriteOnce`, `ReadWriteMany`, `ReadOnlyMany`, `ReadWriteOncePod`. |
+| `bus` | `virtio`; also accepts `sata` or `scsi`. |
+| `boot_order` | Unset; optional positive integer. |
+
+The role passes CDI sources through, including PVC clones and sources requiring
+existing Secret or ConfigMap references. KubeVirt/CDI validate source contents
+and storage quantities. Source credentials and cross-namespace clone grants
+belong to the caller; the role does not create or read their Secrets.
+
+Data-disk DataVolume names use the managed VM name's first 40 characters,
+`-dv-`, and a 16-character digest of the managed VM name and `disk/<name>`.
+Run isolation therefore gives each run separate DataVolumes and PVCs. Their
+names are saved before provisioning, checked on retry, and awaited during
+destroy. Changing the managed disk set requires destroying the saved run first.
+
+Attach caller-owned PVCs or DataVolumes through `extra_disks` and `extra_volumes`;
+destroy leaves those references untouched. Avoid sharing writable boot or data
+claims between guests unless the application and storage support concurrent use.
+Blank disks are unformatted in the guest. The scenario supplies partitioning,
+filesystems, mounts, LVM, or RAID configuration.
+
+Full-manifest mode uses `spec.dataVolumeTemplates` for managed storage and raw
+disk definitions for bus/order. It applies the same run ownership and cleanup
+checks. See [CDI DataVolumes](https://github.com/kubevirt/containerized-data-importer/blob/main/doc/datavolumes.md)
+for source and storage behavior.
+
 ## Windows guests (psrp / winrm)
 
 Set `connection: psrp` (or `winrm`) to provision a Windows Server 2025 / Windows 11
@@ -431,11 +583,9 @@ What changes when `connection != ssh`:
   the boot disk. The field is `secret.name` — the API
   silently drops `secretName` and the VMI stays `Pending`. (`sysprep_secret` is
   valid for any connection, but is primarily used with psrp/winrm.)
-- **Service targets 5986.** The per-VM NodePort Service (still keyed `ssh_service`
-  in the schema — the name is **historical**, it predates Windows support and is
-  kept to avoid breaking every consumer) fronts guest port **5986** instead of 22.
-  In `ssh_service.type: None` mode, `ssh_service.port` defaults to 5986 for
-  psrp/winrm (22 for ssh).
+- **Management port defaults to 5986.** `ssh_service.port` overrides the guest
+  port in NodePort, None, and PodIP modes. The key remains `ssh_service` for
+  compatibility with existing inventories.
 - **Ephemeral inventory.** The runtime inventory renders `ansible_connection: psrp`
   (or `winrm`) with `ansible_user`/`ansible_password` (the admin credentials),
   `ansible_psrp_auth: ntlm` / `ansible_winrm_transport: ntlm`,
@@ -449,7 +599,7 @@ What changes when `connection != ssh`:
 
 **Controller prerequisites (not shipped by this collection):** psrp needs
 [`pypsrp`](https://pypi.org/project/pypsrp/) on the controller (and `pypsrp[credssp]`
-only if you switch off NTLM); `winrm` needs [`pywinrm`](https://pypi.org/project/pywinrm/).
+when using CredSSP); `winrm` needs [`pywinrm`](https://pypi.org/project/pywinrm/).
 These are controller-side runtime deps of the Ansible connection plugins, so they
 are intentionally **not** in this collection's `requirements.txt` — install them in
 your Molecule execution environment / controller venv.
@@ -625,17 +775,177 @@ mp:
 
 If any NodePort host omits `connection_ip`, the Node lookup runs. `None` and `PodIP` hosts do not trigger it; a NodePort host with `connection_ip` still uses its own address.
 
+## Custom connection settings
+
+`connection_vars` overrides generated Ansible connection defaults. It accepts
+`ansible_user`, `ansible_password`, `ansible_timeout`, `ansible_pipelining`, and
+options beginning with `ansible_ssh_`, `ansible_psrp_`, or `ansible_winrm_`.
+The role reserves host, port, and connection-plugin fields, including plugin
+host/port aliases. Use `connection_ip`, `ssh_service.port`, and `connection`
+to configure those values.
+
+For an image with existing SSH access, provide the accepted key and bootstrap
+settings explicitly:
+
+```yaml
+mp:
+  kubevirt:
+    boot_source:
+      type: container_disk
+      image: registry.example.com/test-images/rhel9:latest
+    ssh_user: test-user
+    cloud_init:
+      enabled: false
+    ssh_service:
+      type: "None"
+      port: 2222
+    connection_ip: 192.0.2.50
+    connection_vars:
+      ansible_ssh_private_key_file: /path/to/existing-key
+      ansible_ssh_common_args: -o ProxyJump=test-bastion
+```
+
+The guest must already have Python, sudo access where the scenario needs it,
+and an SSH listener on port 2222. `ansible_ssh_common_args` replaces the default
+host-key options; include them yourself if your test requires them. Changing
+the runtime user or key does not change the cloud-init user/key injection.
+For automatic injection with an existing key, place an Ed25519 key at
+`mp_kubevirt_ssh_key_path` and retain the matching `ssh_user`.
+
+Windows scenarios can change transport, authentication, certificate validation,
+and timeouts without replacing the runtime inventory:
+
+```yaml
+connection: psrp
+admin_password: "{{ lookup('ansible.builtin.env', 'WIN_ADMIN_PASSWORD') }}"
+ssh_service:
+  type: NodePort
+  port: 5985
+connection_vars:
+  ansible_psrp_protocol: http
+  ansible_psrp_auth: ntlm
+  ansible_psrp_connection_timeout: 90
+```
+
+The guest listener and controller libraries must support the requested settings.
+An override of `ansible_password` takes precedence over `admin_password` and
+satisfies the Windows password requirement. Put secret lookups in inventory;
+the role consumes resolved values and hides them in provisioning output.
+
+Explicit Kerberos or certificate authentication can omit the password. Supply
+the ticket cache or certificate/key files and required controller dependencies.
+For WinRM with existing Kerberos tickets, set `ansible_winrm_kinit_mode: manual`.
+Use the plugin's hostname/SPN options when the discovered address is an IP.
+See the [PSRP connection reference](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/psrp_connection.html)
+and [Windows authentication guide](https://docs.ansible.com/projects/ansible/latest/os_guide/windows_winrm.html).
+
+## Application ports and runtime inventory
+
+`application_ports` adds named TCP/UDP ports to the same NodePort Service as
+management access. The selector follows the run's generated VM name:
+
+```yaml
+application_ports:
+  - name: http
+    port: 80
+    target_port: 8080
+  - name: postgres
+    port: 5432
+  - name: dns
+    port: 53
+    protocol: UDP
+```
+
+Each entry requires a unique Service port `name` and numeric `port` from 1
+through 65535. Names use lowercase letters, digits, and hyphens, start with a
+letter, end with a letter or digit, and are at most 15 characters.
+`target_port` defaults to `port`; `protocol` defaults to `TCP` and also accepts
+`UDP`. `management` is reserved. Port/protocol pairs must be unique, including
+the TCP management port. Kubernetes allocates the NodePorts.
+
+Repeated create preserves allocations for unchanged Service port/protocol
+pairs. Removing an entry removes its Service port and runtime endpoint.
+Destroy removes the run-owned Service. No extra Service is created in None or
+PodIP mode: endpoints use the management address and guest target port directly,
+and `port` performs no remapping in those modes.
+
+The caller configures the application listener, guest firewall, controller
+route, and any interface-level port restrictions. A Service allocation does
+not prove the application is ready. For a bastion-only route, the scenario
+must also arrange application access; SSH ProxyJump does not tunnel HTTP/UDP.
+See [Kubernetes Services](https://kubernetes.io/docs/concepts/services-networking/service/)
+for NodePort routing.
+
+The role writes `inventory/molecule_runtime.yml` in the Molecule ephemeral
+directory with mode `0600`. Load it after static inventory, as shown in the
+collection README. Logical host names and groups remain unchanged. Each host
+receives connection variables and `mp_kubevirt_endpoints`:
+
+```yaml
+all:
+  hosts:
+    database-test:
+      ansible_connection: ssh
+      ansible_host: 192.0.2.10
+      ansible_port: 31234
+      ansible_user: cloud-user
+      ansible_ssh_private_key_file: /path/to/ephemeral/identity_file
+      ansible_ssh_common_args: -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+      mp_kubevirt_endpoints:
+        http:
+          host: 192.0.2.10
+          port: 31235
+          guest_port: 8080
+          protocol: TCP
+          service_port: 80
+```
+
+Endpoint keys are application port names. `host` and `port` are the resolved
+controller endpoint; `guest_port` is the target inside the guest. `protocol`
+is TCP or UDP. `service_port` appears only in NodePort mode. With no application
+ports, `mp_kubevirt_endpoints` is an empty mapping. For example, a scenario can
+wait for HTTP from its controller:
+
+```yaml
+- name: Wait for the guest HTTP application
+  ansible.builtin.uri:
+    url: "http://{{ mp_kubevirt_endpoints.http.host }}:{{ mp_kubevirt_endpoints.http.port }}/health"
+  delegate_to: localhost
+  register: application_health
+  until: application_health.status | default(0) == 200
+  retries: 30
+  delay: 2
+```
+
+Runtime inventory can contain passwords. Provisioning suppresses it in logs;
+the caller must also protect the ephemeral directory and later debug output.
+
 ## Role-level overrides
 
-See `defaults/main.yml` (`mp_kubevirt_role_defaults`, `mp_kubevirt_ssh_key_path`, `mp_kubevirt_wait_timeout`, `mp_kubevirt_windows_wait_timeout`, `mp_kubevirt_allowed_ssh_service_types`, `mp_kubevirt_allowed_connections`, `mp_kubevirt_run_isolation`, `mp_kubevirt_cleanup_timeout`, `mp_kubevirt_podip_lookup_retries`, `mp_kubevirt_podip_lookup_delay`).
+Set lifecycle variables in `all.vars`, `group_vars/all`, or extra vars so the
+localhost create/destroy plays can read them. `mp_defaults.kubevirt` belongs in
+the molecule group; the dispatcher reads it from that group's first host.
+
+| Role variable | Default | Purpose |
+| --- | --- | --- |
+| `mp_kubevirt_role_defaults` | See `defaults/main.yml` | Lowest-precedence per-host defaults. |
+| `mp_kubevirt_run_isolation` | `true` | Persist unique names and ownership; `false` uses fixed inventory names. |
+| `mp_kubevirt_cleanup_timeout` | `120` | Seconds per isolated resource deletion/wait. |
+| `mp_kubevirt_ssh_key_path` | Ephemeral directory's `identity_file` | Generated/reused simple-mode key; caller-provided key in full mode. |
+| `mp_kubevirt_wait_timeout` | `120` | SSH prepare connection timeout, seconds. |
+| `mp_kubevirt_windows_wait_timeout` | `900` | PSRP/WinRM prepare connection timeout, seconds. |
+| `mp_kubevirt_podip_lookup_retries` | `60` | VMI address lookup retries. |
+| `mp_kubevirt_podip_lookup_delay` | `5` | Seconds between address lookups. |
+| `mp_kubevirt_allowed_ssh_service_types` | NodePort, None, PodIP | Management mode allowlist; adding a value does not implement another mode. |
+| `mp_kubevirt_allowed_connections` | ssh, psrp, winrm | Connection plugin allowlist; adding a value does not implement guest handling. |
 
 ## SSH service types
 
 Three modes are supported:
 
-- **`NodePort`** (default): the role creates a `NodePort` Service per VM and resolves `ansible_host` to a cluster Node InternalIP (or to `connection_ip` if set).
+- **`NodePort`** (default): the role creates a `NodePort` Service per VM and resolves `ansible_host` to a cluster Node InternalIP (or to `connection_ip` if set). `ssh_service.port` selects the guest listener port; the runtime connection uses the allocated NodePort.
 - **`None`**: no Service is created. `connection_ip` is required (the role asserts this at validate time). `ansible_port` defaults to the guest port implied by the connection type — `22` for `ssh`, `5986` for `psrp`/`winrm` — override per-host with `ssh_service.port`. Use this for setups where access is provided by an external Route/Ingress, or where the controller can talk to pod IPs directly.
-- **`PodIP`**: no Service is created and no `connection_ip` is needed — the role waits for the VMI to report the configured pod network's IP and connects there directly. Only works when the controller runs **inside the cluster** (e.g. an OpenShift Dev Spaces workspace or CI pod). The driving ServiceAccount needs neither `services` nor cluster-wide `nodes` RBAC; it still needs the VM/VMI and boot-source permissions listed above. Port defaults as in `None` mode (`ssh_service.port` override honored). Lookup bounds: `mp_kubevirt_podip_lookup_retries` (60) × `mp_kubevirt_podip_lookup_delay` (5s).
+- **`PodIP`**: no Service is created and no `connection_ip` is needed — the role waits for the VMI to report the configured pod network's IP and connects there directly. The controller needs a route to that address, usually by running **inside the cluster** (e.g. an OpenShift Dev Spaces workspace or CI pod). The driving ServiceAccount needs neither `services` nor cluster-wide `nodes` RBAC; it still needs the VM/VMI and boot-source permissions listed above. Port defaults as in `None` mode (`ssh_service.port` override honored). Lookup bounds: `mp_kubevirt_podip_lookup_retries` (60) × `mp_kubevirt_podip_lookup_delay` (5s).
 
 ```yaml
 mp:
@@ -644,9 +954,49 @@ mp:
       type: container_disk
       image: quay.io/containerdisks/ubuntu:24.04
     ssh_service:
-      type: None
-      port: 2222 # only if the Route/Ingress maps to a non-default port
-    connection_ip: route.example.com # or a controller-reachable pod IP
+      type: "None"
+      port: 2222 # port reachable at connection_ip; must reach the guest listener
+    connection_ip: access.example.com # or a controller-reachable guest IP
 ```
 
 `LoadBalancer` / `ClusterIP`+port-forward are out of scope.
+
+## Troubleshooting and validation
+
+`create` submits desired resources and resolves management endpoints. `prepare`
+waits for Ansible connectivity, which includes guest-side Python for SSH; it
+does not wait for every cloud-init command or application to finish. A VM can
+exist while CDI imports, scheduling, guest startup, or management access are
+still pending. Check the VM/VMI, launcher pod, DataVolume/PVC, and namespace
+events using their generated names or run label.
+
+Common failures:
+
+- **DataVolume stalls:** check source access, cross-namespace clone permission,
+  storage capacity, StorageProfile, and requested access/volume modes. A
+  WaitForFirstConsumer claim may bind only after a VM is scheduled.
+- **Management times out:** check the guest listener port, address reachability,
+  matching keys/user, Python installation, cloud-init completion, and the
+  controller's connection libraries. PodIP requires a controller route into
+  the cluster pod network.
+- **Instance type is rejected:** check CPU/memory requirements in the selected
+  preference. Explicit CPU/memory settings are suppressed when an instance type
+  is selected.
+- **Duplicate disk after an override:** use `boot_disk` or `data_disks`, or a
+  full manifest. Lists in `vm_overrides` append rather than replace named entries.
+- **Destroy times out:** resolve finalizers or storage/controller failures, then
+  retry with the same ephemeral directory. Saved state remains until cleanup
+  succeeds. See the isolation section for recovery after state loss.
+
+Offline renderer tests cover generated/full VM specs, storage settings,
+connection precedence, ports, and validation failures. Local integration tests
+boot real guests on a KubeVirt cluster or disposable kind cluster. They
+exercise overlapping runs, guest disk I/O, custom SSH ports, TCP/UDP access,
+Service updates, retries, cleanup, and preservation of external storage.
+The optional golden-DataSource test requires `MP_TEST_DATASOURCE`; the local suites
+does not validate every storage driver, Block volume mode, clone source, or
+Windows authentication variant. Test those against your chosen cluster and
+images before depending on them.
+
+Actions run lint checks only. See [Local testing](../../docs/TESTING.md) for
+offline checks, backend targets, and disposable KubeVirt/CDI setup.
