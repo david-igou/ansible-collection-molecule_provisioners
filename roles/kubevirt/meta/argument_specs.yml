@@ -131,9 +131,11 @@ argument_specs:
         description: Ansible connection options merged over defaults; endpoint and plugin fields are protected.
       ssh_service:
         type: dict
+        description: Management access mode and guest listener port.
         options:
           type:
             type: str
+            description: Management endpoint mode; defaults to NodePort.
             choices:
               - NodePort
               - "None"

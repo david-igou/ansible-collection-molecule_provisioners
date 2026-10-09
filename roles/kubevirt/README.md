@@ -393,7 +393,7 @@ Requires CDI installed on the cluster.
 ```yaml
 boot_source:
   type: data_volume_url
-  url: https://cloud-images.ubuntu.com/.../noble.img
+  url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
   size: 10Gi                  # required
   storage_class: standard     # optional
 ```

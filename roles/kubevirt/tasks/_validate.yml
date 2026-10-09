@@ -10,9 +10,6 @@
   ansible.builtin.include_tasks: _validate_definition.yml
   when: _mp_specs[item].vm_definition is defined
 
-- name: Validate management access and application ports
-  ansible.builtin.include_tasks: _validate_access.yml
-
 # An unset ssh_service.type defaults to NodePort here AND in create.yml's
 # "Create SSH NodePort Kubernetes service" when-guard. Keep both expressions
 # in sync — if you change the default here, change it there too.
@@ -25,6 +22,9 @@
       Host '{{ item }}' has unsupported ssh_service.type
       '{{ _mp_specs[item].ssh_service.type | default('(missing)') }}'.
       Supported: {{ mp_kubevirt_allowed_ssh_service_types | join(', ') }}.
+
+- name: Validate management access and application ports
+  ansible.builtin.include_tasks: _validate_access.yml
 
 # 'None' mode skips Service creation, so the role has no way to discover a
 # connection IP on its own — the consumer must supply one.

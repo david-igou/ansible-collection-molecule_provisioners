@@ -99,7 +99,7 @@ all:
               connection_vars: <dict> # override Ansible connection defaults; endpoint/plugin fields are reserved
               application_ports: <list> # named TCP/UDP ports; publishes mp_kubevirt_endpoints
               admin_user: <str> # psrp/winrm only, default 'Administrator'
-              admin_password: <str> # psrp/winrm only, REQUIRED (sensitive; no_log). Local admin the unattend set.
+              admin_password: <str> # password authentication; can use connection_vars.ansible_password instead
               sysprep_secret: <str> # optional; sysprep cdrom references sysprep.secret.name
               # Optional curated knobs:
               cpu:
