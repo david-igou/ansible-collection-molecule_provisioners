@@ -2,11 +2,14 @@
 minor_changes:
   - >-
     kubevirt - Added boot-disk bus/order, CDI storage modes, and managed data
-    disks with run-scoped names and cleanup.
+    disks with run-scoped names and cleanup
+    (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/72).
   - >-
     kubevirt - Added connection_vars overrides and named TCP/UDP application
-    ports with resolved endpoints in runtime inventory.
+    ports with resolved endpoints in runtime inventory
+    (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/72).
 bugfixes:
   - >-
     kubevirt - Honored ssh_service.port in NodePort mode and preserved allocated
-    NodePorts when updating the run-owned Service.
+    NodePorts when updating the run-owned Service
+    (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/72).
