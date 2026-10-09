@@ -2,4 +2,5 @@
 bugfixes:
   - >-
     podman - Failed create when a container exited immediately after startup,
-    reporting its state and exit code before writing runtime inventory.
+    reporting its state and exit code before writing runtime inventory
+    (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/71).

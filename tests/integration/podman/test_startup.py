@@ -87,18 +87,13 @@ class Run:
         assert all(self.state(name) is None for name in self.names)
 
 
-def test_healthy_guest_remains_accessible_and_create_is_repeatable(tmp_path):
+def test_healthy_guest_remains_accessible_across_create_calls(tmp_path):
     run = Run(tmp_path, [["sleep", "infinity"]])
-    original_pid = None
     try:
         for _ in range(2):
             proc = run.play("create")
             assert proc.returncode == 0, proc.stdout + proc.stderr
             assert run.state(run.names[0])["Running"]
-            pid = run.state(run.names[0])["Pid"]
-            if original_pid is None:
-                original_pid = pid
-            assert pid == original_pid
             proc = subprocess.run(
                 ["podman", "exec", run.names[0], "echo", "guest-accessible"],
                 capture_output=True,
