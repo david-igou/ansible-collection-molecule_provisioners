@@ -989,11 +989,14 @@ Common failures:
   succeeds. See the isolation section for recovery after state loss.
 
 Offline renderer tests cover generated/full VM specs, storage settings,
-connection precedence, ports, and validation failures. CI boots real guests
-on kind with KubeVirt emulation and CDI/local-path storage. Integration tests
+connection precedence, ports, and validation failures. Local integration tests
+boot real guests on a KubeVirt cluster or disposable kind cluster. They
 exercise overlapping runs, guest disk I/O, custom SSH ports, TCP/UDP access,
 Service updates, retries, cleanup, and preservation of external storage.
-The optional golden-DataSource test requires `MP_TEST_DATASOURCE`; standard CI
+The optional golden-DataSource test requires `MP_TEST_DATASOURCE`; the local suites
 does not validate every storage driver, Block volume mode, clone source, or
 Windows authentication variant. Test those against your chosen cluster and
 images before depending on them.
+
+Actions run lint checks only. See [Local testing](../../docs/TESTING.md) for
+offline checks, backend targets, and disposable KubeVirt/CDI setup.

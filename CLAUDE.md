@@ -32,7 +32,7 @@ Three top-level dispatcher playbooks (`playbooks/{create,destroy,prepare}.yml`) 
 - `roles/kubevirt/tasks/{create,destroy,prepare,_create_vm,_create_vm_dictionary,_build_vm,_validate}.yml` — kubevirt lifecycle. `_create_vm*.yml` are per-host helpers included in a loop over `groups['molecule']`.
 - `roles/docker/tasks/{create,destroy,prepare,_spec_merge,_validate,_networks}.yml` — docker lifecycle. `_networks.yml` is shared between create and destroy.
 - `roles/<backend>/defaults/main.yml` — role-level defaults including the `mp_<backend>_role_defaults` dict that feeds the merge.
-- `extensions/molecule/default/` — self-test scenario carrying all four backends' specs per host. Discovered by `pytest_ansible.molecule_scenario` fixture in `tests/integration/test_integration.py`. The kubevirt-backend run talks to the cluster selected by `KUBECONFIG`, which must have KubeVirt installed. CI provisions kind + KubeVirt with `useEmulation` before running it.
+- `extensions/molecule/default/` — self-test scenario carrying all four backends' specs per host. Discovered by `pytest_ansible.molecule_scenario` fixture in `tests/integration/test_integration.py`. The kubevirt-backend run talks to the cluster selected by `KUBECONFIG`, which must have KubeVirt installed. The local `make test-kubevirt-kind` target provisions kind + KubeVirt with `useEmulation`.
 - `docs/examples/` — copy-paste starter for consumers: `molecule.yml` boilerplate, `inventory/` shape, plus the deterministic-setup files (`requirements-test.yml` pinned to the Galaxy version, `config.yml` wiring it into every scenario, `ansible.cfg`, and a `MOLECULE_GLOB` `Makefile`).
 - `AGENTS.md` — carries the ansible-creator agents.md reference plus a one-pass determinism checklist for agents adding a scenario in a consumer repo (pin version, centralize via `config.yml`, run from root with `MOLECULE_GLOB`, commit `ansible.cfg`).
 - `docs/MIGRATION.md` — translating from molecule's pre-ansible-native `platforms:` shape to this collection.
@@ -63,7 +63,7 @@ source .venv/bin/activate
 | Build collection artifact                                                           | `ansible-galaxy collection build`                                       |
 | Pre-commit                                                                          | `pre-commit run --all-files`                                            |
 
-`pyproject.toml` configures pytest with `-n 2` (xdist parallel). The `kubevirt` CI job overrides this with `-o addopts="" -s` so molecule's `PLAY RECAP` output is visible in the runner log — xdist captures stdout per-worker, which made it impossible to tell whether the scenario was actually exercising the lifecycle.
+`pyproject.toml` configures pytest with `-n 2` (xdist parallel). The local `test-kubevirt` target overrides this with `-o addopts="" -s` so molecule's `PLAY RECAP` output is visible in the runner log — xdist captures stdout per-worker, which made it impossible to tell whether the scenario was actually exercising the lifecycle.
 
 ## Public inventory schema
 
@@ -181,37 +181,26 @@ Runs `update-docs` (collection_prep), `prettier`, `isort`, `black`, `flake8`, pl
 
 ## CI
 
-`.github/workflows/tests.yml` runs reusable changelog, build-import, ansible-lint, sanity, and unit-galaxy workflows, plus `unit-source`. Integration jobs exercise all four backends. KubeVirt runs on kind with `useEmulation`; QEMU runs under TCG and also tests CPU selection through actual guest launches. `release.yml` publishes to Galaxy on GitHub release.
+`.github/workflows/tests.yml` runs one lint job (`all_green`): ansible-lint,
+yamllint, and antsibull-changelog lint. Do not add hosted test matrices or
+backend provisioning jobs. Dependency review and scheduled Scorecard workflows
+are removed. `release.yml` publishes to Galaxy when a release is published.
 
-## Running CI locally
+## Local verification
 
-`act` (nektos/act) is pinned in the parent `igou-devenv` `mise.toml`. It re-plays the GitHub Actions workflow on the local container engine, which in this devcontainer is rootless podman — so a podman API socket has to be exposed first:
+Use `make test-unit` for offline renderer/validation checks. For renderer
+changes, also check an older supported ansible-core in a clean container;
+2.19+ preserves native types that 2.16/2.17 can string-coerce.
 
-```bash
-podman system service --time=0 unix:///tmp/podman.sock &
-export DOCKER_HOST=unix:///tmp/podman.sock
+`make test-kubevirt-kind` creates and cleans up a disposable local KubeVirt/CDI
+cluster. `make test-kubevirt-lifecycle`, `make test-kubevirt-access`, and
+`make test-kubevirt-storage` target the cluster selected by `KUBECONFIG`.
+These targets mutate test infrastructure; live-cluster authorization still
+applies. Run relevant functional tests locally before handing a change over.
 
-act -l                                                                       # list jobs
-act pull_request -j ansible-lint -P ubuntu-latest=catthehacker/ubuntu:act-22.04   # run one
-```
-
-The `-P` flag points act at a real Ubuntu runner image; the default (`node:16-slim`) is too thin for ansible tooling. `catthehacker/ubuntu:act-22.04` (~1.5 GB) is the smallest image that boots `actions/setup-python`. `act` clones the reusable workflows (`ansible/ansible-content-actions/*`, `ansible-network/github_actions/*`) on first run.
-
-**Jobs known to work under act:** `ansible-lint`, `sanity`, `build-import`, `changelog`, `unit-galaxy` — they each run on a single runner with `actions/setup-python@v5` or no Python.
-
-**Known limitation — `unit-source` matrix:** the upstream `ansible-network/github_actions/.github/workflows/unit_source.yml` pins `actions/setup-python@v4`, which collides with the catthehacker image's pre-installed Python and fails before any test runs (`rm: cannot remove '.../python3.12/test': Directory not empty`). Until upstream bumps to `@v5`, reproduce a single matrix cell of `unit-source` by skipping act and running pytest in a clean Python container:
-
-```bash
-# reproduce one CI unit-source cell (py3.11 + ansible-core 2.17)
-podman run --rm -v "$PWD:/work" -w /work python:3.11-slim bash -c '
-  pip install -q "ansible-core>=2.17,<2.18" pytest pytest-ansible pytest-xdist pyyaml
-  pytest tests/unit/kubevirt_render/
-'
-```
-
-Swap the version pin for `>=2.16,<2.17` to check ansible-core 2.16, or `>=2.15,<2.16` for the collection's stated floor.
-
-ansible-core 2.19+ preserves Python `None` through `{{ x | default(none) }}`-style templating, but 2.16/2.17 string-coerce it to `"None"`. A `_var is not none` gate that works on the devcontainer's bleeding-edge ansible-core will silently leak content into the rendered VM on the supported floor. Run at least one cell of the matrix in a clean container before pushing a renderer change.
+See [docs/TESTING.md](docs/TESTING.md) for prerequisites, backend targets,
+older-core checks, and cluster selection. `make sanity` and `make build` remain
+local checks. Use an execution environment for agent verification.
 
 ## Out of scope
 

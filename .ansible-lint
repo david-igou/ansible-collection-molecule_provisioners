@@ -11,6 +11,9 @@ skip_list:
 # CI / docs — not collection content — so they shouldn't be linted
 # against ansible-lint's rules.
 exclude_paths:
+  - .build/
+  - collections/
+  - .venv/
   - .ansible/
   - .devcontainer/
   - .github/

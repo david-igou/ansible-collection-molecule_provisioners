@@ -211,6 +211,10 @@ tight. Copies of both files ship under [`docs/examples/`](docs/examples/).
 
 ## Controller-host prerequisites by backend
 
+For development of this provisioner collection itself, see
+[Local testing](docs/TESTING.md). Pull-request Actions run one lint job;
+unit, sanity, and backend integration suites run locally.
+
 | Backend | Required on the molecule controller |
 | --- | --- |
 | `podman` | `podman` |

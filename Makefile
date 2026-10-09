@@ -1,11 +1,9 @@
 SHELL := bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-# Make the collection discoverable as david_igou.molecule_provisioners without
-# requiring a symlink into $HOME. pytest-ansible's molecule_scenario fixture
-# populates collections/ansible_collections/david_igou/molecule_provisioners on
-# its first run; lint / build / sanity reuse it from here.
-export ANSIBLE_COLLECTIONS_PATH := $(CURDIR)/collections:$(HOME)/.ansible/collections
+# Local tests use .build/ for the collection layout. Preserve pytest-ansible's
+# collections/ tree, installed dependencies, and caller-supplied search paths.
+export ANSIBLE_COLLECTIONS_PATH := $(CURDIR)/.build:$(CURDIR)/collections:$(HOME)/.ansible/collections:$(ANSIBLE_COLLECTIONS_PATH)
 
 CANONICAL := $(CURDIR)/.build/ansible_collections/david_igou/molecule_provisioners
 
@@ -13,6 +11,8 @@ SCENARIO_DIR := extensions/molecule/default
 
 .PHONY: help install lint \
         test test-podman test-kubevirt test-docker test-qemu \
+        test-unit test-podman-startup test-kubevirt-lifecycle test-kubevirt-access \
+        test-kubevirt-storage test-kubevirt-kind test-qemu-functional test-docker-functional \
         podman kubevirt docker qemu \
         sanity build pre-commit clean
 
@@ -21,12 +21,40 @@ help: ## Show this help
 
 install: ## Install python + ansible collection dependencies
 	python -m pip install --upgrade pip
-	pip install ansible-core -r requirements.txt -r test-requirements.txt
-	ansible-galaxy collection install containers.podman kubernetes.core community.crypto
+	pip install -r lint-requirements.txt -r requirements.txt -r test-requirements.txt
+	ansible-galaxy collection install containers.podman kubernetes.core community.crypto community.docker community.general
 
-lint: ## Run ansible-lint and yamllint
+lint: ## Lint Ansible, YAML and changelog fragments
 	ansible-lint
 	yamllint .
+	antsibull-changelog lint
+
+test-unit: $(CANONICAL) ## Offline renderer and validation tests; no backend required
+	PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/unit -q -o addopts=""
+
+test-podman-startup: $(CANONICAL) ## Container startup and cleanup regressions; needs Podman
+	RUN_PODMAN_STARTUP=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/integration/podman -v -o addopts=""
+
+test-kubevirt-lifecycle: $(CANONICAL) ## Isolation, full definitions and failed cleanup; needs KUBECONFIG
+	@test -n "$${KUBECONFIG:-}" || { echo 'Set KUBECONFIG to the test cluster.' >&2; exit 1; }
+	RUN_KUBEVIRT_ISOLATION=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/integration/kubevirt/test_definition.py tests/integration/kubevirt/test_run_isolation.py -v -o addopts=""
+
+test-kubevirt-access: $(CANONICAL) ## Custom SSH and TCP/UDP application access; needs KUBECONFIG
+	@test -n "$${KUBECONFIG:-}" || { echo 'Set KUBECONFIG to the test cluster.' >&2; exit 1; }
+	RUN_KUBEVIRT_ISOLATION=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/integration/kubevirt/test_access.py -v -o addopts=""
+
+test-kubevirt-storage: $(CANONICAL) ## Managed-disk I/O and cleanup; needs KUBECONFIG and CDI
+	@test -n "$${KUBECONFIG:-}" || { echo 'Set KUBECONFIG to the test cluster.' >&2; exit 1; }
+	RUN_KUBEVIRT_STORAGE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/integration/kubevirt/test_storage.py -v -o addopts=""
+
+test-kubevirt-kind: ## Create a disposable local KubeVirt/CDI cluster and run all KubeVirt tests
+	bash scripts/test-kubevirt-kind.sh
+
+test-qemu-functional: $(CANONICAL) ## QEMU validation and CPU launch checks; needs QEMU tools
+	PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/integration/qemu/test_qemu_unit.py -m 'not slow' -v -o addopts=""
+
+test-docker-functional: $(CANONICAL) ## Docker role regressions; needs a reachable Docker daemon
+	PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/integration/docker/test_docker_unit.py -v -o addopts=""
 
 test: test-podman ## Alias for test-podman (the kubevirt backend needs a live cluster)
 

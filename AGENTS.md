@@ -12,6 +12,12 @@ Never commit agent plans, design notes, session logs, or writing-tool state.
 Keep them outside this repository. Put user-facing documentation in `README.md`,
 the role READMEs, or `docs/`.
 
+## Verification
+
+Actions validation is lint-only. Run unit, sanity, build, and backend tests
+locally with the Makefile targets documented in `docs/TESTING.md`. Do not add
+hosted test matrices or backend provisioning jobs to Actions.
+
 ## Adding a Molecule scenario to a consumer collection
 
 Use this checklist when adding a Molecule scenario to a **consumer**
