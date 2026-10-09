@@ -84,6 +84,17 @@
   loop_control:
     label: "{{ item.item }}"
 
+- name: Allow immediate container exits to surface
+  ansible.builtin.pause:
+    seconds: 2
+
+- name: Verify instance(s) are still running
+  ansible.builtin.include_tasks: _check_running.yml
+  loop: "{{ groups['molecule'] }}"
+  loop_control:
+    loop_var: __mp_podman_host
+    label: "{{ __mp_podman_host }}"
+
 # The consumer's static inventory already declares the molecule group. We
 # augment hosts with:
 #   - ansible_connection: containers.podman.podman — so subsequent phases

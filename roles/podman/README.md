@@ -83,6 +83,18 @@ Names listed in `mp_podman_reserved_networks` (default: `bridge`, `none`, `host`
 
 Set shared defaults in `mp_defaults.podman` in `inventory/group_vars/molecule.yml`. Field resolution order: role defaults <- `mp_defaults.podman` <- `hostvars[item].mp.podman`.
 
+## Startup failures
+
+After the async create jobs finish, the role waits two seconds and checks that
+every container is still running before writing runtime inventory. An exited
+or missing container fails create with its name, state, and exit code, plus a
+command to inspect its logs. Container configuration and application logs are
+not printed automatically because they may contain credentials.
+
+Failed containers remain available for inspection; run `molecule destroy` to
+remove them and the scenario's networks. This check detects immediate exits;
+it does not establish application readiness or monitor later failures.
+
 ## Connection user
 
 The role writes `ansible_user: root` into the runtime inventory by default, matching the typical container default. Override per-host by setting `ansible_user` in your static inventory (in `inventory/hosts.yml`, or in `group_vars/molecule.yml`); the role reads it from hostvars before writing the runtime inventory, so consumer-set values win.

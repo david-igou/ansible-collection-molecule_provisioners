@@ -63,6 +63,13 @@ jobs:
           PROVISIONER: podman
           ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
         run: pytest tests/integration -v -k default
+
+      - name: Verify Podman startup failures and cleanup
+        working-directory: ansible_collections/david_igou/molecule_provisioners
+        env:
+          RUN_PODMAN_STARTUP: "1"
+          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}
+        run: pytest tests/integration/podman -v -s -o addopts=""
   integration-kubevirt:
     runs-on: ubuntu-latest
     timeout-minutes: 45
