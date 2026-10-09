@@ -1,0 +1,23 @@
+---
+- name: Inspect container startup state
+  containers.podman.podman_container_info:
+    name: "{{ __mp_podman_host }}"
+    executable: "{{ mp_podman_executable }}"
+  register: __mp_podman_check
+  # Inspect includes container environment and configuration. Expose only the
+  # state and exit code below; leave application logs for explicit inspection.
+  no_log: true
+
+- name: Require the container to remain running
+  vars:
+    __mp_podman_state: "{{ (__mp_podman_check.containers | first | default({})).State | default({}) }}"
+  ansible.builtin.assert:
+    that:
+      - (__mp_podman_state.Status | default('missing')) == 'running'
+    quiet: true
+    fail_msg: >-
+      Podman container '{{ __mp_podman_host }}' is not running after create:
+      status={{ __mp_podman_state.Status | default('missing') }},
+      exit_code={{ __mp_podman_state.ExitCode | default('unknown') }}.
+      Inspect logs with: {{ mp_podman_executable | quote }} logs --tail 20 {{ __mp_podman_host | quote }}.
+      Run destroy to clean up this scenario.
