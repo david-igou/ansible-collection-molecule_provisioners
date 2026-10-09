@@ -21,7 +21,7 @@ IMAGE = os.environ.get("MP_PODMAN_TEST_IMAGE", "docker.io/library/nginx:stable-a
 class Run:
     def __init__(self, path, commands):
         self.path = path
-        self.names = [f"mp-startup-{uuid4().hex[:12]}" for _ in commands]
+        self.names = [f"mp-startup-{uuid4().hex[:12]}" for _command in commands]
         self.runtime = path / "inventory" / "molecule_runtime.yml"
         self.runtime.parent.mkdir()
         hosts = {
@@ -90,7 +90,7 @@ class Run:
 def test_healthy_guest_remains_accessible_across_create_calls(tmp_path):
     run = Run(tmp_path, [["sleep", "infinity"]])
     try:
-        for _ in range(2):
+        for _attempt in range(2):
             proc = run.play("create")
             assert proc.returncode == 0, proc.stdout + proc.stderr
             assert run.state(run.names[0])["Running"]
