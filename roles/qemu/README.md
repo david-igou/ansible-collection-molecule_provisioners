@@ -113,7 +113,10 @@ it or request growth. `bus` accepts `virtio` (default), `scsi`, or `sata`
 Debian's minimal `genericcloud` kernel may omit AHCI, so use its `generic`
 image for SATA tests.
 Identify test disks by their optional `serial`, rather than assuming Linux
-enumeration order. Every managed disk is disposable; image-backed disks use
+enumeration order. Guest drivers control which identifiers they expose:
+CHR 7.24.5 reports a virtio data disk's serial as `vdb` instead of the supplied
+QEMU serial. For that guest, verify the disk's model and capacity and exclude
+the boot disk before formatting. Every managed disk is disposable; image-backed disks use
 an overlay and leave the cached base unchanged. Destroy removes owned data
 disks after the VM exits. Caller-owned devices supplied in `extra_args` are
 outside this lifecycle.
@@ -248,6 +251,7 @@ For RouterOS or other supported appliances:
 mp:
   qemu:
     image: file:///var/lib/molecule-images/chr-test.qcow2
+    cpus: 2
     connection: network_cli
     connection_probe: /system identity print
     connection_vars:
@@ -260,6 +264,19 @@ Install `ansible.netcommon`, the platform collection, and their connection
 requirements in the controller EE. Supply a preconfigured image. Preparation
 waits for the port and executes the caller's read-only `connection_probe`
 through the authenticated CLI; an open port alone is insufficient.
+
+The tested CHR 7.24.5/QEMU 10.0.13 combination with KVM and the default
+i440FX machine needs two vCPUs to detect the virtio management NIC. This is
+an observed compatibility limit for that combination. Prepare CHR images to
+rebind management DHCP at startup: each new VM gets a new management MAC,
+and CHR can retain a DHCP binding to the template's old interface ID. Resolve
+the management interface by its default name rather than the old ID, and
+verify authentication on a fresh clone. Keep this bootstrap action scoped to
+management; application NICs need their own configuration.
+
+A forwarded management port can accept connections before the appliance's
+SSH protocol is ready. `prepare` currently makes one authenticated CLI attempt;
+if it fails during cold boot, wait for guest SSH readiness and retry prepare.
 
 ## Boot diagnostics
 

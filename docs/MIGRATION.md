@@ -27,6 +27,13 @@ require destroy/create. Keep the ephemeral state directory until destroy
 succeeds. See the [QEMU role reference](../roles/qemu/README.md) for parameters,
 managed disks, cloud-init, networks, diagnostics, and connection overrides.
 
+Management MACs, and extra NIC MACs that the caller omits, are derived from
+the VM identity. A new run therefore gives them new MACs. Update prepared
+appliance images that bind network configuration to an old MAC or interface
+ID. In particular, CHR images may need a startup action that resolves the
+management interface and rebinds its DHCP client. See the appliance example
+in the role reference for the tested CHR CPU and bootstrap requirements.
+
 ## Upgrading from 0.0.5-alpha to 0.0.6-alpha
 
 KubeVirt run isolation is now enabled by default. Kubernetes resource names
