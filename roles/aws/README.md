@@ -8,6 +8,9 @@ lists replace defaults. The native inventory overlay supports SSH, WinRM, PSRP a
 
 ## Quick start
 
+Requires `david_igou.molecule_provisioners` 0.0.7-alpha or later. For a complete
+consumer scenario, follow the [AWS walkthrough](../../docs/AWS.md).
+
 The controller needs Python 3.10+, ansible-core 2.17+, `amazon.aws` 9–11,
 `community.aws` 9–11, `community.crypto`, boto3, botocore and cryptography. Install
 this collection's Galaxy and Python requirements in your execution environment.
@@ -132,7 +135,7 @@ networks, security groups and their rules are never modified or deleted.
 
 Template mode reads the pinned version before launch. Template compute, bootstrap
 and device values replace generated defaults; explicit inventory values override
-them. Supply access in the template or explicitly. Retaining generated disks,
+them. Configure management access in the template or inventory. Retaining generated disks,
 termination protection and deleting referenced ENIs are rejected. Templates remain
 caller-owned. Changing launch configuration requires destroy/create.
 

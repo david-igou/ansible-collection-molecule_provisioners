@@ -207,7 +207,7 @@ Both should pass. If a host fails with "missing mp.<backend> in inventory", you 
 
 ## Unsupported configurations
 
-- Cloud-provider backends (AWS, Azure, GCP).
+- Azure and GCP backends.
 - QEMU via libvirtd, qemu+ssh remote URIs, or NAT/bridge networking. The QEMU backend runs local processes with SLIRP networking.
 - KubeVirt LoadBalancer or ClusterIP+port-forward services. `NodePort`, `None`, and `PodIP` are supported; see [SSH service types](../roles/kubevirt/README.md#ssh-service-types).
 - Mixing backends within a single scenario run.
@@ -243,7 +243,9 @@ Four additional boot-source modes are available: `data_volume_url`,
 
 Replace the `ec2` driver and `platforms` with `mp_backend: aws`, native inventory
 and the public create/prepare/destroy imports. Use `mp_defaults.aws` for shared
-values and `mp.aws` for per-host values. See [the AWS reference](../roles/aws/README.md).
+values and `mp.aws` for per-host values. Follow the [AWS walkthrough](AWS.md)
+for installation and a complete scenario; see [the reference](../roles/aws/README.md)
+for all supported fields. AWS requires collection version 0.0.7-alpha or later.
 
 | Molecule EC2 platform option | AWS provisioner field |
 | --- | --- |
@@ -271,9 +273,8 @@ values and `mp.aws` for per-host values. See [the AWS reference](../roles/aws/RE
 | `connection_options` | `connection_vars` |
 | `admin_user`, `boot_wait_seconds` | Same names |
 
-The current ecosystem EC2 driver requires existing networking. This backend's
-`network.mode: auto` creates an isolated run-owned network when no existing target
-is selected. Generated ingress has no unrestricted internet defaults. Launches
+This backend's `network.mode: auto` creates an isolated run-owned network when no
+existing target is selected. Generated ingress has no unrestricted internet defaults. Launches
 use stable client tokens and cleanup follows recorded ownership rather than names.
 Windows listeners remain image/bootstrap responsibilities; choose WinRM or PSRP
 explicitly. For RDP use a client that prompts for credentials.

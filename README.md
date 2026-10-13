@@ -23,13 +23,13 @@ retry, cleanup and lost-state recovery.
 See the [Podman](roles/podman/README.md), [KubeVirt](roles/kubevirt/README.md),
 [QEMU](roles/qemu/README.md), [Docker](roles/docker/README.md), and
 [AWS](roles/aws/README.md) role READMEs
-for their settings and requirements. KubeVirt also supports Windows guests over
-PSRP or WinRM. AWS also supports those transports, managed VPC creation,
-existing networking and appliance readiness probes.
+for their settings and requirements. KubeVirt and AWS also support Windows guests
+over PSRP or WinRM. AWS supports appliance readiness probes.
 
 AWS supports either existing networking or automatic VPC/public-subnet creation.
 Set an explicit region (for example `us-east-2`), an AMI and allowed management
-CIDRs. See [the AWS quick start](roles/aws/README.md#quick-start).
+CIDRs. See [the AWS walkthrough](docs/AWS.md) for installation, a complete scenario
+and networking examples.
 
 ## Installing
 
@@ -228,6 +228,7 @@ unit, sanity, and backend integration suites run locally.
 | `kubevirt` | `kubectl` + a kubeconfig pointing at a KubeVirt-enabled cluster |
 | `qemu` | `qemu-system-x86_64`, `qemu-img`, `cloud-localds` (or `genisoimage`); OVMF firmware only when a host sets `firmware: uefi` |
 | `docker` | A reachable local docker daemon and the `docker` python package (`pip install docker`) |
+| `aws` | ansible-core 2.17+, boto3, botocore, cryptography, AWS credentials and an SSH client; [setup and transport dependencies](docs/AWS.md#install) |
 
 On a Debian/Ubuntu controller, the `qemu` backend's system prerequisites are:
 
@@ -260,18 +261,19 @@ Notes for the VM backends (`qemu`, `kubevirt`):
 - `roles/kubevirt/` — creates VirtualMachines from simple variables or a full `vm_definition`, manages generated data disks, and writes runtime connection inventory. It supports custom connection options and named TCP/UDP application endpoints. NodePort mode creates one run-owned Service per VM. See the [KubeVirt role reference](roles/kubevirt/README.md).
 - `roles/qemu/` — caches base qcow2 images, builds NoCloud seed ISOs, launches per-VM `qemu-system-x86_64` processes with SLIRP `hostfwd` for SSH.
 - `roles/docker/` — uses `community.docker.docker_container` + `community.docker.docker_network`.
+- `roles/aws/` — provisions EC2 guests, managed or existing networking, EBS storage and runtime inventory. See the [AWS reference](roles/aws/README.md).
 
 Every backend writes runtime connection details for the hosts in the inventory's `molecule` group.
 
 ## Out of scope
 
-- AWS, Azure, GCP backends
+- Azure and GCP backends
 - qemu via libvirtd
 - qemu remote / non-controller-local hosts
 - qemu NAT or bridge networking (SLIRP only)
 - LoadBalancer / ClusterIP+port-forward kubevirt service types
-- Windows guests on backends other than KubeVirt; macOS guests
-- Per-platform networks beyond `podman.podman_network` and `docker.networks`
+- Windows guests on backends other than KubeVirt or AWS; macOS guests
+- AWS VPC peering and automatic IPv6 network creation
 - Docker image build at create time, private-registry login, remote/TLS docker daemons
 - Molecule `shared_state` / shared default-scenario pattern
 

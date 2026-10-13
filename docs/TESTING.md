@@ -66,6 +66,7 @@ podman run --rm \
 | `make test-kubevirt-lifecycle` | Overlapping runs, full definitions, failed cleanup | KubeVirt cluster |
 | `make test-kubevirt-access` | Custom SSH, TCP/UDP endpoints, Service updates | KubeVirt cluster with reachable NodePorts |
 | `make test-kubevirt-storage` | Managed-disk I/O, retries, cleanup, external storage | KubeVirt, CDI, suitable storage class |
+| `make test-aws` | EC2 lifecycle, networking, storage, transports and recovery | Podman, exported AWS credentials and explicit test account; [AWS setup](#aws) |
 
 Backend tests create and delete test infrastructure. Choose a test namespace
 and verify the cluster identity before running against an existing cluster.
@@ -165,12 +166,21 @@ export MP_TEST_AWS_CIDR=198.51.100.10/32
 make test-aws
 ```
 
-Activate credentials through the normal SDK chain before invoking this target.
+The target passes `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and optional
+`AWS_SESSION_TOKEN` from the host into its execution environment. Export those
+variables through your credential provider before invoking it; the target does
+not mount `~/.aws` or pass a named profile into the container.
 When `MP_TEST_AWS_CIDR` is omitted the harness discovers the controller's public
 egress address through `checkip.amazonaws.com`; set it explicitly when SSH uses a
 different egress path. Never add credentials to a test fixture or test report.
-`AWS_TEST_ARGS` selects individual pytest cases. The harness retains private
-failure evidence under `.build/aws-live/`; a cleanup failure reports its exact run
+`AWS_TEST_ARGS` selects individual pytest cases. For a focused Linux lifecycle run:
+
+```bash
+make test-aws AWS_TEST_ARGS='-k managed_linux_lifecycle'
+```
+
+The harness retains private failure evidence under `.build/aws-live/`;
+a cleanup failure reports its exact run
 directory. Keep it until scoped destroy succeeds.
 
 The tests exercise authenticated Linux/sudo, Windows WinRM and PSRP password
