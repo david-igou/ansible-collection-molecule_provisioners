@@ -45,21 +45,22 @@ def test_interrupted_create_recovers_without_duplicate_resources(aws_environment
 def test_check_mode_and_ownership_mismatch_preserve_resources(aws_environment):
     run = GuestRun(aws_environment, {"instance": {}})
     try:
-        run.play(
-            [
-                {
-                    "ansible.builtin.import_playbook": "david_igou.molecule_provisioners.create",
-                    "check_mode": True,
-                }
-            ],
-            "check-create",
-        )
+        run.action("create", check_mode=True)
         assert not (run.ephemeral / "aws_run.yml").exists()
         run.action("create")
         original = run.state()
         run.run_id = original["id"]
         instance_id = original["hosts"]["instance"]["instance_id"]
+        journal = (run.ephemeral / "aws_run.yml").read_bytes()
+        run.action("destroy", check_mode=True)
+        assert (run.ephemeral / "aws_run.yml").read_bytes() == journal
         ec2 = aws_environment["ec2"]
+        assert (
+            ec2.describe_instances(InstanceIds=[instance_id])["Reservations"][0]["Instances"][0][
+                "State"
+            ]["Name"]
+            == "running"
+        )
         ec2.delete_tags(Resources=[instance_id], Tags=[{"Key": "molecule-provisioners:run-id"}])
         try:
             code, _output = run.action("destroy", check=False)

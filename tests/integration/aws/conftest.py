@@ -90,7 +90,7 @@ class GuestRun:
             "all"
         ]["hosts"]
 
-    def play(self, plays, label="verify", check=True, extra_environment=None):
+    def play(self, plays, label="verify", check=True, extra_environment=None, check_mode=False):
         """Run Ansible in the EE; suppress all known credentials on failure."""
         path = self.directory / (label + ".yml")
         write_yaml(path, plays)
@@ -99,6 +99,7 @@ class GuestRun:
         process = subprocess.run(
             [
                 "ansible-playbook",
+                *(["--check"] if check_mode else []),
                 "-i",
                 str(self.inventory),
                 "-i",
