@@ -1,0 +1,150 @@
+---
+- name: AWS | Resolve host settings
+  ansible.builtin.set_fact:
+    __mp_aws_specs: >-
+      {{ __mp_aws_specs | default({}) | combine({item: mp_aws_role_defaults
+         | combine(mp_defaults.aws | default({}), recursive=true)
+         | combine(hostvars[item].mp.aws, recursive=true)}) }}
+  loop: "{{ groups['molecule'] }}"
+
+- name: AWS | Validate the provided network and pinned images
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_specs[item].deployment_id is match('^[a-z0-9-]{1,32}$')
+      - __mp_aws_specs[item].vpc_id is match('^vpc-[a-f0-9]+$')
+      - __mp_aws_specs[item].subnet_id is match('^subnet-[a-f0-9]+$')
+      - __mp_aws_specs[item].image_id is match('^ami-[a-f0-9]+$')
+      - __mp_aws_specs[item].region == __mp_aws_specs[groups['molecule'][0]].region
+      - __mp_aws_specs[item].deployment_id == __mp_aws_specs[groups['molecule'][0]].deployment_id
+      - __mp_aws_specs[item].subnet_id == __mp_aws_specs[groups['molecule'][0]].subnet_id
+      - __mp_aws_specs[item].vpc_id == __mp_aws_specs[groups['molecule'][0]].vpc_id
+      - item is match('^[a-z0-9-]{1,32}$')
+      - molecule_scenario_name is match('^[a-z0-9-]{1,32}$')
+    fail_msg: Supply a deployment ID, existing public VPC/subnet and exact image IDs for AWS tests.
+  loop: "{{ groups['molecule'] }}"
+
+- name: AWS | Load run ownership
+  ansible.builtin.include_tasks: _load_run.yml
+
+- name: AWS | Require unchanged settings when resuming a run
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_run.hosts == __mp_aws_specs
+      - __mp_aws_run.scenario == molecule_scenario_name
+    fail_msg: Destroy the saved run before changing inventory or scenario settings.
+  when: __mp_aws_run_file.stat.exists
+
+- name: AWS | Generate a stable invocation identity
+  ansible.builtin.set_fact:
+    __mp_aws_new_id: "{{ lookup('ansible.builtin.password', '/dev/null', length=16, chars=['0123456789abcdef']) }}"
+  when: not __mp_aws_run_file.stat.exists
+
+- name: AWS | Record a new run before creating cloud resources
+  vars:
+    __mp_aws_first: "{{ __mp_aws_specs[groups['molecule'][0]] }}"
+  ansible.builtin.set_fact:
+    __mp_aws_run:
+      version: 1
+      id: "{{ __mp_aws_new_id }}"
+      deployment_id: "{{ __mp_aws_first.deployment_id }}"
+      region: "{{ __mp_aws_first.region }}"
+      scenario: "{{ molecule_scenario_name }}"
+      prefix: "molecule-{{ __mp_aws_first.deployment_id }}-{{ molecule_scenario_name }}-{{ __mp_aws_new_id }}"
+      hosts: "{{ __mp_aws_specs }}"
+  when: not __mp_aws_run_file.stat.exists
+
+- name: AWS | Persist run ownership before provisioning
+  ansible.builtin.copy:
+    dest: "{{ molecule_ephemeral_directory }}/aws_run.yml"
+    content: "{{ __mp_aws_run | to_nice_yaml }}"
+    mode: "0600"
+
+- name: AWS | Create the run resources
+  module_defaults:
+    group/amazon.aws.aws:
+      region: "{{ __mp_aws_run.region }}"
+  vars:
+    __mp_aws_tags:
+      "demojam:deployment": "{{ __mp_aws_run.deployment_id }}"
+      "demojam:purpose": molecule
+      molecule_scenario: "molecule-{{ __mp_aws_run.scenario }}"
+      molecule_run_id: "{{ __mp_aws_run.id }}"
+  block:
+    - name: AWS | Generate a private PEM SSH key
+      community.crypto.openssh_keypair:
+        path: "{{ mp_aws_ssh_key_path }}"
+        type: rsa
+        size: 4096
+        private_key_format: pkcs1
+        backend: cryptography
+        regenerate: never
+        mode: "0600"
+      register: __mp_aws_key
+      no_log: true
+
+    - name: AWS | Inspect the existing run SSH public key
+      amazon.aws.ec2_key_info:
+        names: ["{{ __mp_aws_run.prefix }}"]
+        include_public_key: true
+      register: __mp_aws_existing_keys
+
+    - name: AWS | Validate a resumed run's SSH key ownership and material
+      ansible.builtin.assert:
+        that:
+          - __mp_aws_existing_keys.keypairs | length == 1
+          - __mp_aws_existing_keys.keypairs[0].tags['demojam:deployment'] == __mp_aws_run.deployment_id
+          - __mp_aws_existing_keys.keypairs[0].tags['demojam:purpose'] == 'molecule'
+          - __mp_aws_existing_keys.keypairs[0].tags.molecule_run_id == __mp_aws_run.id
+          - __mp_aws_existing_keys.keypairs[0].public_key.split()[:2] == __mp_aws_key.public_key.split()[:2]
+        fail_msg: The saved run's EC2 key differs from its private key or ownership tags; refusing to replace it.
+      when: __mp_aws_existing_keys.keypairs | length > 0
+
+    - name: AWS | Import a new run SSH public key
+      amazon.aws.ec2_key:
+        name: "{{ __mp_aws_run.prefix }}"
+        key_material: "{{ __mp_aws_key.public_key }}"
+        state: present
+        tags: "{{ __mp_aws_tags }}"
+      when: __mp_aws_existing_keys.keypairs | length == 0
+
+    - name: AWS | Create the run security group
+      amazon.aws.ec2_security_group:
+        name: "{{ __mp_aws_run.prefix }}"
+        description: Molecule disposable Linux guests
+        vpc_id: "{{ __mp_aws_specs[groups['molecule'][0]].vpc_id }}"
+        state: present
+        tags: "{{ __mp_aws_tags }}"
+        rules:
+          - proto: tcp
+            ports: [22]
+            cidr_ip: "{{ __mp_aws_specs[groups['molecule'][0]].ssh_cidr }}"
+          - proto: tcp
+            ports: [80]
+            cidr_ip: "{{ __mp_aws_specs[groups['molecule'][0]].http_cidr }}"
+      register: __mp_aws_security_group
+
+    - name: AWS | Initialize the connection inventory
+      ansible.builtin.set_fact:
+        __mp_aws_runtime_hosts: {}
+
+    - name: AWS | Provision each Linux guest
+      ansible.builtin.include_tasks: _create_host.yml
+      loop: "{{ groups['molecule'] }}"
+      loop_control:
+        loop_var: __mp_aws_host
+        label: "{{ __mp_aws_host }}"
+
+- name: AWS | Create the runtime inventory directory
+  ansible.builtin.file:
+    path: "{{ molecule_ephemeral_directory }}/inventory"
+    state: directory
+    mode: "0700"
+
+- name: AWS | Write guest connections
+  ansible.builtin.copy:
+    dest: "{{ molecule_ephemeral_directory }}/inventory/molecule_runtime.yml"
+    content: "{{ {'all': {'hosts': __mp_aws_runtime_hosts}} | to_nice_yaml }}"
+    mode: "0600"
+
+- name: AWS | Refresh inventory
+  ansible.builtin.meta: refresh_inventory

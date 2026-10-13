@@ -11,7 +11,7 @@ SCENARIO_DIR := extensions/molecule/default
 
 .PHONY: help install lint \
         test test-podman test-kubevirt test-docker test-qemu \
-        test-unit test-podman-startup test-kubevirt-lifecycle test-kubevirt-access \
+        test-unit test-aws test-podman-startup test-kubevirt-lifecycle test-kubevirt-access \
         test-kubevirt-storage test-kubevirt-kind test-qemu-functional test-docker-functional \
         podman kubevirt docker qemu \
         test-qemu-testing sanity build pre-commit clean
@@ -31,6 +31,9 @@ lint: ## Lint Ansible, YAML and changelog fragments
 
 test-unit: $(CANONICAL) ## Offline renderer and validation tests; no backend required
 	PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/unit -q -o addopts=""
+
+test-aws: $(CANONICAL) ## EC2 Linux guests, resume and cleanup; needs scoped AWS credentials/network/images
+	RUN_AWS_LIFECYCLE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/integration/aws -v -o addopts=""
 
 test-podman-startup: $(CANONICAL) ## Container startup and cleanup regressions; needs Podman
 	RUN_PODMAN_STARTUP=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/integration/podman -v -o addopts=""

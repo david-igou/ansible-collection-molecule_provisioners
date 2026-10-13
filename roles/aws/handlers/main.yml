@@ -1,0 +1,2 @@
+---
+# EC2 lifecycle tasks do not need service handlers.

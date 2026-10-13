@@ -1,0 +1,4 @@
+---
+- name: AWS | Require a lifecycle entry point
+  ansible.builtin.fail:
+    msg: Use the collection create, prepare and destroy playbooks.

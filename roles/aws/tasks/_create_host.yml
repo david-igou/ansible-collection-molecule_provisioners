@@ -1,0 +1,65 @@
+---
+- name: AWS | Describe the pinned image
+  amazon.aws.ec2_ami_info:
+    image_ids: ["{{ __mp_aws_specs[__mp_aws_host].image_id }}"]
+  register: __mp_aws_image
+
+- name: AWS | Require an available x86 Linux image
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_image.images | length == 1
+      - __mp_aws_image.images[0].state == 'available'
+      - __mp_aws_image.images[0].architecture == 'x86_64'
+
+- name: AWS | Start the owned guest
+  amazon.aws.ec2_instance:
+    name: "{{ __mp_aws_run.prefix }}-{{ __mp_aws_host }}"
+    image_id: "{{ __mp_aws_specs[__mp_aws_host].image_id }}"
+    instance_type: "{{ __mp_aws_specs[__mp_aws_host].instance_type }}"
+    vpc_subnet_id: "{{ __mp_aws_specs[__mp_aws_host].subnet_id }}"
+    security_groups: ["{{ __mp_aws_security_group.group_id }}"]
+    key_name: "{{ __mp_aws_run.prefix }}"
+    state: running
+    wait: true
+    wait_timeout: "{{ mp_aws_wait_timeout }}"
+    network:
+      assign_public_ip: true
+    metadata_options:
+      http_tokens: required
+      http_endpoint: enabled
+    volumes:
+      - device_name: "{{ __mp_aws_image.images[0].root_device_name }}"
+        ebs:
+          volume_type: gp3
+          volume_size: >-
+            {{ [__mp_aws_specs[__mp_aws_host].root_volume_size | int,
+                (__mp_aws_image.images[0].block_device_mappings
+                 | selectattr('device_name', 'equalto', __mp_aws_image.images[0].root_device_name)
+                 | first).ebs.volume_size | int] | max }}
+          encrypted: true
+          delete_on_termination: true
+    tags: "{{ __mp_aws_tags }}"
+    filters:
+      "tag:demojam:deployment": "{{ __mp_aws_run.deployment_id }}"
+      "tag:demojam:purpose": molecule
+      "tag:molecule_run_id": "{{ __mp_aws_run.id }}"
+      "tag:Name": "{{ __mp_aws_run.prefix }}-{{ __mp_aws_host }}"
+      instance-state-name: [pending, running, stopping, stopped]
+  register: __mp_aws_instance
+
+- name: AWS | Require one public guest
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_instance.instances | length == 1
+      - __mp_aws_instance.instances[0].public_ip_address | default('') | length > 0
+
+- name: AWS | Record guest connection settings
+  ansible.builtin.set_fact:
+    __mp_aws_runtime_hosts: >-
+      {{ __mp_aws_runtime_hosts | combine({__mp_aws_host: {
+         'ansible_host': __mp_aws_instance.instances[0].public_ip_address,
+         'ansible_user': __mp_aws_specs[__mp_aws_host].ssh_user,
+         'ansible_connection': 'ssh',
+         'ansible_ssh_private_key_file': mp_aws_ssh_key_path,
+         'ansible_ssh_common_args': '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+      }}) }}
