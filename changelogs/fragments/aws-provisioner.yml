@@ -2,4 +2,5 @@
 minor_changes:
   - >-
     Added an AWS EC2 provisioner with automatic or existing networking, saved run
-    ownership, stable launch retries, Linux/Windows connections and scoped cleanup.
+    ownership, stable launch retries, Linux/Windows connections and scoped cleanup
+    (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/77).
