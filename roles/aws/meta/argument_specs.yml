@@ -1,0 +1,18 @@
+---
+argument_specs:
+  main: &aws_arguments
+    short_description: Provision disposable EC2 guests in an existing network.
+    options:
+      mp_aws_wait_timeout:
+        type: int
+        default: 600
+        description: Maximum seconds for EC2 state and guest SSH readiness.
+      mp_aws_ssh_key_path:
+        type: path
+        description: Private RSA key location in the Molecule ephemeral directory.
+      mp_aws_role_defaults:
+        type: dict
+        description: Base settings overridden by mp_defaults.aws and each host's mp.aws.
+  create: *aws_arguments
+  destroy: *aws_arguments
+  prepare: *aws_arguments

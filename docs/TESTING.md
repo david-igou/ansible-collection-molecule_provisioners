@@ -147,3 +147,15 @@ Run the same guest target with no accessible KVM device to test TCG. Increase
 `mp_qemu_runtime_cache_dir` to coordinate host-port reservations. Keep ephemeral
 state after a cleanup error and retry destroy; do not delete ownership files
 while processes are running.
+
+## AWS lifecycle
+
+Use scoped SDK credentials in an account with a caller-owned public subnet.
+Set `AWS_REGION`, `MOLECULE_AWS_DEPLOYMENT_ID`, `MOLECULE_AWS_VPC_ID`,
+`MOLECULE_AWS_SUBNET_ID`, `MOLECULE_AWS_RHEL9_AMI_ID` and
+`MOLECULE_AWS_RHEL10_AMI_ID`, then run `make test-aws`.
+
+The test provisions both releases, repeats create to check that guests are
+reused, authenticates over SSH, and verifies encrypted root disks and cleanup.
+It preserves the network. Keep failed cleanup state and inspect the failure
+before retrying. IAM policy creation belongs to the caller's bootstrap.

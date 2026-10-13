@@ -1,0 +1,27 @@
+---
+- name: AWS | Locate saved run ownership
+  ansible.builtin.stat:
+    path: "{{ molecule_ephemeral_directory }}/aws_run.yml"
+  register: __mp_aws_run_file
+
+- name: AWS | Load saved run ownership
+  ansible.builtin.set_fact:
+    __mp_aws_run: >-
+      {{ (lookup('ansible.builtin.file', molecule_ephemeral_directory ~ '/aws_run.yml') | from_yaml)
+         if __mp_aws_run_file.stat.exists else {} }}
+
+- name: AWS | Validate saved run ownership
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_run.version == 1
+      - __mp_aws_run.id is match('^[a-f0-9]{16}$')
+      - __mp_aws_run.deployment_id is match('^[a-z0-9-]{1,32}$')
+      - >-
+        __mp_aws_run.prefix == 'molecule-' ~ __mp_aws_run.deployment_id ~ '-'
+        ~ __mp_aws_run.scenario ~ '-' ~ __mp_aws_run.id
+      - __mp_aws_run.scenario is match('^[a-z0-9-]{1,32}$')
+      - __mp_aws_run.region is match('^[a-z]{2}-[a-z]+-[0-9]+$')
+      - __mp_aws_run.hosts is mapping
+      - __mp_aws_run.hosts | length > 0
+    fail_msg: Restore valid aws_run.yml before retrying cleanup. No AWS resources were changed.
+  when: __mp_aws_run_file.stat.exists

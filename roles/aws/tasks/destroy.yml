@@ -1,0 +1,67 @@
+---
+- name: AWS | Load recorded run ownership
+  ansible.builtin.include_tasks: _load_run.yml
+
+- name: AWS | Clean only this run's resources
+  module_defaults:
+    group/amazon.aws.aws:
+      region: "{{ __mp_aws_run.region }}"
+  when: __mp_aws_run_file.stat.exists
+  block:
+    - name: AWS | Find guests including a partially created run
+      amazon.aws.ec2_instance_info:
+        filters:
+          "tag:demojam:deployment": "{{ __mp_aws_run.deployment_id }}"
+          "tag:demojam:purpose": molecule
+          "tag:molecule_run_id": "{{ __mp_aws_run.id }}"
+          instance-state-name: [pending, running, stopping, stopped, shutting-down]
+      register: __mp_aws_instances
+
+    - name: AWS | Record volume IDs before terminating
+      ansible.builtin.set_fact:
+        __mp_aws_volume_ids: >-
+          {{ __mp_aws_instances.instances | map(attribute='block_device_mappings') | flatten
+             | selectattr('ebs', 'defined') | map(attribute='ebs.volume_id') | list }}
+
+    - name: AWS | Terminate the run guests
+      amazon.aws.ec2_instance:
+        instance_ids: "{{ __mp_aws_instances.instances | map(attribute='instance_id') | list }}"
+        state: absent
+        wait: true
+        wait_timeout: "{{ mp_aws_wait_timeout }}"
+      when: __mp_aws_instances.instances | length > 0
+
+    - name: AWS | Verify root disks were deleted
+      amazon.aws.ec2_vol_info:
+        filters:
+          volume-id: "{{ __mp_aws_volume_ids }}"
+      register: __mp_aws_volumes
+      until: __mp_aws_volumes.volumes | length == 0
+      retries: 30
+      delay: 5
+      when: __mp_aws_volume_ids | length > 0
+
+    - name: AWS | Delete the run security group after interfaces detach
+      amazon.aws.ec2_security_group:
+        name: "{{ __mp_aws_run.prefix }}"
+        vpc_id: "{{ __mp_aws_run.hosts.values() | map(attribute='vpc_id') | first }}"
+        state: absent
+      register: __mp_aws_deleted_group
+      until: __mp_aws_deleted_group is succeeded
+      retries: 30
+      delay: 5
+
+    - name: AWS | Delete the run EC2 key pair
+      amazon.aws.ec2_key:
+        name: "{{ __mp_aws_run.prefix }}"
+        state: absent
+
+    - name: AWS | Remove local ownership after successful cleanup
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ molecule_ephemeral_directory }}/inventory/molecule_runtime.yml"
+        - "{{ mp_aws_ssh_key_path }}"
+        - "{{ mp_aws_ssh_key_path }}.pub"
+        - "{{ molecule_ephemeral_directory }}/aws_run.yml"

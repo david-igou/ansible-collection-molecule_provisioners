@@ -1,0 +1,14 @@
+---
+# Credentials use the controller's standard AWS SDK credential chain.
+mp_aws_wait_timeout: 600
+mp_aws_ssh_key_path: "{{ molecule_ephemeral_directory }}/identity_file"
+mp_aws_role_defaults:
+  region: "{{ lookup('ansible.builtin.env', 'AWS_REGION', default='us-east-2') }}"
+  deployment_id: "{{ lookup('ansible.builtin.env', 'MOLECULE_AWS_DEPLOYMENT_ID') }}"
+  vpc_id: "{{ lookup('ansible.builtin.env', 'MOLECULE_AWS_VPC_ID') }}"
+  subnet_id: "{{ lookup('ansible.builtin.env', 'MOLECULE_AWS_SUBNET_ID') }}"
+  instance_type: "{{ lookup('ansible.builtin.env', 'MOLECULE_AWS_INSTANCE_TYPE', default='t3.medium') }}"
+  ssh_user: ec2-user
+  ssh_cidr: "{{ lookup('ansible.builtin.env', 'MOLECULE_AWS_SSH_CIDR', default='0.0.0.0/0') }}"
+  http_cidr: "{{ lookup('ansible.builtin.env', 'MOLECULE_AWS_HTTP_CIDR', default='0.0.0.0/0') }}"
+  root_volume_size: 30

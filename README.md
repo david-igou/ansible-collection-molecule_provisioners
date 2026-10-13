@@ -16,6 +16,7 @@ retry, cleanup and lost-state recovery.
 | --- | --- |
 | `podman` (default) | Containers, fastest CI loop |
 | `kubevirt` | Real VMs in a Kubernetes cluster (requires KubeVirt) |
+| `aws` | EC2 Linux guests in a caller-owned public VPC/subnet |
 | `qemu` | Real VMs via direct `qemu-system` process (no libvirtd) |
 | `docker` | Containers using a local Docker daemon |
 
@@ -258,7 +259,7 @@ Every backend writes runtime connection details for the hosts in the inventory's
 
 ## Out of scope
 
-- AWS, Azure, GCP backends
+- Azure and GCP backends
 - qemu via libvirtd
 - qemu remote / non-controller-local hosts
 - qemu NAT or bridge networking (SLIRP only)
@@ -271,3 +272,11 @@ Every backend writes runtime connection details for the hosts in the inventory's
 ## Licensing
 
 MIT License. See [LICENSE](LICENSE).
+
+## AWS guest account
+
+The [AWS role](roles/aws/README.md) uses exact AMI IDs and a provided public
+subnet. It creates disposable guests, a run-specific SSH key and security group,
+then verifies guest disk deletion during cleanup. The caller owns the VPC,
+subnet and IAM credentials. See [local testing](docs/TESTING.md) for the real
+AWS lifecycle target.

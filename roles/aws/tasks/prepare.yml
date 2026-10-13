@@ -1,0 +1,5 @@
+---
+- name: AWS | Wait for guest SSH access
+  ansible.builtin.wait_for_connection:
+    timeout: "{{ mp_aws_wait_timeout }}"
+    sleep: 5

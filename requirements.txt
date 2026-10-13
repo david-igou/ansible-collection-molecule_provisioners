@@ -2,3 +2,6 @@
 # Note: community.docker (declared in galaxy.yml) requires the `docker` python
 # package on the controller. Consumers running the docker backend must install:
 #   pip install docker
+# AWS lifecycle modules run on the controller.
+boto3>=1.34.0
+botocore>=1.34.0
