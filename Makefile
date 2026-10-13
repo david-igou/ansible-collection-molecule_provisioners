@@ -9,7 +9,7 @@ CANONICAL := $(CURDIR)/.build/ansible_collections/david_igou/molecule_provisione
 
 SCENARIO_DIR := extensions/molecule/default
 
-.PHONY: help install lint \
+.PHONY: help install lint ee test-aws \
         test test-podman test-kubevirt test-docker test-qemu \
         test-unit test-podman-startup test-kubevirt-lifecycle test-kubevirt-access \
         test-kubevirt-storage test-kubevirt-kind test-qemu-functional test-docker-functional \
@@ -19,10 +19,27 @@ SCENARIO_DIR := extensions/molecule/default
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
+AWS_TEST_IMAGE ?= localhost/mp-aws-ee:dev
+
+ee: ## Build the local AWS test execution environment
+	podman build -f tests/ee/Containerfile -t $(AWS_TEST_IMAGE) .
+
+test-aws: $(CANONICAL) ## Opt-in live AWS lifecycle tests inside the local EE
+	podman run --rm --network host --cgroups=disabled \
+	  -v $(CURDIR):$(CURDIR):Z -w $(CURDIR) \
+	  -v $(HOME)/.ansible/collections:/opt/ansible/collections:ro \
+	  -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN \
+	  -e AWS_REGION -e AWS_DEFAULT_REGION -e MP_TEST_AWS_ACCOUNT_ID \
+	  -e MP_TEST_AWS_CIDR -e RUN_AWS_LIFECYCLE=1 \
+	  -e ANSIBLE_COLLECTIONS_PATH=$(CURDIR)/.build:$(CURDIR)/collections:/opt/ansible/collections \
+	  -e PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 $(AWS_TEST_IMAGE) \
+	  pytest tests/integration/aws -v -o addopts="" $(AWS_TEST_ARGS)
+
 install: ## Install python + ansible collection dependencies
 	python -m pip install --upgrade pip
 	pip install -r lint-requirements.txt -r requirements.txt -r test-requirements.txt
-	ansible-galaxy collection install containers.podman kubernetes.core community.crypto community.docker community.general ansible.netcommon community.routeros
+	ansible-galaxy collection install containers.podman kubernetes.core community.crypto community.docker community.general ansible.netcommon community.routeros \
+	  'amazon.aws:>=9.0.0,<12.0.0' 'community.aws:>=9.0.0,<12.0.0' 'ansible.windows:>=2.5.0,<4.0.0'
 
 lint: ## Lint Ansible, YAML and changelog fragments
 	ansible-lint

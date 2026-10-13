@@ -1,0 +1,14 @@
+---
+- name: AWS | Acquire the controller lifecycle lease
+  david_igou.molecule_provisioners.aws_lock:
+    directory: '{{ molecule_ephemeral_directory }}'
+    state: held
+- name: AWS | Provision the saved run
+  block:
+    - name: AWS | Execute provisioning
+      ansible.builtin.include_tasks: _create.yml
+  always:
+    - name: AWS | Release the controller lifecycle lease
+      david_igou.molecule_provisioners.aws_lock:
+        directory: '{{ molecule_ephemeral_directory }}'
+        state: released

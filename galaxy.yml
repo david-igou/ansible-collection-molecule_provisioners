@@ -1,13 +1,13 @@
 ---
 namespace: david_igou
 name: molecule_provisioners
-version: 0.0.6-alpha
+version: 0.0.7-alpha
 readme: README.md
 authors:
   - David Igou <igou.david@gmail.com>
 
 description: >-
-  Reusable Molecule provisioner playbooks and roles (podman, kubevirt, qemu, docker) for
+  Reusable Molecule provisioner playbooks and roles (podman, kubevirt, qemu, docker, aws) for
   testing other Ansible collections without copy-pasting create/destroy/prepare
   automation per repo.
 
@@ -20,8 +20,12 @@ tags:
   - kubevirt
   - qemu
   - docker
+  - aws
 
 dependencies:
+  amazon.aws: ">=9.0.0,<12.0.0"
+  community.aws: ">=9.0.0,<12.0.0"
+  ansible.windows: ">=2.5.0,<4.0.0"
   containers.podman: ">=1.10.0"
   kubernetes.core: ">=3.0.0"
   community.crypto: ">=2.0.0"
@@ -58,3 +62,6 @@ build_ignore:
   - lint-requirements.txt
   - .build
   - collections
+  - .venv
+  - tests/ee
+  - .containerignore

@@ -5,3 +5,4 @@ mp_supported_backends:
   - kubevirt
   - qemu
   - docker
+  - aws

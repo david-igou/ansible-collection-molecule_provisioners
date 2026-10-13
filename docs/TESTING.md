@@ -147,3 +147,33 @@ Run the same guest target with no accessible KVM device to test TCG. Increase
 `mp_qemu_runtime_cache_dir` to coordinate host-port reservations. Keep ephemeral
 state after a cleanup error and retry destroy; do not delete ownership files
 while processes are running.
+
+## AWS
+
+AWS tests run locally in a Podman execution environment; hosted Actions stay
+lint-only. They create chargeable disposable infrastructure and always attempt
+scoped teardown. Credentials alone never start tests: `make test-aws` explicitly
+opts in, and requires `MP_TEST_AWS_ACCOUNT_ID` matching STS identity. All live tests
+use **us-east-2** and discover an Amazon Linux 2023 AMI there. Windows cases also
+discover an Amazon Windows Server 2022 image.
+
+```bash
+make ee
+export AWS_REGION=us-east-2 AWS_DEFAULT_REGION=us-east-2
+export MP_TEST_AWS_ACCOUNT_ID=123456789012
+export MP_TEST_AWS_CIDR=198.51.100.10/32
+make test-aws
+```
+
+Activate credentials through the normal SDK chain before invoking this target.
+When `MP_TEST_AWS_CIDR` is omitted the harness discovers the controller's public
+egress address through `checkip.amazonaws.com`; set it explicitly when SSH uses a
+different egress path. Never add credentials to a test fixture or test report.
+`AWS_TEST_ARGS` selects individual pytest cases. The harness retains private
+failure evidence under `.build/aws-live/`; a cleanup failure reports its exact run
+directory. Keep it until scoped destroy succeeds.
+
+The tests exercise authenticated Linux/sudo, Windows WinRM and PSRP password
+decryption, repeated create, existing-network preservation, inventory removal,
+run isolation, failure recovery and independent SDK cleanup checks. Backend
+validation/rendering and launch retry tests are also part of `make test-unit`.

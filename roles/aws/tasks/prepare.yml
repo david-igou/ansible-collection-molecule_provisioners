@@ -1,0 +1,32 @@
+---
+- name: AWS | Authenticate the selected guest transport
+  block:
+    - name: AWS | Wait for authenticated SSH or Windows readiness
+      ansible.builtin.wait_for_connection:
+        timeout: |-
+          {{ mp_aws_windows_wait_timeout if ansible_connection in ['winrm',
+          'psrp'] else mp_aws_wait_timeout }}
+        sleep: 5
+      when: ansible_connection != 'network_cli'
+    - name: AWS | Retry the appliance read-only connection probe
+      ansible.netcommon.cli_command:
+        command: '{{ mp.aws.connection_probe | default(mp_defaults.aws.connection_probe) }}'
+      register: __mp_aws_probe
+      until: __mp_aws_probe is succeeded
+      retries: '{{ ([1, (mp_aws_wait_timeout | int / 5) | int] | max) }}'
+      delay: 5
+      changed_when: false
+      when: ansible_connection == 'network_cli'
+    - name: AWS | Honor an explicit post-authentication settling interval
+      ansible.builtin.wait_for:
+        timeout: '{{ mp.aws.boot_wait_seconds | default(mp_defaults.aws.boot_wait_seconds | default(0)) }}'
+      delegate_to: localhost
+      when: mp.aws.boot_wait_seconds | default(mp_defaults.aws.boot_wait_seconds | default(0)) | int > 0
+  rescue:
+    - name: AWS | Collect private diagnostics after readiness failure
+      ansible.builtin.include_tasks: _diagnostics.yml
+    - name: AWS | Report authenticated readiness failure
+      ansible.builtin.fail:
+        msg: |-
+          Guest authentication failed; keep aws_run.yml and run destroy after
+          inspecting the private diagnostics.

@@ -1,0 +1,25 @@
+---
+- name: AWS | Inspect generated volume ownership
+  amazon.aws.ec2_vol_info:
+    filters:
+      volume-id: '{{ __mp_aws_guest.volumes }}'
+  register: __mp_aws_owned_volumes
+  when: __mp_aws_guest.volumes | length > 0
+- name: AWS | Require generated volume ownership
+  ansible.builtin.assert:
+    that: |-
+      __mp_aws_owned_volumes.volumes | david_igou.molecule_provisioners.aws_owned(__mp_aws_run.id)
+      is sequence
+  when: __mp_aws_guest.volumes | length > 0
+- name: AWS | Inspect generated interface ownership
+  amazon.aws.ec2_eni_info:
+    filters:
+      network-interface-id: '{{ __mp_aws_guest.enis }}'
+  register: __mp_aws_owned_enis
+  when: __mp_aws_guest.enis | length > 0
+- name: AWS | Require generated interface ownership
+  ansible.builtin.assert:
+    that: |-
+      __mp_aws_owned_enis.network_interfaces |
+      david_igou.molecule_provisioners.aws_owned(__mp_aws_run.id) is sequence
+  when: __mp_aws_guest.enis | length > 0

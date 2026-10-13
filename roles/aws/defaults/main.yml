@@ -1,0 +1,8 @@
+---
+mp_aws_wait_timeout: 600
+mp_aws_windows_wait_timeout: 900
+mp_aws_cleanup_timeout: 600
+mp_aws_max_instances: 10
+mp_aws_ssh_key_path: '{{ molecule_ephemeral_directory }}/identity_file'
+mp_aws_print_diagnostic_tails: false
+mp_aws_role_defaults: {}

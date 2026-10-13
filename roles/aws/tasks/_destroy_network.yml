@@ -1,0 +1,67 @@
+---
+- name: AWS | Select the recorded regional network for cleanup
+  ansible.builtin.set_fact:
+    __mp_aws_net: '{{ __mp_aws_run.networks[__mp_aws_region] }}'
+    __mp_aws_net_name: mp-{{ __mp_aws_run.id }}-{{ __mp_aws_region }}
+    __mp_aws_deleting: true
+- name: AWS | Verify the network cleanup identity
+  david_igou.molecule_provisioners.aws_instance:
+    operation: identity
+    region: '{{ __mp_aws_region }}'
+    profile: '{{ __mp_aws_net.profile | default(omit, true) }}'
+  register: __mp_aws_network_identity
+- name: AWS | Require the saved account for network cleanup
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_network_identity.account == __mp_aws_run.account
+      - __mp_aws_network_identity.partition == __mp_aws_run.partition
+- name: AWS | Remove verified managed network foundations
+  module_defaults:
+    group/amazon.aws.aws:
+      region: '{{ __mp_aws_region }}'
+      profile: '{{ __mp_aws_net.profile | default(omit, true) }}'
+  block:
+    - name: AWS | Verify exact network ownership before deletion
+      ansible.builtin.include_tasks: _network_info.yml
+    - name: AWS | Refuse foreign route-table associations
+      ansible.builtin.assert:
+        that: |-
+          __mp_aws_found_route.route_tables | map(attribute='associations')
+          | flatten | selectattr('subnet_id', 'defined') | map(attribute='subnet_id')
+          | difference([__mp_aws_net.subnet_id | default('')]) | length == 0
+        fail_msg: The owned route table has a foreign association; state was retained.
+    - name: AWS | Remove the owned route table and its subnet association
+      amazon.aws.ec2_vpc_route_table:
+        route_table_id: '{{ __mp_aws_net.route_table_id }}'
+        lookup: id
+        state: absent
+      when:
+        - not ansible_check_mode
+        - __mp_aws_found_route.route_tables | length > 0
+    - name: AWS | Detach and delete the recorded internet gateway
+      amazon.aws.ec2_vpc_igw:
+        internet_gateway_id: '{{ __mp_aws_net.gateway_id }}'
+        vpc_id: '{{ __mp_aws_net.vpc_id | default(omit) }}'
+        state: absent
+      when:
+        - not ansible_check_mode
+        - __mp_aws_found_gateway.internet_gateways | length > 0
+    - name: AWS | Delete only the verified generated subnet
+      amazon.aws.ec2_vpc_subnet:
+        vpc_id: '{{ __mp_aws_net.vpc_id }}'
+        cidr: '{{ __mp_aws_net.subnet_cidr }}'
+        state: absent
+      when:
+        - not ansible_check_mode
+        - __mp_aws_found_subnet.subnets | length > 0
+    - name: AWS | Delete the verified VPC without sweeping foreign contents
+      amazon.aws.ec2_vpc_net:
+        vpc_id: '{{ __mp_aws_net.vpc_id }}'
+        state: absent
+      register: __mp_aws_vpc_deleted
+      until: __mp_aws_vpc_deleted is succeeded
+      retries: 6
+      delay: 5
+      when:
+        - not ansible_check_mode
+        - __mp_aws_found_vpc.vpcs | length > 0

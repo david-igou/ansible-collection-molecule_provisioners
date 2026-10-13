@@ -1,0 +1,45 @@
+---
+- name: AWS | Inspect failed guest status without returning bootstrap
+  amazon.aws.ec2_instance_info:
+    region: '{{ mp_aws_region }}'
+    profile: '{{ mp.aws.profile | default(mp_defaults.aws.profile | default(omit)) }}'
+    filters:
+      instance-id: '{{ mp_aws_instance_id }}'
+  delegate_to: localhost
+  register: __mp_aws_failed_instance
+  failed_when: false
+- name: AWS | Report safe guest identity and status
+  ansible.builtin.debug:
+    msg:
+      instance_id: '{{ mp_aws_instance_id }}'
+      region: '{{ mp_aws_region }}'
+      state: |-
+        {{ (__mp_aws_failed_instance.instances | default([]) | first).state.name
+        | default('unknown') }}
+- name: AWS | Read the private run identity for diagnostics
+  ansible.builtin.set_fact:
+    __mp_aws_diagnostic_run: '{{ lookup(''ansible.builtin.file'', molecule_ephemeral_directory ~ ''/aws_run.yml'')
+      | from_yaml }}'
+  no_log: true
+- name: AWS | Save bounded console output privately
+  david_igou.molecule_provisioners.aws_instance:
+    operation: diagnostics
+    directory: '{{ molecule_ephemeral_directory }}'
+    host: '{{ inventory_hostname }}'
+    run_id: '{{ __mp_aws_diagnostic_run.id }}'
+    instance_id: '{{ mp_aws_instance_id }}'
+    region: '{{ mp_aws_region }}'
+    profile: '{{ mp.aws.profile | default(mp_defaults.aws.profile | default(omit)) }}'
+  delegate_to: localhost
+  register: __mp_aws_console
+  failed_when: false
+  no_log: true
+- name: AWS | Report the private diagnostic location
+  ansible.builtin.debug:
+    msg: |-
+      {{ __mp_aws_console.console_path | default('Console unavailable; inspect permissions and saved IDs.')
+      }}
+- name: AWS | Print console tail only with explicit opt-in
+  ansible.builtin.debug:
+    msg: '{{ __mp_aws_console.console_tail | default('''') }}'
+  when: mp_aws_print_diagnostic_tails | bool

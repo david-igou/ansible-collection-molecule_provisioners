@@ -1,0 +1,23 @@
+---
+- name: AWS | Locate saved ownership
+  ansible.builtin.stat:
+    path: '{{ molecule_ephemeral_directory }}/aws_run.yml'
+  register: __mp_aws_state_file
+- name: AWS | Read saved ownership
+  ansible.builtin.set_fact:
+    __mp_aws_run: |-
+      {{ (lookup('ansible.builtin.file', molecule_ephemeral_directory ~
+      '/aws_run.yml') | from_yaml) if __mp_aws_state_file.stat.exists else
+      {} }}
+- name: AWS | Validate saved ownership format
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_run is mapping
+      - __mp_aws_run.version == 1
+      - __mp_aws_run.id is match('^[a-f0-9]{32}$')
+      - __mp_aws_run.hosts is mapping
+      - __mp_aws_run.networks is mapping
+      - __mp_aws_run.account is match('^[0-9]{12}$')
+      - __mp_aws_run.local_keys is mapping
+    fail_msg: Restore valid aws_run.yml before retrying; no cloud resources were changed.
+  when: __mp_aws_state_file.stat.exists

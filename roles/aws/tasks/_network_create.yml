@@ -1,0 +1,101 @@
+---
+- name: AWS | Create the missing vpc
+  when: __mp_aws_net.vpc_id is not defined
+  block:
+    - name: AWS | Mark pending vpc
+      ansible.builtin.set_fact:
+        __mp_aws_net: '{{ __mp_aws_net | combine({''pending'': ''vpc''}) }}'
+    - name: AWS | Save vpc creation intent
+      ansible.builtin.include_tasks: _network_checkpoint.yml
+    - name: AWS | Provision the owned vpc
+      amazon.aws.ec2_vpc_net:
+        name: '{{ __mp_aws_net_name }}-vpc'
+        cidr_block:
+          - '{{ __mp_aws_net.vpc_cidr }}'
+        dns_support: true
+        dns_hostnames: true
+        state: present
+        tags: |-
+          {{ __mp_aws_run.id | david_igou.molecule_provisioners.aws_tags | combine({'Name':
+          __mp_aws_net_name ~ '-vpc'}) }}
+      register: __mp_aws_created
+    - name: AWS | Record completed vpc
+      ansible.builtin.set_fact:
+        __mp_aws_net: '{{ __mp_aws_net | combine({''vpc_id'': __mp_aws_created.vpc.id, ''pending'': ''''}) }}'
+    - name: AWS | Save vpc ownership
+      ansible.builtin.include_tasks: _network_checkpoint.yml
+- name: AWS | Create the missing subnet
+  when: __mp_aws_net.subnet_id is not defined
+  block:
+    - name: AWS | Mark pending subnet
+      ansible.builtin.set_fact:
+        __mp_aws_net: '{{ __mp_aws_net | combine({''pending'': ''subnet''}) }}'
+    - name: AWS | Save subnet creation intent
+      ansible.builtin.include_tasks: _network_checkpoint.yml
+    - name: AWS | Provision the owned subnet
+      amazon.aws.ec2_vpc_subnet:
+        vpc_id: '{{ __mp_aws_net.vpc_id }}'
+        cidr: '{{ __mp_aws_net.subnet_cidr }}'
+        az: '{{ __mp_aws_net.az }}'
+        map_public: true
+        state: present
+        tags: |-
+          {{ __mp_aws_run.id | david_igou.molecule_provisioners.aws_tags | combine({'Name':
+          __mp_aws_net_name ~ '-subnet'}) }}
+      register: __mp_aws_created
+    - name: AWS | Record completed subnet
+      ansible.builtin.set_fact:
+        __mp_aws_net: '{{ __mp_aws_net | combine({''subnet_id'': __mp_aws_created.subnet.id, ''pending'': ''''})
+          }}'
+    - name: AWS | Save subnet ownership
+      ansible.builtin.include_tasks: _network_checkpoint.yml
+- name: AWS | Create the missing gateway
+  when: __mp_aws_net.gateway_id is not defined
+  block:
+    - name: AWS | Mark pending gateway
+      ansible.builtin.set_fact:
+        __mp_aws_net: '{{ __mp_aws_net | combine({''pending'': ''gateway''}) }}'
+    - name: AWS | Save gateway creation intent
+      ansible.builtin.include_tasks: _network_checkpoint.yml
+    - name: AWS | Provision the owned gateway
+      amazon.aws.ec2_vpc_igw:
+        vpc_id: '{{ __mp_aws_net.vpc_id }}'
+        state: present
+        tags: |-
+          {{ __mp_aws_run.id | david_igou.molecule_provisioners.aws_tags | combine({'Name':
+          __mp_aws_net_name ~ '-gateway'}) }}
+      register: __mp_aws_created
+    - name: AWS | Record completed gateway
+      ansible.builtin.set_fact:
+        __mp_aws_net: '{{ __mp_aws_net | combine({''gateway_id'': __mp_aws_created.gateway_id, ''pending'': ''''})
+          }}'
+    - name: AWS | Save gateway ownership
+      ansible.builtin.include_tasks: _network_checkpoint.yml
+- name: AWS | Create the missing route
+  when: __mp_aws_net.route_table_id is not defined
+  block:
+    - name: AWS | Mark pending route
+      ansible.builtin.set_fact:
+        __mp_aws_net: '{{ __mp_aws_net | combine({''pending'': ''route''}) }}'
+    - name: AWS | Save route creation intent
+      ansible.builtin.include_tasks: _network_checkpoint.yml
+    - name: AWS | Provision the owned route
+      amazon.aws.ec2_vpc_route_table:
+        vpc_id: '{{ __mp_aws_net.vpc_id }}'
+        subnets:
+          - '{{ __mp_aws_net.subnet_id }}'
+        routes:
+          - dest: 0.0.0.0/0
+            gateway_id: '{{ __mp_aws_net.gateway_id }}'
+        state: present
+        tags: |-
+          {{ __mp_aws_run.id | david_igou.molecule_provisioners.aws_tags | combine({'Name':
+          __mp_aws_net_name ~ '-route'}) }}
+      register: __mp_aws_created
+    - name: AWS | Record completed route
+      ansible.builtin.set_fact:
+        __mp_aws_net: |-
+          {{ __mp_aws_net | combine({'route_table_id': __mp_aws_created.route_table.id,
+          'pending': ''}) }}
+    - name: AWS | Save route ownership
+      ansible.builtin.include_tasks: _network_checkpoint.yml

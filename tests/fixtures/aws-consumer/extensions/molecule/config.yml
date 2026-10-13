@@ -1,0 +1,7 @@
+---
+# Tests build and install this exact collection artifact into an isolated path.
+dependency:
+  name: galaxy
+  enabled: false
+  options:
+    requirements-file: extensions/molecule/requirements-test.yml

@@ -18,11 +18,18 @@ retry, cleanup and lost-state recovery.
 | `kubevirt` | Real VMs in a Kubernetes cluster (requires KubeVirt) |
 | `qemu` | Real VMs via direct `qemu-system` process (no libvirtd) |
 | `docker` | Containers using a local Docker daemon |
+| `aws` | Disposable EC2 guests with managed or existing networking |
 
 See the [Podman](roles/podman/README.md), [KubeVirt](roles/kubevirt/README.md),
-[QEMU](roles/qemu/README.md), and [Docker](roles/docker/README.md) role READMEs
+[QEMU](roles/qemu/README.md), [Docker](roles/docker/README.md), and
+[AWS](roles/aws/README.md) role READMEs
 for their settings and requirements. KubeVirt also supports Windows guests over
-PSRP or WinRM.
+PSRP or WinRM. AWS also supports those transports, managed VPC creation,
+existing networking and appliance readiness probes.
+
+AWS supports either existing networking or automatic VPC/public-subnet creation.
+Set an explicit region (for example `us-east-2`), an AMI and allowed management
+CIDRs. See [the AWS quick start](roles/aws/README.md#quick-start).
 
 ## Installing
 
@@ -165,7 +172,7 @@ mp_defaults:
     privileged: true
 ```
 
-Switch backends at runtime: `PROVISIONER=podman molecule test` (or `kubevirt`, `qemu`, `docker`).
+Switch backends at runtime: `PROVISIONER=podman molecule test` (or `kubevirt`, `qemu`, `docker`, `aws`).
 
 A single-backend scenario may hardcode `mp_backend: qemu`, but the env-driven
 form above is preferred — it keeps the `PROVISIONER=<backend>` override working

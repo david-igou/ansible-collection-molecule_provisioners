@@ -1,0 +1,152 @@
+---
+- name: AWS | Select host settings
+  ansible.builtin.set_fact:
+    __mp_aws_spec: '{{ __mp_aws_specs[__mp_aws_host] }}'
+    __mp_aws_template_data: {}
+  no_log: true
+- name: AWS | Read pinned launch template when requested
+  david_igou.molecule_provisioners.aws_instance:
+    operation: template
+    region: '{{ __mp_aws_spec.region | default(omit) }}'
+    profile: '{{ __mp_aws_spec.profile | default(omit) }}'
+    template: '{{ __mp_aws_spec.launch_template }}'
+  register: __mp_aws_template_result
+  no_log: true
+  when: __mp_aws_spec.launch_template is defined
+- name: AWS | Resolve template defaults and explicit overrides
+  ansible.builtin.set_fact:
+    __mp_aws_spec: |-
+      {{ __mp_aws_spec |
+      david_igou.molecule_provisioners.aws_template_spec(__mp_aws_template_result.template)
+      }}
+    __mp_aws_template_data: '{{ __mp_aws_template_result.template }}'
+  no_log: true
+  when: __mp_aws_spec.launch_template is defined
+- name: AWS | Verify account and placement eligibility
+  david_igou.molecule_provisioners.aws_instance:
+    operation: identity
+    region: '{{ __mp_aws_spec.region | default(omit) }}'
+    profile: '{{ __mp_aws_spec.profile | default(omit) }}'
+    instance_type: '{{ __mp_aws_spec.instance_type }}'
+  register: __mp_aws_identity
+- name: AWS | Check expected account and saved identity
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_spec.expected_account_id | default(__mp_aws_identity.account) == __mp_aws_identity.account
+      - not __mp_aws_state_file.stat.exists or __mp_aws_run.account == __mp_aws_identity.account
+      - __mp_aws_plans | length == 0 or (__mp_aws_plans.values() | first).account == __mp_aws_identity.account
+      - not __mp_aws_state_file.stat.exists or __mp_aws_run.hosts[__mp_aws_host].region == __mp_aws_identity.region
+      - (__mp_aws_spec.network_interfaces | default([]) | length) <= __mp_aws_identity.max_interfaces
+      - (__mp_aws_spec.network_interfaces_ids | default([]) | length) <= __mp_aws_identity.max_interfaces
+      - |-
+        ([0] + (((__mp_aws_spec.network_interfaces | default([])) +
+        (__mp_aws_spec.network_interfaces_ids | default([]))) | selectattr('device_index',
+        'defined') | map(attribute='device_index') | list)) | max < __mp_aws_identity.max_interfaces
+    fail_msg: AWS account, region or interface eligibility does not match this run.
+- name: AWS | Set effective regional configuration
+  ansible.builtin.set_fact:
+    __mp_aws_spec: '{{ __mp_aws_spec | combine({''region'': __mp_aws_identity.region}) }}'
+    __mp_aws_saved_host: '{{ __mp_aws_run.hosts[__mp_aws_host] if __mp_aws_state_file.stat.exists else {} }}'
+  no_log: true
+- name: AWS | Discover regional guest prerequisites
+  module_defaults:
+    group/amazon.aws.aws:
+      region: '{{ __mp_aws_spec.region }}'
+      profile: '{{ __mp_aws_spec.profile | default(omit) }}'
+  block:
+    - name: AWS | Resolve a pinned or discovered AMI
+      amazon.aws.ec2_ami_info:
+        image_ids: |-
+          {{ [__mp_aws_saved_host.image.image_id | default(__mp_aws_spec.image_id)]
+          if (__mp_aws_saved_host.image is defined or __mp_aws_spec.image_id
+          is defined) else omit }}
+        owners: |-
+          {{ __mp_aws_spec.image_owner | default('self') if (__mp_aws_saved_host.image
+          is not defined and __mp_aws_spec.image_id is not defined) else omit
+          }}
+        filters: |-
+          {{ (__mp_aws_spec.image_filters | default({}) | combine( {'name':
+          __mp_aws_spec.image_name} if __mp_aws_spec.image_name is defined else
+          {})) if (__mp_aws_saved_host.image is not defined and __mp_aws_spec.image_id
+          is not defined) else omit }}
+      register: __mp_aws_images
+    - name: AWS | Validate and retain the selected AMI
+      ansible.builtin.set_fact:
+        __mp_aws_image: |-
+          {{ __mp_aws_images.images |
+          david_igou.molecule_provisioners.aws_image_info(__mp_aws_identity.architectures)
+          }}
+        __mp_aws_group_ids: []
+        __mp_aws_subnet: {}
+    - name: AWS | Resolve existing network references
+      ansible.builtin.include_tasks: _existing.yml
+      when: __mp_aws_spec.network.mode == 'existing'
+    - name: AWS | Inspect referenced data volumes
+      amazon.aws.ec2_vol_info:
+        filters:
+          volume-id: '{{ __mp_aws_spec.existing_volumes | map(attribute=''volume_id'') | list }}'
+      register: __mp_aws_existing_disks
+      when: __mp_aws_spec.existing_volumes | default([]) | length > 0
+    - name: AWS | Check referenced data-volume placement
+      ansible.builtin.assert:
+        that:
+          - __mp_aws_existing_disks.volumes | length == __mp_aws_spec.existing_volumes | length
+          - __mp_aws_existing_disks.volumes | map(attribute='zone') | unique | length == 1
+          - |-
+            __mp_aws_existing_disks.volumes | map(attribute='status') | unique
+            | difference(['available', 'in-use']) | length == 0
+        fail_msg: Existing data volumes must exist in one eligible availability zone.
+      when: __mp_aws_spec.existing_volumes | default([]) | length > 0
+    - name: AWS | Refuse unrelated volume attachments or a different subnet AZ
+      ansible.builtin.assert:
+        that:
+          - |-
+            item.attachment_set | default([]) | map(attribute='instance_id') |
+            difference([__mp_aws_saved_host.instance_id | default('')]) | length
+            == 0
+          - __mp_aws_spec.network.mode != 'existing' or item.zone == __mp_aws_subnet.availability_zone
+        fail_msg: Referenced storage must be unattached or already attached to this saved guest in the selected
+          AZ.
+      loop: '{{ __mp_aws_existing_disks.volumes | default([]) }}'
+      loop_control:
+        label: '{{ item.id }}'
+- name: AWS | Record non-secret placement plan
+  ansible.builtin.set_fact:
+    __mp_aws_plans: |-
+      {{ __mp_aws_plans | combine({__mp_aws_host: { 'account': __mp_aws_identity.account,
+      'region': __mp_aws_spec.region, 'profile': __mp_aws_spec.profile |
+      default(''), 'image': __mp_aws_image, 'network_mode': __mp_aws_spec.network.mode,
+      'subnet': __mp_aws_subnet, 'groups': __mp_aws_group_ids, 'zones':
+      (__mp_aws_identity.zones | intersect(__mp_aws_existing_disks.volumes
+      | map(attribute='zone') | list)) if __mp_aws_spec.existing_volumes
+      | default([]) | length > 0 else __mp_aws_identity.zones }}) }}
+    __mp_aws_specs: '{{ __mp_aws_specs | combine({__mp_aws_host: __mp_aws_spec}) }}'
+    __mp_aws_templates: '{{ __mp_aws_templates | combine({__mp_aws_host: __mp_aws_template_data}) }}'
+  no_log: true
+- name: AWS | Validate the complete effective launch request before mutation
+  ansible.builtin.assert:
+    that:
+      - |-
+        __mp_aws_spec | david_igou.molecule_provisioners.aws_request(__mp_aws_image,
+        __mp_aws_subnet.subnet_id | default('subnet-preflight'), __mp_aws_group_ids,
+        'preflight', __mp_aws_host, '', '', __mp_aws_template_data) |
+        david_igou.molecule_provisioners.aws_valid_request
+    fail_msg: Correct the effective launch configuration before creating any resources.
+  no_log: true
+- name: AWS | Locate a supplied private key before creating resources
+  ansible.builtin.stat:
+    path: '{{ __mp_aws_spec.private_key_path | default(__mp_aws_spec.connection_vars.ansible_ssh_private_key_file)
+      }}'
+  register: __mp_aws_supplied_key
+  when: |-
+    __mp_aws_spec.private_key_path is defined or
+    __mp_aws_spec.connection_vars.ansible_ssh_private_key_file is defined
+- name: AWS | Require caller key material to exist
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_supplied_key.stat.exists
+      - __mp_aws_supplied_key.stat.isreg
+    fail_msg: The supplied private key must exist before infrastructure is created.
+  when: |-
+    __mp_aws_spec.private_key_path is defined or
+    __mp_aws_spec.connection_vars.ansible_ssh_private_key_file is defined

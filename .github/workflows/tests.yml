@@ -35,9 +35,13 @@ jobs:
       - name: Install lint tools and collection dependencies
         working-directory: ansible_collections/david_igou/molecule_provisioners
         run: |
-          python -m pip install -r lint-requirements.txt
+          python -m pip install -r lint-requirements.txt -r requirements.txt
           ansible-galaxy collection install \
-            containers.podman kubernetes.core community.crypto community.docker community.general
+            containers.podman kubernetes.core community.crypto community.docker community.general \
+            ansible.netcommon community.routeros \
+            'amazon.aws:>=9.0.0,<12.0.0' \
+            'community.aws:>=9.0.0,<12.0.0' \
+            'ansible.windows:>=2.5.0,<4.0.0'
 
       - name: Lint collection
         working-directory: ansible_collections/david_igou/molecule_provisioners

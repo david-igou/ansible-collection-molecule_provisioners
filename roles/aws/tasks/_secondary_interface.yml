@@ -1,0 +1,59 @@
+---
+- name: AWS | Select a unique secondary interface identity
+  ansible.builtin.set_fact:
+    __mp_aws_nic_name: |-
+      mp-{{ __mp_aws_run.id }}-{{ __mp_aws_host }}-nic-{{ __mp_aws_nic.device_index
+      | default(__mp_aws_nic_index) }}
+- name: AWS | Locate only this run secondary interface
+  amazon.aws.ec2_eni_info:
+    filters:
+      tag:Name: '{{ __mp_aws_nic_name }}'
+  register: __mp_aws_secondary_info
+- name: AWS | Verify secondary interface ownership before reuse
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_secondary_info.network_interfaces | length <= 1
+      - |-
+        __mp_aws_secondary_info.network_interfaces |
+        david_igou.molecule_provisioners.aws_owned(__mp_aws_run.id) is sequence
+      - |-
+        __mp_aws_secondary_info.network_interfaces | length > 0 or (__mp_aws_guest.pending_eni
+        | default('')) != __mp_aws_nic_name
+    fail_msg: Secondary interface creation is uncertain or ownership differs; retain state and retry destroy.
+- name: AWS | Journal secondary interface creation intent
+  ansible.builtin.set_fact:
+    __mp_aws_guest: '{{ __mp_aws_guest | combine({''pending_eni'': __mp_aws_nic_name}) }}'
+- name: AWS | Save secondary interface intent
+  ansible.builtin.include_tasks: _host_checkpoint.yml
+- name: AWS | Create or reuse a verified secondary interface
+  amazon.aws.ec2_eni:
+    eni_id: '{{ (__mp_aws_secondary_info.network_interfaces | first).network_interface_id | default(omit) }}'
+    name: '{{ __mp_aws_nic_name }}'
+    subnet_id: '{{ __mp_aws_nic.subnet_id | default(__mp_aws_guest.subnet.subnet_id) }}'
+    private_ip_address: '{{ __mp_aws_nic.private_ip_address | default(omit) }}'
+    secondary_private_ip_address_count: '{{ __mp_aws_nic.secondary_private_ip_address_count | default(omit) }}'
+    secondary_private_ip_addresses: |-
+      {{ __mp_aws_nic.private_ip_addresses | default([]) | rejectattr('primary',
+      'equalto', true) | map(attribute='private_ip_address') | list if
+      __mp_aws_nic.private_ip_addresses is defined else omit }}
+    security_groups: '{{ __mp_aws_nic.groups | default(__mp_aws_guest.groups) }}'
+    description: '{{ __mp_aws_nic.description | default(__mp_aws_nic_name) }}'
+    tags: '{{ __mp_aws_run.id | david_igou.molecule_provisioners.aws_tags(__mp_aws_host) }}'
+    state: present
+  register: __mp_aws_secondary
+- name: AWS | Journal the accepted secondary interface ID
+  ansible.builtin.set_fact:
+    __mp_aws_guest: |-
+      {{ __mp_aws_guest | combine({'enis': ((__mp_aws_guest.enis | default([]))
+      + [__mp_aws_secondary.interface.id]) | unique, 'pending_eni': ''})
+      }}
+- name: AWS | Save the secondary interface before attachment
+  ansible.builtin.include_tasks: _host_checkpoint.yml
+- name: AWS | Attach the secondary interface with disposable ownership
+  amazon.aws.ec2_eni:
+    eni_id: '{{ __mp_aws_secondary.interface.id }}'
+    instance_id: '{{ __mp_aws_guest.instance_id }}'
+    device_index: '{{ __mp_aws_nic.device_index | default(__mp_aws_nic_index) }}'
+    attached: true
+    delete_on_termination: true
+    state: present

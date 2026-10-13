@@ -1,0 +1,9 @@
+---
+- name: Apply a small consumer workload
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Set the guest test hostname
+      ansible.builtin.hostname:
+        name: molecule-consumer
+      become: true

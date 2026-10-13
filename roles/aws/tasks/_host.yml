@@ -1,0 +1,189 @@
+---
+- name: AWS | Select the saved guest plan
+  ansible.builtin.set_fact:
+    __mp_aws_guest: '{{ __mp_aws_run.hosts[__mp_aws_host] }}'
+    __mp_aws_spec: '{{ __mp_aws_specs[__mp_aws_host] }}'
+    __mp_aws_group_name: |-
+      {{ __mp_aws_specs[__mp_aws_host].security_group_name | default('mp')
+      }}-{{ __mp_aws_run.id }}-{{ __mp_aws_host }}-sg
+  no_log: true
+- name: AWS | Provision guest resources in the recorded region
+  module_defaults:
+    group/amazon.aws.aws:
+      region: '{{ __mp_aws_guest.region }}'
+      profile: '{{ __mp_aws_guest.profile | default(omit, true) }}'
+  block:
+    - name: AWS | Resolve the managed subnet
+      ansible.builtin.set_fact:
+        __mp_aws_guest: |-
+          {{ __mp_aws_guest | combine({'subnet': { 'subnet_id':
+          __mp_aws_run.networks[__mp_aws_guest.region].subnet_id, 'vpc_id':
+          __mp_aws_run.networks[__mp_aws_guest.region].vpc_id, 'availability_zone':
+          __mp_aws_run.networks[__mp_aws_guest.region].az}}) }}
+      when: __mp_aws_guest.network_mode == 'create'
+    - name: AWS | Prepare guest key material
+      ansible.builtin.include_tasks: _keys.yml
+    - name: AWS | Inspect the precise managed security-group name
+      amazon.aws.ec2_security_group_info:
+        filters:
+          group-name: '{{ __mp_aws_group_name }}'
+          vpc-id: '{{ __mp_aws_guest.subnet.vpc_id }}'
+      register: __mp_aws_managed_groups
+      when: __mp_aws_guest.groups | length == 0 or __mp_aws_guest.sg_owned | default(false)
+    - name: AWS | Verify security-group ownership
+      ansible.builtin.assert:
+        that:
+          - __mp_aws_managed_groups.security_groups | length <= 1
+          - |-
+            __mp_aws_managed_groups.security_groups |
+            david_igou.molecule_provisioners.aws_owned(__mp_aws_run.id) is sequence
+        fail_msg: The generated security-group name belongs to a different run.
+      when: __mp_aws_guest.groups | length == 0 or __mp_aws_guest.sg_owned | default(false)
+    - name: AWS | Create a run-owned security group
+      amazon.aws.ec2_security_group:
+        name: '{{ __mp_aws_group_name }}'
+        description: |-
+          {{ __mp_aws_spec.security_group_description | default('Disposable Molecule guest access')
+          }}
+        vpc_id: '{{ __mp_aws_guest.subnet.vpc_id }}'
+        state: present
+        tags: '{{ __mp_aws_run.id | david_igou.molecule_provisioners.aws_tags(__mp_aws_host) }}'
+        rules: '{{ __mp_aws_spec | david_igou.molecule_provisioners.aws_ingress }}'
+        rules_egress: '{{ __mp_aws_spec.security_group_rules_egress | default(omit) }}'
+      register: __mp_aws_created_group
+      when: __mp_aws_guest.groups | length == 0
+    - name: AWS | Record generated security-group ownership
+      ansible.builtin.set_fact:
+        __mp_aws_guest: |-
+          {{ __mp_aws_guest | combine({'groups': [__mp_aws_created_group.group_id],
+          'sg_owned': true}) }}
+      when: __mp_aws_guest.groups | length == 0
+    - name: AWS | Record referenced attachment identities
+      ansible.builtin.set_fact:
+        __mp_aws_guest: |-
+          {{ __mp_aws_guest | combine({ 'external_volumes': __mp_aws_spec.existing_volumes
+          | default([]) | map(attribute='volume_id') | list, 'external_enis':
+          __mp_aws_spec.network_interfaces_ids | default([]) | map(attribute='id')
+          | list}) }}
+    - name: AWS | Save guest prerequisites before launch
+      ansible.builtin.include_tasks: _host_checkpoint.yml
+    - name: AWS | Build guest bootstrap
+      ansible.builtin.set_fact:
+        __mp_aws_bootstrap: '{{ __mp_aws_spec | david_igou.molecule_provisioners.aws_cloud_data(__mp_aws_public_key)
+          }}'
+      no_log: true
+    - name: AWS | Serialize structured cloud-init with a real header
+      ansible.builtin.set_fact:
+        __mp_aws_user_data: |
+          #cloud-config
+          {{ __mp_aws_bootstrap | to_nice_yaml }}
+      no_log: true
+      when: __mp_aws_bootstrap is mapping
+    - name: AWS | Preserve opaque bootstrap bytes
+      ansible.builtin.set_fact:
+        __mp_aws_user_data: '{{ __mp_aws_bootstrap }}'
+      no_log: true
+      when: __mp_aws_bootstrap is not mapping
+    - name: AWS | Render the private launch request
+      ansible.builtin.set_fact:
+        __mp_aws_request: |-
+          {{ __mp_aws_spec | david_igou.molecule_provisioners.aws_request(__mp_aws_guest.image,
+          __mp_aws_guest.subnet.subnet_id, __mp_aws_guest.groups, __mp_aws_run.id,
+          __mp_aws_host, __mp_aws_user_data, __mp_aws_key_name if __mp_aws_spec.key_inject_method
+          == 'ec2' else '', __mp_aws_templates[__mp_aws_host]) }}
+      no_log: true
+    - name: AWS | Launch exactly one guest with the saved token
+      david_igou.molecule_provisioners.aws_instance:
+        directory: '{{ molecule_ephemeral_directory }}'
+        region: '{{ __mp_aws_guest.region }}'
+        profile: '{{ __mp_aws_guest.profile | default(omit, true) }}'
+        host: '{{ __mp_aws_host }}'
+        run_id: '{{ __mp_aws_run.id }}'
+        request: |-
+          {{ __mp_aws_request | dict2items | rejectattr('key', 'equalto', 'UserData')
+          | items2dict }}
+        user_data: '{{ __mp_aws_request.UserData | default(omit) }}'
+      register: __mp_aws_launched
+      no_log: true
+    - name: AWS | Require a replay to keep the saved instance identity
+      ansible.builtin.assert:
+        that:
+          - __mp_aws_guest.instance_id | default(__mp_aws_launched.instance_id) == __mp_aws_launched.instance_id
+    - name: AWS | Journal the accepted guest ID immediately
+      ansible.builtin.set_fact:
+        __mp_aws_guest: '{{ __mp_aws_guest | combine({''instance_id'': __mp_aws_launched.instance_id}) }}'
+      when: __mp_aws_guest.instance_id is not defined
+    - name: AWS | Save the accepted launch result
+      ansible.builtin.include_tasks: _host_checkpoint.yml
+    - name: AWS | Wait for the recorded instance to run
+      amazon.aws.ec2_instance_info:
+        filters:
+          instance-id: '{{ __mp_aws_guest.instance_id }}'
+      register: __mp_aws_instance_info
+      until: |-
+        __mp_aws_instance_info.instances | length == 1 and
+        __mp_aws_instance_info.instances[0].state.name == 'running' and
+        (__mp_aws_spec.connection_address != 'public' or __mp_aws_spec.connection_ip
+        is defined or __mp_aws_instance_info.instances[0].public_ip_address
+        | default('') | length > 0)
+      retries: '{{ ([1, (mp_aws_wait_timeout | int / 5) | int] | max) }}'
+      delay: 5
+    - name: AWS | Verify instance ownership before using it
+      ansible.builtin.assert:
+        that: |-
+          __mp_aws_instance_info.instances | david_igou.molecule_provisioners.aws_owned(__mp_aws_run.id)
+          is sequence
+    - name: AWS | Attach generated secondary interfaces after public primary launch
+      ansible.builtin.include_tasks: _secondary_interface.yml
+      loop: '{{ __mp_aws_spec.network_interfaces | default([]) }}'
+      loop_control:
+        loop_var: __mp_aws_nic
+        index_var: __mp_aws_nic_index
+      when:
+        - __mp_aws_spec.assign_public_ip
+        - __mp_aws_nic.device_index | default(__mp_aws_nic_index) | int != 0
+    - name: AWS | Refresh attached guest interface identities
+      amazon.aws.ec2_instance_info:
+        filters:
+          instance-id: '{{ __mp_aws_guest.instance_id }}'
+      register: __mp_aws_instance_info
+    - name: AWS | Record generated volume and interface IDs
+      ansible.builtin.set_fact:
+        __mp_aws_guest: |-
+          {{ __mp_aws_guest | combine({ 'volumes':
+          __mp_aws_instance_info.instances[0].block_device_mappings | selectattr('ebs',
+          'defined') | map(attribute='ebs.volume_id') | list |
+          difference(__mp_aws_guest.external_volumes), 'enis':
+          __mp_aws_instance_info.instances[0].network_interfaces | map(attribute='network_interface_id')
+          | list | difference(__mp_aws_guest.external_enis)}) }}
+    - name: AWS | Save generated descendant ownership
+      ansible.builtin.include_tasks: _host_checkpoint.yml
+    - name: AWS | Attach caller-owned data volumes without deletion
+      amazon.aws.ec2_vol:
+        id: '{{ item.volume_id }}'
+        instance: '{{ __mp_aws_guest.instance_id }}'
+        device_name: '{{ item.device_name }}'
+        delete_on_termination: false
+        state: present
+      loop: '{{ __mp_aws_spec.existing_volumes | default([]) }}'
+    - name: AWS | Retrieve the Windows Administrator password
+      community.aws.ec2_win_password:
+        region: '{{ __mp_aws_guest.region }}'
+        profile: '{{ __mp_aws_guest.profile | default(omit, true) }}'
+        instance_id: '{{ __mp_aws_guest.instance_id }}'
+        key_file: '{{ __mp_aws_key_path }}'
+        wait: true
+        wait_timeout: '{{ mp_aws_windows_wait_timeout }}'
+      no_log: true
+      register: __mp_aws_password
+      when:
+        - __mp_aws_spec.connection in ['winrm', 'psrp']
+        - __mp_aws_spec.connection_vars.ansible_password is not defined
+    - name: AWS | Build the native guest connection overlay
+      ansible.builtin.set_fact:
+        __mp_aws_runtime: |-
+          {{ __mp_aws_runtime | combine({__mp_aws_host: __mp_aws_spec |
+          david_igou.molecule_provisioners.aws_runtime( __mp_aws_instance_info.instances[0],
+          __mp_aws_run, __mp_aws_host, __mp_aws_key_path if __mp_aws_key_needed
+          else '', __mp_aws_password.win_password | default(''))}) }}
+      no_log: true
