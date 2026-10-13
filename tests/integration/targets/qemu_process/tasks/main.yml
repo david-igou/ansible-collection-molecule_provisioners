@@ -1,0 +1,94 @@
+---
+- name: Allocate an isolated test directory
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: qemu-process-
+  register: __test_directory
+
+- name: Exercise owned process lifecycle
+  vars:
+    molecule_ephemeral_directory: "{{ __test_directory.path }}"
+    mp_qemu_image_cache_dir: "{{ __test_directory.path }}/cache"
+    mp_qemu_runtime_cache_dir: "{{ __test_directory.path }}/reservations"
+    mp_qemu_cleanup_timeout: 5
+  block:
+    - name: Create a valid test disk
+      ansible.builtin.command:
+        argv:
+          - qemu-img
+          - create
+          - -f
+          - qcow2
+          - "{{ __test_directory.path }}/base.qcow2"
+          - 1M
+        creates: "{{ __test_directory.path }}/base.qcow2"
+
+    - name: Declare the paused test guest
+      ansible.builtin.add_host:
+        name: module-test
+        groups: molecule
+        mp:
+          qemu:
+            image: "file://{{ __test_directory.path }}/base.qcow2"
+            memory: 64
+            cpus: 1
+            cloud_init:
+              enabled: false
+            extra_args:
+              - -S
+
+    - name: Start the paused test guest
+      ansible.builtin.include_role:
+        name: david_igou.molecule_provisioners.qemu
+        tasks_from: create
+
+    - name: Start the same guest again
+      ansible.builtin.include_role:
+        name: david_igou.molecule_provisioners.qemu
+        tasks_from: create
+
+    - name: Verify an existing process was reused
+      ansible.builtin.assert:
+        that: not __mp_qemu_launch.changed
+        fail_msg: Repeated create relaunched the guest.
+
+    - name: Query authenticated ownership and QMP status
+      david_igou.molecule_provisioners.qemu_process:
+        operation: status
+        directory: "{{ __test_directory.path }}"
+        cache: "{{ mp_qemu_runtime_cache_dir }}"
+        host: module-test
+      register: __status
+
+    - name: Verify the intentionally paused guest is observed
+      ansible.builtin.assert:
+        that:
+          - not __status.changed
+          - __status.diagnostics.status in ['paused', 'prelaunch']
+        fail_msg: QMP did not observe the expected paused guest.
+  always:
+    - name: Stop the owned test guest
+      david_igou.molecule_provisioners.qemu_process:
+        operation: destroy
+        directory: "{{ __test_directory.path }}"
+        cache: "{{ mp_qemu_runtime_cache_dir }}"
+        cleanup_timeout: 5
+
+    - name: Verify repeated destroy is idempotent
+      david_igou.molecule_provisioners.qemu_process:
+        operation: destroy
+        directory: "{{ __test_directory.path }}"
+        cache: "{{ mp_qemu_runtime_cache_dir }}"
+      register: __destroy
+
+    - name: Verify no owned process remains
+      ansible.builtin.assert:
+        that:
+          - not __destroy.changed
+          - __destroy.run | length == 0
+        fail_msg: Repeated destroy changed state or left resources.
+
+    - name: Remove the test directory
+      ansible.builtin.file:
+        path: "{{ __test_directory.path }}"
+        state: absent

@@ -61,6 +61,7 @@ podman run --rm \
 | `make test-docker-functional` | Docker role regressions | Reachable Docker daemon |
 | `make test-qemu` | Default Molecule scenario | QEMU and NoCloud ISO tools |
 | `make test-qemu-functional` | Validation and BIOS/UEFI CPU launches | QEMU, with OVMF for UEFI |
+| `make test-qemu-testing` | Real guest disk I/O, routed links, forwards, isolation, diagnostics and network_cli | QEMU, Debian cloud image, ISO tools, RouterOS connection plugin |
 | `make test-kubevirt` | Default Molecule scenario | KubeVirt cluster selected by `KUBECONFIG` |
 | `make test-kubevirt-lifecycle` | Overlapping runs, full definitions, failed cleanup | KubeVirt cluster |
 | `make test-kubevirt-access` | Custom SSH, TCP/UDP endpoints, Service updates | KubeVirt cluster with reachable NodePorts |
@@ -120,3 +121,29 @@ own namespace, storage class, and node address.
 The storage tests cover filesystem volumes. Driver-specific behavior, Block
 volumes, other clone sources, and Windows authentication variants need tests
 on the chosen cluster and guest images.
+
+## QEMU guest regressions
+
+`make test-qemu-testing` creates disposable local VMs, authenticates through the
+public provisioner lifecycle, and destroys its runs in cleanup. Set
+`MP_TEST_QEMU_IMAGE` to a pinned Debian 12 cloud-image URL or `file://` URL. The
+default is the upstream rolling generic image; offline or reproducible runs
+should supply their own image. `MP_TEST_QEMU_CACHE` selects a reusable image and
+reservation directory. The tests need `ansible.netcommon`, `community.routeros`,
+and Paramiko in the controller environment. The network_cli test runs the actual
+RouterOS connection plugin against a small test CLI in a Linux guest; it does
+not certify a particular CHR image.
+
+The guest tests cover SCSI/SATA disk I/O and reboot persistence, two overlapping
+runs, management-key injection, extra-interface NoCloud network configuration,
+three-guest routing with a denied flow, real TCP/UDP application traffic, a
+persisted UEFI variable, and recovery after partial create. A separate fixture
+installs the built collection and checks Molecule list/login from a consumer.
+The launch suite separately covers BIOS/UEFI and KVM/TCG CPU choices. KVM tests
+skip if `/dev/kvm` is unavailable; UEFI tests skip if OVMF is absent.
+
+Run the same guest target with no accessible KVM device to test TCG. Increase
+`mp_qemu_wait_timeout` for slower consumer images. All runs must share the same
+`mp_qemu_runtime_cache_dir` to coordinate host-port reservations. Keep ephemeral
+state after a cleanup error and retry destroy; do not delete ownership files
+while processes are running.

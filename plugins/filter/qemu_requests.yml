@@ -1,0 +1,27 @@
+---
+DOCUMENTATION:
+  name: qemu_requests
+  author:
+    - David Igou (@david-igou)
+  version_added: 0.0.7
+  short_description: Build non-secret QEMU allocation requests
+  description:
+    - Internal configuration helper for the QEMU role.
+  options:
+    _input:
+      description: Role-provided input; use the documented QEMU lifecycle rather than calling internal
+        filters directly.
+      type: dict
+      required: true
+    boot_options:
+      description: Role-level bootstrap key and UEFI paths included in the configuration fingerprint.
+      type: dict
+      default: {}
+EXAMPLES: |
+  - name: Transform role configuration
+    ansible.builtin.set_fact:
+      __requests: "{{ normalized_hosts | david_igou.molecule_provisioners.qemu_requests }}"
+RETURN:
+  _value:
+    description: Build non-secret QEMU allocation requests.
+    type: dict

@@ -4,3 +4,6 @@ pytest-xdist
 molecule
 kubernetes
 docker
+# Authenticated network_cli regression with the RouterOS connection plugin.
+paramiko
+pexpect

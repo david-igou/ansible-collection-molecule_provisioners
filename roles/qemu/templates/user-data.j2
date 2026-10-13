@@ -1,16 +1,2 @@
 #cloud-config
-users:
-  - name: "{{ _mp_specs[_host].ssh_user }}"
-    ssh_authorized_keys:
-      - "{{ temporary_ssh_public_key }}"
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    shell: /bin/bash
-chpasswd:
-  expire: false
-{% if _mp_specs[_host].disk_size is defined and _mp_specs[_host].disk_size %}
-growpart:
-  mode: auto
-  devices: ['/']
-runcmd:
-  - resize2fs $(findmnt / -no SOURCE) || xfs_growfs /
-{% endif %}
+{{ _mp_specs[_host] | david_igou.molecule_provisioners.qemu_user_data(temporary_ssh_public_key | default('')) | to_nice_yaml }}

@@ -1,0 +1,49 @@
+---
+- name: qemu | Cache optional data-disk base image
+  ansible.builtin.include_tasks: _cache_image.yml
+  vars:
+    _mp_qemu_image:
+      key: "{{ __mp_qemu_data_disk.1.image }}"
+      value: "{{ __mp_qemu_data_disk.1.image_checksum | default('') }}"
+  when: __mp_qemu_data_disk.1.image is defined
+
+- name: qemu | Inspect data backing image size
+  ansible.builtin.command:
+    argv:
+      - qemu-img
+      - info
+      - --output=json
+      - "{{ mp_qemu_image_cache_dir }}/{{ __mp_qemu_data_disk.1.image | hash('sha256') }}/disk.qcow2"
+  register: __mp_qemu_backing_size
+  changed_when: false
+  when: __mp_qemu_data_disk.1.image is defined
+
+- name: qemu | Reject implicit data disk shrink
+  ansible.builtin.assert:
+    that: >-
+      (__mp_qemu_data_disk.1.size | david_igou.molecule_provisioners.qemu_size)
+      >= (__mp_qemu_backing_size.stdout | from_json)['virtual-size']
+    fail_msg: Data disk size is smaller than its backing image.
+  when:
+    - __mp_qemu_data_disk.1.image is defined
+    - __mp_qemu_data_disk.1.size is defined
+
+- name: qemu | Create disposable data disk
+  vars:
+    __disk: "{{ __mp_qemu_data_disk.1 }}"
+    __host: "{{ __mp_qemu_data_disk.0.key }}"
+    __backing: >-
+      {{ ['-F', 'qcow2', '-b', mp_qemu_image_cache_dir ~ '/' ~ (__disk.image | hash('sha256')) ~ '/disk.qcow2']
+         if __disk.image is defined else [] }}
+    __size: "{{ [__disk.size] if __disk.size is defined else [] }}"
+  ansible.builtin.command:
+    argv: >-
+      {{ ['qemu-img', 'create', '-f', 'qcow2'] + __backing
+         + [_mp_qemu_run.hosts[__host].disks[__disk.name]] + __size }}
+    creates: "{{ _mp_qemu_run.hosts[__host].disks[__disk.name] }}"
+
+- name: qemu | Protect managed data disk
+  ansible.builtin.file:
+    path: "{{ _mp_qemu_run.hosts[__mp_qemu_data_disk.0.key].disks[__mp_qemu_data_disk.1.name] }}"
+    state: file
+    mode: "0600"

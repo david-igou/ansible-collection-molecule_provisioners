@@ -1,0 +1,3 @@
+---
+- name: QEMU consumer destroy
+  ansible.builtin.import_playbook: david_igou.molecule_provisioners.destroy

@@ -14,7 +14,7 @@ SCENARIO_DIR := extensions/molecule/default
         test-unit test-podman-startup test-kubevirt-lifecycle test-kubevirt-access \
         test-kubevirt-storage test-kubevirt-kind test-qemu-functional test-docker-functional \
         podman kubevirt docker qemu \
-        sanity build pre-commit clean
+        test-qemu-testing sanity build pre-commit clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -22,7 +22,7 @@ help: ## Show this help
 install: ## Install python + ansible collection dependencies
 	python -m pip install --upgrade pip
 	pip install -r lint-requirements.txt -r requirements.txt -r test-requirements.txt
-	ansible-galaxy collection install containers.podman kubernetes.core community.crypto community.docker community.general
+	ansible-galaxy collection install containers.podman kubernetes.core community.crypto community.docker community.general ansible.netcommon community.routeros
 
 lint: ## Lint Ansible, YAML and changelog fragments
 	ansible-lint
@@ -52,6 +52,9 @@ test-kubevirt-kind: ## Create a disposable local KubeVirt/CDI cluster and run al
 
 test-qemu-functional: $(CANONICAL) ## QEMU validation and CPU launch checks; needs QEMU tools
 	PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/integration/qemu/test_qemu_unit.py -m 'not slow' -v -o addopts=""
+
+test-qemu-testing: $(CANONICAL) ## Local QEMU guest I/O, routing, forwards, isolation and diagnostics
+	RUN_QEMU_TESTING=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/integration/qemu/test_testing_features.py tests/integration/qemu/test_consumer.py -v -o addopts=""
 
 test-docker-functional: $(CANONICAL) ## Docker role regressions; needs a reachable Docker daemon
 	PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/integration/docker/test_docker_unit.py -v -o addopts=""

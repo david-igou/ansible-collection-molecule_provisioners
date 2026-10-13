@@ -1,0 +1,3 @@
+---
+mp_qemu_wait_timeout: 300
+mp_qemu_image_cache_dir: "{{ lookup('env', 'MP_TEST_QEMU_CACHE') | default('/tmp/mp-qemu-consumer-cache', true) }}"

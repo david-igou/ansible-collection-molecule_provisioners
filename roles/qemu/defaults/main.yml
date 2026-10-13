@@ -36,3 +36,10 @@ mp_qemu_role_defaults:
   firmware: bios
   # Empty selects host under KVM, Nehalem under TCG (BIOS and UEFI).
   cpu_model: ""
+
+# Shared controller lock location must be the same for all concurrent runs.
+mp_qemu_run_isolation: true
+mp_qemu_runtime_cache_dir: "{{ mp_qemu_image_cache_dir }}/runtime"
+mp_qemu_cleanup_timeout: 30
+# Guest logs can contain secrets. File paths and status are always reported.
+mp_qemu_print_diagnostic_tails: false

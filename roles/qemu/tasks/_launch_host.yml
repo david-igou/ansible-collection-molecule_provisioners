@@ -1,0 +1,47 @@
+---
+- name: qemu | Read current allocations before launching
+  david_igou.molecule_provisioners.qemu_process:
+    operation: status
+    directory: "{{ molecule_ephemeral_directory }}"
+    cache: "{{ mp_qemu_runtime_cache_dir }}"
+  register: __mp_qemu_current
+
+- name: qemu | Preserve writable firmware state
+  ansible.builtin.copy:
+    src: "{{ mp_qemu_ovmf_vars }}"
+    dest: "{{ __mp_qemu_current.run.hosts[__mp_qemu_host].ovmf_vars }}"
+    mode: "0600"
+    force: false
+    remote_src: true
+  when: _mp_specs[__mp_qemu_host].firmware == 'uefi'
+
+- name: qemu | Create private serial log
+  ansible.builtin.copy:
+    content: ""
+    dest: "{{ __mp_qemu_current.run.hosts[__mp_qemu_host].serial_log }}"
+    mode: "0600"
+    force: false
+  when: _mp_specs[__mp_qemu_host].diagnostics.serial_log
+
+- name: qemu | Launch or reuse the owned guest
+  david_igou.molecule_provisioners.qemu_process:
+    operation: launch
+    directory: "{{ molecule_ephemeral_directory }}"
+    cache: "{{ mp_qemu_runtime_cache_dir }}"
+    host: "{{ __mp_qemu_host }}"
+    argv: >-
+      {{ _mp_specs[__mp_qemu_host]
+         | david_igou.molecule_provisioners.qemu_argv(
+             __mp_qemu_current.run.hosts[__mp_qemu_host], _mp_qemu_kvm_ok, mp_qemu_ovmf_code) }}
+  register: __mp_qemu_launch
+
+- name: qemu | Read final allocations without secret argument redaction
+  david_igou.molecule_provisioners.qemu_process:
+    operation: status
+    directory: "{{ molecule_ephemeral_directory }}"
+    cache: "{{ mp_qemu_runtime_cache_dir }}"
+  register: __mp_qemu_final
+
+- name: qemu | Record final endpoints after launch retries
+  ansible.builtin.set_fact:
+    _mp_qemu_run: "{{ __mp_qemu_final.run }}"

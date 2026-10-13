@@ -1,0 +1,30 @@
+---
+- name: qemu | Read installed QEMU version
+  ansible.builtin.command:
+    argv:
+      - qemu-system-x86_64
+      - --version
+  register: __mp_qemu_version
+  changed_when: false
+
+- name: qemu | Read available network backends
+  ansible.builtin.command:
+    argv:
+      - qemu-system-x86_64
+      - -netdev
+      - help
+  register: __mp_qemu_backends
+  changed_when: false
+
+- name: qemu | Require management user-mode networking
+  ansible.builtin.assert:
+    that: "'user' in __mp_qemu_backends.stdout.split()"
+    fail_msg: "{{ __mp_qemu_version.stdout_lines | first }} lacks the required user-mode network backend."
+
+- name: qemu | Require socket networking for shared links
+  ansible.builtin.assert:
+    that: "'socket' in __mp_qemu_backends.stdout.split()"
+    fail_msg: "{{ __mp_qemu_version.stdout_lines | first }} lacks the requested socket network backend."
+  when: >-
+    _mp_specs.values() | map(attribute='networks') | flatten
+    | selectattr('type', 'equalto', 'socket') | list | length > 0
