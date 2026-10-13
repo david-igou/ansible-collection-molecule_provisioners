@@ -1,17 +1,7 @@
 ---
-- name: Merge per-host specs (defensive)
-  ansible.builtin.include_tasks: _spec_merge.yml
-
-- name: Destroy process-driver VMs
-  ansible.builtin.include_tasks: _destroy_process.yml
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
-
-- name: Remove cidata directories
-  ansible.builtin.file:
-    path: "{{ molecule_ephemeral_directory }}/{{ item }}-cidata"
-    state: absent
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
+- name: qemu | Destroy all guests recorded in this run
+  david_igou.molecule_provisioners.qemu_process:
+    operation: destroy
+    directory: "{{ molecule_ephemeral_directory }}"
+    cache: "{{ mp_qemu_runtime_cache_dir }}"
+    cleanup_timeout: "{{ mp_qemu_cleanup_timeout }}"

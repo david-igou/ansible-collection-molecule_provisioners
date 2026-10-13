@@ -1,6 +1,46 @@
 ---
-- name: Wait for the host to be reachable
-  ansible.builtin.wait_for_connection:
-    timeout: "{{ mp_qemu_wait_timeout }}"
-    delay: 10
-    sleep: 5
+- name: qemu | Prepare authenticated guest access
+  block:
+    - name: qemu | Wait for SSH authentication
+      ansible.builtin.wait_for_connection:
+        timeout: "{{ mp_qemu_wait_timeout }}"
+        delay: 1
+        sleep: 5
+      no_log: true
+      when: ansible_connection | default('ssh') == 'ssh'
+
+    - name: qemu | Wait for appliance management port
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: "{{ ansible_port }}"
+        timeout: "{{ mp_qemu_wait_timeout }}"
+      delegate_to: localhost
+      when: ansible_connection | default('ssh') != 'ssh'
+
+    - name: qemu | Authenticate the appliance CLI
+      ansible.netcommon.cli_command:
+        command: >-
+          {{ (mp | default({})).get('qemu', {}).get('connection_probe',
+             (mp_defaults | default({})).get('qemu', {}).get('connection_probe')) }}
+      no_log: true
+      changed_when: false
+      when: ansible_connection | default('ssh') != 'ssh'
+  rescue:
+    - name: qemu | Collect guest status without exposing console data by default
+      david_igou.molecule_provisioners.qemu_process:
+        operation: status
+        directory: "{{ molecule_ephemeral_directory }}"
+        cache: "{{ mp_qemu_runtime_cache_dir }}"
+        host: "{{ inventory_hostname }}"
+        print_tail: "{{ mp_qemu_print_diagnostic_tails }}"
+      delegate_to: localhost
+      register: __mp_qemu_diagnostic
+
+    - name: qemu | Report the failed guest and retained diagnostic paths
+      ansible.builtin.fail:
+        msg: >-
+          Guest preparation failed:
+          {{ 'protected authentication or CLI operation failed'
+             if ansible_failed_result._ansible_no_log | default(false)
+             else ansible_failed_result.msg | default('connection failed') }}.
+          {{ __mp_qemu_diagnostic.diagnostics }}

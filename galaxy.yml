@@ -27,6 +27,7 @@ dependencies:
   community.crypto: ">=2.0.0"
   community.docker: ">=4.0.0"
   community.general: ">=10.1.0" # decompress module (image cache)
+  ansible.netcommon: ">=7.0.0" # QEMU appliance connections
 
 repository: https://github.com/david-igou/ansible-collection-molecule_provisioners
 documentation: https://github.com/david-igou/ansible-collection-molecule_provisioners

@@ -1,0 +1,19 @@
+---
+- name: qemu | Reserve run identity and controller endpoints
+  vars:
+    __mp_qemu_boot_options:
+      ssh_key_path: "{{ mp_qemu_ssh_key_path }}"
+      ovmf_code: "{{ mp_qemu_ovmf_code }}"
+      ovmf_vars: "{{ mp_qemu_ovmf_vars }}"
+  david_igou.molecule_provisioners.qemu_process:
+    operation: reserve
+    directory: "{{ molecule_ephemeral_directory }}"
+    cache: "{{ mp_qemu_runtime_cache_dir }}"
+    hosts: "{{ _mp_specs | david_igou.molecule_provisioners.qemu_requests(__mp_qemu_boot_options) }}"
+    isolation: "{{ mp_qemu_run_isolation }}"
+    port_base: "{{ mp_qemu_slirp_port_base }}"
+  register: __mp_qemu_reservation
+
+- name: qemu | Record owned resources
+  ansible.builtin.set_fact:
+    _mp_qemu_run: "{{ __mp_qemu_reservation.run }}"

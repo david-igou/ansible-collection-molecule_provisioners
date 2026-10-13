@@ -1,56 +1,76 @@
 ---
-# Per-host seed ISO build. Called from _seed_iso.yml with loop_var=_seed_iso_host.
-- name: "Ensure cidata dir for {{ _seed_iso_host }}"
-  ansible.builtin.file:
-    path: "{{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-cidata"
-    state: directory
-    mode: "0755"
+- name: qemu | Inspect existing bootstrap media
+  ansible.builtin.stat:
+    path: "{{ _mp_qemu_run.hosts[_seed_iso_host].seed_iso }}"
+  register: __mp_qemu_seed
 
-- name: "Render user-data for {{ _seed_iso_host }}"
-  vars:
-    _host: "{{ _seed_iso_host }}"
-  ansible.builtin.template:
-    src: "{{ _mp_qemu_template_dir }}/user-data.j2"
-    dest: "{{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-cidata/user-data"
-    mode: "0644"
+- name: qemu | Render first-boot configuration
+  when: not __mp_qemu_seed.stat.exists
+  no_log: true
+  block:
+    - name: qemu | Create private bootstrap directory
+      ansible.builtin.file:
+        path: "{{ _mp_qemu_run.hosts[_seed_iso_host].cidata }}"
+        state: directory
+        mode: "0700"
 
-- name: "Render meta-data for {{ _seed_iso_host }}"
-  vars:
-    _host: "{{ _seed_iso_host }}"
-  ansible.builtin.template:
-    src: "{{ _mp_qemu_template_dir }}/meta-data.j2"
-    dest: "{{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-cidata/meta-data"
-    mode: "0644"
+    - name: qemu | Build stable instance metadata
+      ansible.builtin.set_fact:
+        _mp_qemu_metadata: >-
+          {{ {'local-hostname': _seed_iso_host}
+             | combine(_mp_specs[_seed_iso_host].cloud_init.metadata | default({}))
+             | combine({'instance-id': _mp_qemu_run.hosts[_seed_iso_host].vm_uuid}) }}
 
-- name: "Build seed ISO via cloud-localds for {{ _seed_iso_host }}"
-  ansible.builtin.command:
-    cmd: >-
-      cloud-localds
-      {{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-seed.iso
-      {{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-cidata/user-data
-      {{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-cidata/meta-data
-    creates: "{{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-seed.iso"
-  when: __mp_qemu_cloudlocalds.rc == 0
+    - name: qemu | Render bootstrap files
+      vars:
+        _host: "{{ _seed_iso_host }}"
+      ansible.builtin.template:
+        src: "{{ _mp_qemu_template_dir }}/{{ item }}.j2"
+        dest: "{{ _mp_qemu_run.hosts[_seed_iso_host].cidata }}/{{ item }}"
+        mode: "0600"
+      loop:
+        - user-data
+        - meta-data
 
-- name: "Build seed ISO via genisoimage for {{ _seed_iso_host }}"
-  ansible.builtin.command:
-    cmd: >-
-      genisoimage
-      -output {{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-seed.iso
-      -volid cidata
-      -joliet
-      -rock
-      {{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-cidata/user-data
-      {{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-cidata/meta-data
-    creates: "{{ molecule_ephemeral_directory }}/{{ _seed_iso_host }}-seed.iso"
-  when: __mp_qemu_cloudlocalds.rc != 0
+    - name: qemu | Render network configuration
+      vars:
+        _host: "{{ _seed_iso_host }}"
+      ansible.builtin.template:
+        src: "{{ _mp_qemu_template_dir }}/network-config.j2"
+        dest: "{{ _mp_qemu_run.hosts[_seed_iso_host].cidata }}/network-config"
+        mode: "0600"
+      when: _mp_specs[_seed_iso_host].cloud_init.network_data | default({}) | length > 0
 
-- name: "Record seed_iso path for {{ _seed_iso_host }}"
-  ansible.builtin.set_fact:
-    _mp_specs: >-
-      {{ _mp_specs | combine({
-           _seed_iso_host: _mp_specs[_seed_iso_host] | combine({
-             'seed_iso_path':
-               molecule_ephemeral_directory ~ '/' ~ _seed_iso_host ~ '-seed.iso'
-           })
-         }, recursive=True) }}
+    - name: qemu | Build seed using cloud-localds
+      vars:
+        __network_args: >-
+          {{ ['--network-config', _mp_qemu_run.hosts[_seed_iso_host].cidata ~ '/network-config']
+             if _mp_specs[_seed_iso_host].cloud_init.network_data | default({}) | length > 0 else [] }}
+      ansible.builtin.command:
+        argv: >-
+          {{ ['cloud-localds'] + __network_args + [
+             _mp_qemu_run.hosts[_seed_iso_host].seed_iso,
+             _mp_qemu_run.hosts[_seed_iso_host].cidata ~ '/user-data',
+             _mp_qemu_run.hosts[_seed_iso_host].cidata ~ '/meta-data'] }}
+        creates: "{{ _mp_qemu_run.hosts[_seed_iso_host].seed_iso }}"
+      when: __mp_qemu_cloudlocalds.rc == 0
+
+    - name: qemu | Build seed using genisoimage
+      ansible.builtin.command:
+        argv:
+          - genisoimage
+          - -output
+          - "{{ _mp_qemu_run.hosts[_seed_iso_host].seed_iso }}"
+          - -volid
+          - cidata
+          - -joliet
+          - -rock
+          - "{{ _mp_qemu_run.hosts[_seed_iso_host].cidata }}"
+        creates: "{{ _mp_qemu_run.hosts[_seed_iso_host].seed_iso }}"
+      when: __mp_qemu_cloudlocalds.rc != 0
+
+    - name: qemu | Protect generated seed media
+      ansible.builtin.file:
+        path: "{{ _mp_qemu_run.hosts[_seed_iso_host].seed_iso }}"
+        state: file
+        mode: "0600"

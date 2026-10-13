@@ -33,6 +33,7 @@
     label: "{{ _mp_qemu_image.key }}"
 
 - name: Record cached base path per host in _mp_specs
+  no_log: true
   ansible.builtin.set_fact:
     _mp_specs: >-
       {{ _mp_specs | combine({

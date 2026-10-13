@@ -2,6 +2,31 @@
 
 If you have a molecule scenario using the upstream `platforms:` + `driver:` shape (now called _pre ansible-native_ in molecule's own docs) and you want to use this collection, here is the field-by-field translation.
 
+## QEMU testing features (unreleased)
+
+QEMU now allocates management ports automatically and verifies VM ownership
+using persisted state. Destroy existing guests with the provisioner version
+that created them before upgrading. Guests without `qemu-state.json` are not
+automatically adopted or killed. Logical inventory names remain unchanged;
+read `ansible_port` and `mp_qemu_endpoints` from runtime inventory.
+
+For legacy fixed ports on new runs, put this in `inventory/group_vars/all.yml`:
+
+```yaml
+---
+mp_qemu_run_isolation: false
+mp_qemu_slirp_port_base: 2222
+```
+
+Alternatively set an explicit `mp.qemu.ssh_host_port` per host. Both modes
+retain ownership verification. `extra_args` can no longer replace managed
+identity/PID/QMP options or reuse reserved device/network IDs; use the new
+`application_ports` interface for forwards. Writable UEFI variables and seed
+media are preserved across repeated create, and boot-configuration changes
+require destroy/create. Keep the ephemeral state directory until destroy
+succeeds. See the [QEMU role reference](../roles/qemu/README.md) for parameters,
+managed disks, cloud-init, networks, diagnostics, and connection overrides.
+
 ## Upgrading from 0.0.5-alpha to 0.0.6-alpha
 
 KubeVirt run isolation is now enabled by default. Kubernetes resource names

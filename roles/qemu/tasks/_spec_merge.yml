@@ -7,6 +7,7 @@
     _mp_specs: {}
 
 - name: Merge per-host specs with mp_defaults and role defaults
+  no_log: true
   ansible.builtin.set_fact:
     _mp_specs: >-
       {{ _mp_specs | combine({

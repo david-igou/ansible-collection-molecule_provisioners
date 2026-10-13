@@ -1,0 +1,27 @@
+---
+DOCUMENTATION:
+  name: qemu_user_data
+  author:
+    - David Igou (@david-igou)
+  version_added: 0.0.7
+  short_description: Build NoCloud user data for an owned QEMU guest
+  description:
+    - Internal configuration helper for the QEMU role.
+  options:
+    _input:
+      description: Role-provided input; use the documented QEMU lifecycle rather than calling internal
+        filters directly.
+      type: dict
+      required: true
+    public_key:
+      description: Generated public key used only when injection is enabled.
+      type: str
+      required: true
+EXAMPLES: |
+  - name: Transform role configuration
+    ansible.builtin.set_fact:
+      __userdata: "{{ guest_spec | david_igou.molecule_provisioners.qemu_user_data(bootstrap_public_key) }}"
+RETURN:
+  _value:
+    description: Build NoCloud user data for an owned QEMU guest.
+    type: dict

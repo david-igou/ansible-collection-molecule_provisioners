@@ -1,34 +1,36 @@
 ---
-- name: Initialize runtime hosts dict
+- name: qemu | Initialize runtime hosts
   ansible.builtin.set_fact:
     __mp_qemu_runtime_hosts: {}
 
-- name: Build per-host runtime entries
+- name: qemu | Build connection entries from final allocations
+  vars:
+    __spec: "{{ _mp_specs[item] }}"
+    __runtime: "{{ _mp_qemu_run.hosts[item] }}"
+    __defaults:
+      ansible_host: 127.0.0.1
+      ansible_port: "{{ __runtime.ssh_port }}"
+      ansible_user: "{{ __spec.ssh_user }}"
+      ansible_connection: "{{ 'ansible.netcommon.network_cli' if __spec.connection == 'network_cli' else 'ssh' }}"
+      ansible_ssh_common_args: -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+      ansible_host_key_checking: false
+      ansible_paramiko_host_key_auto_add: true
+      mp_qemu_endpoints: "{{ __runtime.endpoints }}"
+    __key: >-
+      {{ {'ansible_ssh_private_key_file': mp_qemu_ssh_key_path} if __spec.cloud_init.inject_ssh_key else {} }}
   ansible.builtin.set_fact:
     __mp_qemu_runtime_hosts: >-
-      {{ __mp_qemu_runtime_hosts | combine({
-           item: {
-             'ansible_host': _mp_specs[item].ssh_host,
-             'ansible_port': _mp_specs[item].ssh_port,
-             'ansible_user': _mp_specs[item].ssh_user,
-             'ansible_ssh_private_key_file': mp_qemu_ssh_key_path,
-             'ansible_connection': 'ssh',
-             'ansible_ssh_common_args': '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
-           }
-         }) }}
-  when: _mp_specs[item].ssh_host is defined
+      {{ __mp_qemu_runtime_hosts | combine({item: __defaults | combine(__key) | combine(__spec.connection_vars)}) }}
   loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
+  no_log: true
 
-- name: Ensure ephemeral inventory dir exists
+- name: qemu | Create private runtime inventory directory
   ansible.builtin.file:
     path: "{{ molecule_ephemeral_directory }}/inventory"
     state: directory
-    mode: "0755"
-  when: __mp_qemu_runtime_hosts | length > 0
+    mode: "0700"
 
-- name: Write runtime inventory file
+- name: qemu | Write runtime inventory
   vars:
     runtime_inventory:
       all:
@@ -37,8 +39,7 @@
     content: "{{ runtime_inventory | to_nice_yaml }}"
     dest: "{{ molecule_ephemeral_directory }}/inventory/molecule_runtime.yml"
     mode: "0600"
-  when: __mp_qemu_runtime_hosts | length > 0
+  no_log: true
 
-- name: Refresh inventory
+- name: qemu | Refresh inventory
   ansible.builtin.meta: refresh_inventory
-  when: __mp_qemu_runtime_hosts | length > 0

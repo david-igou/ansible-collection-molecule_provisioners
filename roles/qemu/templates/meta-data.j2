@@ -1,2 +1,1 @@
-instance-id: {{ _host }}-{{ now(fmt='%s') }}
-local-hostname: {{ _host }}
+{{ _mp_qemu_metadata | to_nice_yaml }}

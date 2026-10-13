@@ -1,0 +1,7 @@
+---
+- name: qemu | Create guest data disks
+  ansible.builtin.include_tasks: _data_disk.yml
+  loop: "{{ _mp_specs | dict2items | subelements('value.data_disks') }}"
+  loop_control:
+    loop_var: __mp_qemu_data_disk
+    label: "{{ __mp_qemu_data_disk.0.key }} / {{ __mp_qemu_data_disk.1.name }}"

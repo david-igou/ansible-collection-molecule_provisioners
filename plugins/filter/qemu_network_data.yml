@@ -1,0 +1,27 @@
+---
+DOCUMENTATION:
+  name: qemu_network_data
+  author:
+    - David Igou (@david-igou)
+  version_added: 0.0.7
+  short_description: Build NoCloud network data while preserving management DHCP
+  description:
+    - Internal configuration helper for the QEMU role.
+  options:
+    _input:
+      description: Role-provided input; use the documented QEMU lifecycle rather than calling internal
+        filters directly.
+      type: dict
+      required: true
+    runtime:
+      description: Persisted guest UUID and resource allocations.
+      type: dict
+      required: true
+EXAMPLES: |
+  - name: Transform role configuration
+    ansible.builtin.set_fact:
+      __network: "{{ guest_spec | david_igou.molecule_provisioners.qemu_network_data(guest_runtime) }}"
+RETURN:
+  _value:
+    description: Build NoCloud network data while preserving management DHCP.
+    type: dict

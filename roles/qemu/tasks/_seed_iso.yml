@@ -1,35 +1,31 @@
 ---
-# Generate SSH keypair once for the whole molecule run.
-- name: Generate SSH key pair
+- name: qemu | Generate bootstrap SSH key only when requested
   community.crypto.openssh_keypair:
     path: "{{ mp_qemu_ssh_key_path }}"
     type: ed25519
+    mode: "0600"
   register: __mp_qemu_ssh_keypair
+  when: _mp_specs.values() | selectattr('cloud_init.inject_ssh_key') | list | length > 0
 
-- name: Surface SSH public key
+- name: qemu | Record public bootstrap key
   ansible.builtin.set_fact:
-    temporary_ssh_public_key: "{{ __mp_qemu_ssh_keypair.public_key }}"
+    temporary_ssh_public_key: "{{ __mp_qemu_ssh_keypair.public_key | default('') }}"
 
-- name: Detect cloud-localds availability
+- name: qemu | Find cloud-localds
   ansible.builtin.command: which cloud-localds
   register: __mp_qemu_cloudlocalds
   changed_when: false
   failed_when: false
 
-# Resolve template directory: role_path is set when invoked via include_role;
-# mp_qemu_template_dir_override can be set by callers (e.g. integration tests)
-# that include tasks directly without a role context.
-- name: Resolve template directory
+- name: qemu | Resolve seed templates
   ansible.builtin.set_fact:
     _mp_qemu_template_dir: >-
       {{ mp_qemu_template_dir_override
-         | default(role_path ~ '/templates'
-                   if role_path is defined
-                   else (playbook_dir ~ '/../roles/qemu/templates')) }}
+         | default((role_path | default(playbook_dir ~ '/../roles/qemu')) ~ '/templates') }}
 
-- name: Build per-host seed ISO
+- name: qemu | Build immutable per-guest seed media
   ansible.builtin.include_tasks: _seed_iso_host.yml
   loop: "{{ groups['molecule'] }}"
   loop_control:
     loop_var: _seed_iso_host
-    label: "{{ _seed_iso_host }}"
+  when: _mp_specs[_seed_iso_host].cloud_init.enabled

@@ -15,11 +15,16 @@
         path: "{{ molecule_ephemeral_directory }}"
         state: directory
         mode: "0755"
-    - name: Create a tiny fake qcow2 (just any bytes)
-      ansible.builtin.copy:
-        content: "QFI\xfb fake qcow2 for cache test"
-        dest: "{{ _fake_image_src }}"
-        mode: "0644"
+    - name: Create a small valid qcow2
+      ansible.builtin.command:
+        argv:
+          - qemu-img
+          - create
+          - -f
+          - qcow2
+          - "{{ _fake_image_src }}"
+          - 1M
+        creates: "{{ _fake_image_src }}"
 
     - name: Include role defaults
       ansible.builtin.include_vars:

@@ -1,0 +1,37 @@
+---
+DOCUMENTATION:
+  name: qemu_argv
+  author:
+    - David Igou (@david-igou)
+  version_added: 0.0.7
+  short_description: Build launch arguments from the QEMU role specification
+  description:
+    - Internal configuration helper for the QEMU role.
+  options:
+    _input:
+      description: Role-provided input; use the documented QEMU lifecycle rather than calling internal
+        filters directly.
+      type: dict
+      required: true
+    runtime:
+      description: Persisted guest allocations.
+      type: dict
+      required: true
+    kvm:
+      description: Whether KVM is available.
+      type: bool
+      required: true
+    ovmf_code:
+      description: Read-only UEFI firmware path.
+      type: str
+      required: true
+EXAMPLES: |
+  - name: Transform role configuration
+    ansible.builtin.set_fact:
+      __argv: >-
+        {{ guest_spec | david_igou.molecule_provisioners.qemu_argv(guest_runtime, false, ovmf_code) }}
+RETURN:
+  _value:
+    description: Build launch arguments from the QEMU role specification.
+    type: list
+    elements: str

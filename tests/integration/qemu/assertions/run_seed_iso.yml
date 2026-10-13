@@ -33,6 +33,8 @@
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_spec_merge.yml"
     - name: Run validation
       ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_validate.yml"
+    - name: Reserve owned seed media
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../../../../roles/qemu/tasks/_run_state.yml"
     # _seed_iso.yml only needs the merged spec (not base_image_path); skip image cache
     # to avoid the shared-/tmp race condition with test_image_cache.
     - name: Run seed ISO phase only
@@ -40,7 +42,7 @@
 
     - name: Stat the seed ISO for the first host
       ansible.builtin.stat:
-        path: "{{ _mp_specs[groups['molecule'][0]].seed_iso_path }}"
+        path: "{{ _mp_qemu_run.hosts[groups['molecule'][0]].seed_iso }}"
       register: __iso
     - name: Assert seed ISO exists and is non-empty
       ansible.builtin.assert:
@@ -63,7 +65,7 @@
         that:
           # ssh_user is now rendered as a quoted YAML scalar to guard against
           # names that YAML would coerce to bool/null (yes, no, null, ...).
-          - '''name: "ubuntu"'' in (__ud_content.content | b64decode)'
+          - "((__ud_content.content | b64decode | from_yaml).users | first).name == 'ubuntu'"
           - "'ssh-ed25519' in (__ud_content.content | b64decode)"
 
     - name: Cleanup fake source

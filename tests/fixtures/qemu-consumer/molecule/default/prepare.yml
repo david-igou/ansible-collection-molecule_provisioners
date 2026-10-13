@@ -1,0 +1,3 @@
+---
+- name: QEMU consumer prepare
+  ansible.builtin.import_playbook: david_igou.molecule_provisioners.prepare
