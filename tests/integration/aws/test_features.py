@@ -39,7 +39,15 @@ def test_shared_network_disks_reboot_secondary_nic_and_application_access(aws_en
             "instance": {
                 "root_disk": {"size": 12},
                 "volumes": [{"device_name": "/dev/sdf", "ebs": {"volume_size": 1}}],
-                "network_interfaces": [{"device_index": 0}, {"device_index": 1}],
+                "network_interfaces": [
+                    {"device_index": 0},
+                    {
+                        "device_index": 1,
+                        "private_ip_addresses": [
+                            {"private_ip_address": "10.77.0.20", "primary": True}
+                        ],
+                    },
+                ],
                 "application_ports": ports,
             },
             "peer": {},
@@ -64,6 +72,14 @@ def test_shared_network_disks_reboot_secondary_nic_and_application_access(aws_en
             for nic in instance["NetworkInterfaces"]
             if nic["Attachment"]["DeviceIndex"] == 1
         )
+        assert secondary == "10.77.0.20"
+        root_id = next(
+            disk["Ebs"]["VolumeId"]
+            for disk in instance["BlockDeviceMappings"]
+            if disk["DeviceName"] == instance["RootDeviceName"]
+        )
+        root = ec2.describe_volumes(VolumeIds=[root_id])["Volumes"][0]
+        assert root["Size"] == 12 and root["Encrypted"] and root["VolumeType"] == "gp3"
         volume = next(
             disk["Ebs"]["VolumeId"]
             for disk in instance["BlockDeviceMappings"]
@@ -193,7 +209,7 @@ def test_arm_guest_and_architecture_mismatch(aws_environment):
         from .conftest import write_yaml
 
         write_yaml(run.inventory, run.sources)
-        code, _ = run.action("create", check=False)
+        code, _output = run.action("create", check=False)
         assert code != 0
         assert not (run.ephemeral / "aws_run.yml").exists()
         run.sources["all"]["children"]["molecule"]["hosts"]["instance"]["mp"]["aws"][

@@ -169,6 +169,11 @@ required authentication fields, plus `mp_aws_instance_id`, `mp_aws_region`,
 `host`, `port`, `guest_port` and `protocol`. Guest ports are exposed directly;
 security-group rules do not start application listeners or forward ports.
 
+With public IPv4, additional generated interfaces attach after the primary
+launch; the AMI must configure them. Existing ENIs require private addressing or
+an explicit reachable endpoint. Secondary IPv6 interfaces use private-address
+launch mode.
+
 Private addressing requires an existing route, VPN or caller SSH proxy settings.
 The backend does not create a NAT gateway, bastion or tunnel.
 
@@ -177,7 +182,9 @@ The backend does not create a NAT gateway, bastion or tunnel.
 Before creating infrastructure, the role validates every host and saves a private
 `aws_run.yml` journal with a random run identity, account, region, selected AMI and
 ownership. It journals resources incrementally. Launches use a stable EC2 client
-token and an exact private replay request in `aws-requests/`. Repeated create
+token and an exact private replay request in `aws-requests/`. The vendor instance
+module does not accept a caller-provided launch token, so a narrow SDK helper owns
+that operation; networking, keys, storage and cleanup use vendor modules. Repeated create
 keeps the same instance; changed inventory requires destroy/create. Missing saved
 keys, ownership/account mismatch and ambiguous recovery stop with state retained.
 
@@ -195,6 +202,11 @@ controller in the same Linux PID namespace is recoverable. When moving a run
 between containers/PID namespaces, first verify that the old controller stopped,
 then remove only `.aws-lock` before retrying. Do not remove it while a controller
 is active.
+
+A pending network create with no discoverable owned candidate remains uncertain,
+including during destroy. Inspect the recorded account/region and CloudTrail;
+resolve the pending journal entry only after confirming the create outcome.
+The role keeps that evidence rather than assuming an absent response means no resource.
 
 If state is lost, normal destroy deliberately does nothing. Recover the manifest
 from private backup, or inspect exact account/region resources with both
@@ -233,3 +245,8 @@ access, not permission to modify its foundations.
 
 See [AWS testing](../../docs/TESTING.md#aws) and
 [EC2 driver migration](../../docs/MIGRATION.md#aws-ec2-driver).
+
+Spot/Fleet/ASG orchestration, SSM connections and AMI building are outside this
+backend. Pinned templates cannot bypass the on-demand lifecycle through market
+options. Appliance probes and IAM profile passthrough require caller-prepared
+fixtures; they are covered by validation tests rather than the live test suite.

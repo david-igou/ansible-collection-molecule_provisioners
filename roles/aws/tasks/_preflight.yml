@@ -123,6 +123,11 @@
     __mp_aws_specs: '{{ __mp_aws_specs | combine({__mp_aws_host: __mp_aws_spec}) }}'
     __mp_aws_templates: '{{ __mp_aws_templates | combine({__mp_aws_host: __mp_aws_template_data}) }}'
   no_log: true
+- name: AWS | Validate guest bootstrap before creating resources
+  ansible.builtin.set_fact:
+    __mp_aws_preflight_bootstrap: '{{ __mp_aws_spec | david_igou.molecule_provisioners.aws_cloud_data(''preflight-key'')
+      }}'
+  no_log: true
 - name: AWS | Validate the complete effective launch request before mutation
   ansible.builtin.assert:
     that:

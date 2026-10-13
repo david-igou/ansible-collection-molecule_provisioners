@@ -110,6 +110,7 @@ class GuestRun:
             capture_output=True,
             text=True,
             timeout=1800,
+            check=False,
             env=environment,
         )
         output = process.stdout + process.stderr

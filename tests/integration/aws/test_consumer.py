@@ -4,7 +4,6 @@ import os
 import shutil
 import subprocess
 import uuid
-from pathlib import Path
 
 from .conftest import GuestRun, ROOT
 
@@ -58,6 +57,7 @@ def test_installed_molecule_consumer(aws_environment):
             text=True,
             capture_output=True,
             timeout=1200,
+            check=False,
         )
         log = target / (action + ".log")
         log.write_text(result.stdout + result.stderr)

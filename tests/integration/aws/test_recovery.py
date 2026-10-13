@@ -10,14 +10,15 @@ from .conftest import GuestRun
 @pytest.mark.parametrize("stage", ["vpc", "subnet", "gateway", "route", "group", "key", "launch"])
 def test_interrupted_create_recovers_without_duplicate_resources(aws_environment, stage):
     settings = {"key_inject_method": "ec2", "ssh_user": "ec2-user"} if stage == "key" else {}
-    run = GuestRun(aws_environment, {"instance": settings})
+    hosts = {"instance": settings, "peer": {}} if stage == "launch" else {"instance": settings}
+    run = GuestRun(aws_environment, hosts)
     task = {
         "group": "AWS | Create a run-owned security group",
         "key": "AWS | Import the owned public EC2 key",
         "launch": "AWS | Launch exactly one guest with the saved token",
     }.get(stage, "AWS | Provision the owned " + stage)
     try:
-        code, _ = run.action(
+        code, _output = run.action(
             "create",
             check=False,
             extra_environment={
@@ -35,7 +36,8 @@ def test_interrupted_create_recovers_without_duplicate_resources(aws_environment
             run.action("prepare")
             filters = [{"Name": "tag:molecule-provisioners:run-id", "Values": [run.run_id]}]
             guests = aws_environment["ec2"].describe_instances(Filters=filters)["Reservations"]
-            assert sum(len(reservation["Instances"]) for reservation in guests) == 1
+            assert sum(len(reservation["Instances"]) for reservation in guests) == len(hosts)
+            assert len(run.state()["networks"]) == 1
     finally:
         run.destroy()
 
@@ -60,7 +62,7 @@ def test_check_mode_and_ownership_mismatch_preserve_resources(aws_environment):
         ec2 = aws_environment["ec2"]
         ec2.delete_tags(Resources=[instance_id], Tags=[{"Key": "molecule-provisioners:run-id"}])
         try:
-            code, _ = run.action("destroy", check=False)
+            code, _output = run.action("destroy", check=False)
             assert code != 0
             assert (run.ephemeral / "aws_run.yml").exists()
             assert (

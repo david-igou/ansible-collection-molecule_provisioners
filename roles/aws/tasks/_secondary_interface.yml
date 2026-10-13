@@ -30,15 +30,18 @@
     eni_id: '{{ (__mp_aws_secondary_info.network_interfaces | first).network_interface_id | default(omit) }}'
     name: '{{ __mp_aws_nic_name }}'
     subnet_id: '{{ __mp_aws_nic.subnet_id | default(__mp_aws_guest.subnet.subnet_id) }}'
-    private_ip_address: '{{ __mp_aws_nic.private_ip_address | default(omit) }}'
+    private_ip_address: |-
+      {{ __mp_aws_nic.private_ip_address | default((__mp_aws_nic.private_ip_addresses
+      | default([]) | selectattr('primary', 'defined') | selectattr('primary')
+      | map(attribute='private_ip_address') | first) | default(omit)) }}
     secondary_private_ip_address_count: '{{ __mp_aws_nic.secondary_private_ip_address_count | default(omit) }}'
     secondary_private_ip_addresses: |-
-      {{ __mp_aws_nic.private_ip_addresses | default([]) | rejectattr('primary',
-      'equalto', true) | map(attribute='private_ip_address') | list if
-      __mp_aws_nic.private_ip_addresses is defined else omit }}
+      {{ (__mp_aws_nic.private_ip_addresses | default([]) | rejectattr('primary',
+      'equalto', true) | map(attribute='private_ip_address') | list) | default(omit,
+      true) }}
     security_groups: '{{ __mp_aws_nic.groups | default(__mp_aws_guest.groups) }}'
     description: '{{ __mp_aws_nic.description | default(__mp_aws_nic_name) }}'
-    tags: '{{ __mp_aws_run.id | david_igou.molecule_provisioners.aws_tags(__mp_aws_host) }}'
+    tags: '{{ __mp_aws_run.id | david_igou.molecule_provisioners.aws_tags(__mp_aws_host, __mp_aws_spec.tags) }}'
     state: present
   register: __mp_aws_secondary
 - name: AWS | Journal the accepted secondary interface ID

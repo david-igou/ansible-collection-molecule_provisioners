@@ -416,3 +416,89 @@ def test_explicit_create_does_not_adopt_template_network():
                 "NetworkInterfaces": [{"DeviceIndex": 0, "SubnetId": "subnet-existing"}],
             },
         )
+
+
+def test_interface_private_ip_validation_and_network_uncertainty():
+    configured = guest(
+        network_interfaces=[
+            {"device_index": 0},
+            {
+                "device_index": 1,
+                "private_ip_addresses": [{"private_ip_address": "10.77.0.20", "primary": True}],
+            },
+        ]
+    )
+    assert configured["network_interfaces"][1]["private_ip_addresses"][0]["primary"]
+    for nics in (
+        [{"device_index": 0, "private_ip_address": 1}],
+        [{"device_index": 0, "private_ip_addresses": [{"private_ip_address": True}]}],
+        [
+            {
+                "device_index": 0,
+                "private_ip_address": "10.77.0.21",
+                "private_ip_addresses": [{"private_ip_address": "10.77.0.20", "primary": True}],
+            }
+        ],
+    ):
+        with pytest.raises(ValueError):
+            guest(network_interfaces=nics)
+    with pytest.raises(ValueError, match="Uncertain"):
+        spec.reconcile_network({"pending": "vpc"}, {"vpc": []}, "a" * 32, deleting=True)
+
+
+def test_template_interface_fields_and_explicit_overrides_are_preserved():
+    template = {
+        "ImageId": image()["image_id"],
+        "UserData": "template-bootstrap",
+        "NetworkInterfaces": [
+            {
+                "DeviceIndex": 0,
+                "SubnetId": "subnet-original",
+                "Groups": ["sg-original"],
+                "PrivateIpAddress": "10.77.0.30",
+                "Description": "template primary",
+            }
+        ],
+    }
+    configured = guest(launch_template={"id": "lt-example", "version": 1})
+    resolved = spec.template_spec(configured, template)
+    data = spec.request(
+        resolved,
+        image(),
+        "subnet-original",
+        ["sg-original"],
+        "a" * 32,
+        "instance",
+        "template-bootstrap",
+        template=template,
+    )
+    assert data["NetworkInterfaces"][0]["PrivateIpAddress"] == "10.77.0.30"
+    assert data["NetworkInterfaces"][0]["Description"] == "template primary"
+    overridden = guest(
+        launch_template={"id": "lt-example", "version": 1},
+        subnet_id="subnet-new",
+        security_groups=["sg-new"],
+        key_inject_method="none",
+        user_data="",
+    )
+    resolved = spec.template_spec(overridden, template)
+    data = spec.request(
+        resolved, image(), "subnet-new", ["sg-new"], "a" * 32, "instance", "", template=template
+    )
+    assert data["NetworkInterfaces"][0]["SubnetId"] == "subnet-new"
+    assert data["NetworkInterfaces"][0]["Groups"] == ["sg-new"]
+    assert "UserData" not in data
+    invalid = dict(template, NetworkInterfaces=[{"DeviceIndex": 0, "DeleteOnTermination": False}])
+    with pytest.raises(ValueError, match="retains generated ENIs"):
+        spec.template_spec(configured, invalid)
+
+
+def test_spot_templates_cannot_escape_disposable_cleanup():
+    configured = guest(launch_template={"id": "lt-example", "version": 1})
+    market = {"MarketType": "spot", "SpotOptions": {"SpotInstanceType": "persistent"}}
+    with pytest.raises(ValueError, match="market/Spot"):
+        spec.template_spec(configured, {"InstanceMarketOptions": market})
+    client = Mock()
+    with pytest.raises(ValueError, match="on-demand"):
+        instance.launch(client, {"InstanceMarketOptions": market}, "a" * 32, "host")
+    client.run_instances.assert_not_called()

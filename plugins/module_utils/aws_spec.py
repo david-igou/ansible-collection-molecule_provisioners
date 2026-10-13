@@ -254,6 +254,26 @@ def normalize(hosts, shared=None):
             if device_index in indexes:
                 raise ValueError("Network device indexes must be unique")
             indexes.append(device_index)
+            if "private_ip_address" in nic:
+                if not isinstance(nic["private_ip_address"], str):
+                    raise ValueError("Private IP addresses must be strings")
+                ipaddress.IPv4Address(nic["private_ip_address"])
+            addresses = nic.get("private_ip_addresses", [])
+            if not isinstance(addresses, list):
+                raise ValueError("private_ip_addresses must be a list")
+            for address in addresses:
+                _unknown(address, ("private_ip_address", "primary"), "private IP entry")
+                if not isinstance(address.get("private_ip_address"), str):
+                    raise ValueError("Private IP addresses must be strings")
+                ipaddress.IPv4Address(address["private_ip_address"])
+                if "primary" in address and not isinstance(address["primary"], bool):
+                    raise ValueError("Private IP primary must be a boolean")
+            if sum(address.get("primary", False) for address in addresses) > 1:
+                raise ValueError("An interface can have only one primary private IP")
+            if addresses and (
+                nic.get("private_ip_address") or nic.get("secondary_private_ip_address_count")
+            ):
+                raise ValueError("Private IP list conflicts with address/count settings")
             if "groups" in nic and (
                 not isinstance(nic["groups"], list)
                 or any(not isinstance(group, str) for group in nic["groups"])
@@ -443,7 +463,7 @@ def pascal(value):
 def request(spec, image, subnet, groups, run_id, host, user_data, key_name="", template=None):
     """Render a single disposable RunInstances request; lifecycle remains in the role."""
     result = copy.deepcopy(template or {})
-    for field in ("TagSpecifications", "SecurityGroupIds", "SecurityGroups"):
+    for field in ("TagSpecifications", "SecurityGroupIds", "SecurityGroups", "UserData"):
         result.pop(field, None)
     result.update({"ImageId": image["image_id"], "InstanceType": spec["instance_type"]})
     options = spec.get("instance_options", {})
@@ -601,6 +621,10 @@ def ingress(spec):
 
 def template_spec(spec, template):
     """Resolve a pinned template while suppressing implicit generated bootstrap."""
+    if template.get("InstanceMarketOptions"):
+        raise ValueError(
+            "Launch template market/Spot options are outside the disposable on-demand lifecycle"
+        )
     if template.get("DisableApiTermination"):
         raise ValueError("Launch template enables termination protection")
     for disk in template.get("BlockDeviceMappings", []):
@@ -609,6 +633,8 @@ def template_spec(spec, template):
     for nic in template.get("NetworkInterfaces", []):
         if nic.get("NetworkInterfaceId") and nic.get("DeleteOnTermination"):
             raise ValueError("Launch template deletes a referenced ENI")
+        if not nic.get("NetworkInterfaceId") and nic.get("DeleteOnTermination") is False:
+            raise ValueError("Launch template retains generated ENIs")
     derived = {
         "instance_type": template.get("InstanceType", spec["instance_type"]),
         "key_inject_method": "ec2" if template.get("KeyName") else "none",
@@ -629,27 +655,54 @@ def template_spec(spec, template):
                 raise ValueError(
                     "Mixed existing and generated template ENIs require explicit network overrides"
                 )
+            derived["assign_public_ip"] = False
             derived["network_interfaces_ids"] = [
                 {"id": nic["NetworkInterfaceId"], "device_index": nic.get("DeviceIndex", index)}
                 for index, nic in enumerate(nics)
             ]
         else:
-            derived["network_interfaces"] = [
-                {
-                    "subnet_id": nic["SubnetId"],
-                    "device_index": nic.get("DeviceIndex", index),
-                    "groups": nic.get("Groups", []),
-                }
-                for index, nic in enumerate(nics)
-                if nic.get("SubnetId")
-            ]
-            if nics[0].get("Groups"):
-                derived["security_groups"] = nics[0]["Groups"]
-            if "AssociatePublicIpAddress" in nics[0]:
-                derived["assign_public_ip"] = nics[0]["AssociatePublicIpAddress"]
+            derived["network_interfaces"] = []
+            for index, nic in enumerate(nics):
+                converted = {}
+                for key, value in nic.items():
+                    if key in ("DeleteOnTermination", "AssociatePublicIpAddress"):
+                        continue
+                    field = re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower()
+                    if isinstance(value, list):
+                        value = [
+                            (
+                                {
+                                    re.sub(r"(?<!^)(?=[A-Z])", "_", k).lower(): v
+                                    for k, v in item.items()
+                                }
+                                if isinstance(item, dict)
+                                else item
+                            )
+                            for item in value
+                        ]
+                    converted[field] = value
+                converted.setdefault("device_index", index)
+                derived["network_interfaces"].append(converted)
+            primary = next(
+                (nic for index, nic in enumerate(nics) if nic.get("DeviceIndex", index) == 0), {}
+            )
+            if primary.get("Groups"):
+                derived["security_groups"] = primary["Groups"]
+            if "AssociatePublicIpAddress" in primary:
+                derived["assign_public_ip"] = primary["AssociatePublicIpAddress"]
     if template.get("UserData"):
         derived["user_data"] = template["UserData"]
     explicit = {key: spec[key] for key in spec["_explicit"]}
+    if any(explicit.get(field) for field in ("image_name", "image_owner", "image_filters")):
+        derived.pop("image_id", None)
+    if explicit.get("cloud_init", {}).get("enabled"):
+        derived.pop("user_data", None)
+    if not any(field in explicit for field in ("network_interfaces", "network_interfaces_ids")):
+        for nic in derived.get("network_interfaces", []):
+            if "subnet_id" in explicit and nic["device_index"] == 0:
+                nic["subnet_id"] = explicit["subnet_id"]
+            if "security_groups" in explicit:
+                nic.pop("groups", None)
     # Auto is resolved only after template network references have been discovered.
     if "network" not in explicit:
         derived["network"] = {"mode": "auto"}

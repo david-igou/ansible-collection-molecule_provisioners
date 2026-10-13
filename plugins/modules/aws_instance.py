@@ -167,6 +167,8 @@ def save_request(directory, host, request):
 
 def launch(client, request, run_id, host):
     """Use exactly one stable SDK token; never fall back to unscoped matching."""
+    if request.get("InstanceMarketOptions"):
+        raise ValueError("Only on-demand instance launches are supported")
     if set(request) & {"ClientToken", "MinCount", "MaxCount", "DryRun"}:
         raise ValueError("Launch token and instance counts are reserved")
     response = client.run_instances(
