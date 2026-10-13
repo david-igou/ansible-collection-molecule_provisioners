@@ -63,5 +63,7 @@ build_ignore:
   - .build
   - collections
   - .venv
+  - .pytest_cache
+  - tests/output
   - tests/ee
   - .containerignore

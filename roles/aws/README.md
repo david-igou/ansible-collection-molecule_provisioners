@@ -136,6 +136,9 @@ them. Supply access in the template or explicitly. Retaining generated disks,
 termination protection and deleting referenced ENIs are rejected. Templates remain
 caller-owned. Changing launch configuration requires destroy/create.
 
+With `key_inject_method: ec2`, set `ssh_user` to the AMI default account
+(for example `ec2-user` for Amazon Linux), or provide a prepared management user.
+
 Structured cloud-init merges management keys into users by name and preserves
 caller packages and commands. `mode: replace` suppresses package additions; key
 injection still follows `key_inject_method`. Opaque payloads are passed unchanged
