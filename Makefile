@@ -22,7 +22,7 @@ help: ## Show this help
 install: ## Install python + ansible collection dependencies
 	python -m pip install --upgrade pip
 	pip install -r lint-requirements.txt -r requirements.txt -r test-requirements.txt
-	ansible-galaxy collection install containers.podman kubernetes.core community.crypto community.docker community.general
+	ansible-galaxy collection install containers.podman kubernetes.core community.crypto community.docker community.general ansible.netcommon community.routeros
 
 lint: ## Lint Ansible, YAML and changelog fragments
 	ansible-lint
