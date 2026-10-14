@@ -48,6 +48,32 @@
         fail_msg: "Host '{{ item }}' is missing mp.{{ _mp_backend }} in inventory."
       loop: "{{ groups['molecule'] }}"
 
+    - name: Pull AWS role options from molecule group hostvars
+      ansible.builtin.set_fact:
+        __mp_aws_options_loaded: true
+        mp_aws_wait_timeout: >-
+          {{ mp_aws_wait_timeout | default(
+             hostvars[groups['molecule'][0]].mp_aws_wait_timeout | default(omit)) }}
+        mp_aws_windows_wait_timeout: >-
+          {{ mp_aws_windows_wait_timeout | default(
+             hostvars[groups['molecule'][0]].mp_aws_windows_wait_timeout | default(omit)) }}
+        mp_aws_cleanup_timeout: >-
+          {{ mp_aws_cleanup_timeout | default(
+             hostvars[groups['molecule'][0]].mp_aws_cleanup_timeout | default(omit)) }}
+        mp_aws_max_instances: >-
+          {{ mp_aws_max_instances | default(
+             hostvars[groups['molecule'][0]].mp_aws_max_instances | default(omit)) }}
+        mp_aws_ssh_key_path: >-
+          {{ mp_aws_ssh_key_path | default(
+             hostvars[groups['molecule'][0]].mp_aws_ssh_key_path | default(omit)) }}
+        mp_aws_print_diagnostic_tails: >-
+          {{ mp_aws_print_diagnostic_tails | default(
+             hostvars[groups['molecule'][0]].mp_aws_print_diagnostic_tails | default(omit)) }}
+        mp_aws_role_defaults: >-
+          {{ mp_aws_role_defaults | default(
+             hostvars[groups['molecule'][0]].mp_aws_role_defaults | default(omit)) }}
+      when: _mp_backend == 'aws'
+
     - name: Run provisioner create
       ansible.builtin.include_role:
         name: "david_igou.molecule_provisioners.{{ _mp_backend }}"

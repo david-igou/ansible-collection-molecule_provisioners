@@ -1,0 +1,38 @@
+---
+argument_specs:
+  create:
+    short_description: Manage disposable EC2 guests with saved run ownership.
+    options: &id001
+      mp_aws_wait_timeout:
+        type: int
+        description: Authenticated Linux readiness and EC2 launch deadline in seconds.
+        default: 600
+      mp_aws_windows_wait_timeout:
+        type: int
+        description: Authenticated Windows readiness/password deadline in seconds.
+        default: 900
+      mp_aws_cleanup_timeout:
+        type: int
+        description: Per-resource cleanup deadline in seconds.
+        default: 600
+      mp_aws_max_instances:
+        type: int
+        description: Maximum number of instances created by a scenario.
+        default: 10
+      mp_aws_ssh_key_path:
+        type: path
+        description: Generated private scenario key location.
+      mp_aws_print_diagnostic_tails:
+        type: bool
+        description: Opt in to printing bounded private console diagnostics.
+        default: false
+      mp_aws_role_defaults:
+        type: dict
+        description: Base inventory settings overridden by shared and per-host AWS settings.
+        default: {}
+  prepare:
+    short_description: Manage disposable EC2 guests with saved run ownership.
+    options: *id001
+  destroy:
+    short_description: Manage disposable EC2 guests with saved run ownership.
+    options: *id001

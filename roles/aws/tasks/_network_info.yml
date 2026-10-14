@@ -1,0 +1,33 @@
+---
+- name: AWS | Inspect the exact VPC identity
+  amazon.aws.ec2_vpc_net_info:
+    filters: |-
+      {{ {'vpc-id': __mp_aws_net.vpc_id} if __mp_aws_net.vpc_id is defined
+      else {'tag:Name': __mp_aws_net_name ~ '-vpc'} }}
+  register: __mp_aws_found_vpc
+- name: AWS | Inspect the exact subnet identity
+  amazon.aws.ec2_vpc_subnet_info:
+    filters: |-
+      {{ {'subnet-id': __mp_aws_net.subnet_id} if __mp_aws_net.subnet_id
+      is defined else {'tag:Name': __mp_aws_net_name ~ '-subnet'} }}
+  register: __mp_aws_found_subnet
+- name: AWS | Inspect the exact gateway identity
+  amazon.aws.ec2_vpc_igw_info:
+    filters: |-
+      {{ {'internet-gateway-id': __mp_aws_net.gateway_id} if __mp_aws_net.gateway_id
+      is defined else {'tag:Name': __mp_aws_net_name ~ '-gateway'} }}
+  register: __mp_aws_found_gateway
+- name: AWS | Inspect the exact route-table identity
+  amazon.aws.ec2_vpc_route_table_info:
+    filters: |-
+      {{ {'route-table-id': __mp_aws_net.route_table_id} if __mp_aws_net.route_table_id
+      is defined else {'tag:Name': __mp_aws_net_name ~ '-route'} }}
+  register: __mp_aws_found_route
+- name: AWS | Reconcile saved network ownership
+  ansible.builtin.set_fact:
+    __mp_aws_net: |-
+      {{ __mp_aws_net | david_igou.molecule_provisioners.aws_reconcile_network({
+      'vpc': __mp_aws_found_vpc.vpcs, 'subnet': __mp_aws_found_subnet.subnets,
+      'gateway': __mp_aws_found_gateway.internet_gateways, 'route':
+      __mp_aws_found_route.route_tables}, __mp_aws_run.id, __mp_aws_deleting
+      | default(false)) }}

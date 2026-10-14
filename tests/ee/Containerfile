@@ -1,0 +1,5 @@
+FROM docker.io/library/python@sha256:2b4f19dae3a777dfc3b76730bda1e82e1f66ab2a2686fa93ca78edbfb4f04ffe
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client sshpass && rm -rf /var/lib/apt/lists/*
+COPY lint-requirements.txt test-requirements.txt requirements.txt /tmp/requirements/
+RUN python -m pip install --no-cache-dir -r /tmp/requirements/lint-requirements.txt -r /tmp/requirements/test-requirements.txt -r /tmp/requirements/requirements.txt pywinrm pypsrp
+WORKDIR /work

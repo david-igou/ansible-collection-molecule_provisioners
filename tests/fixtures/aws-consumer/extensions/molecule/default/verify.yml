@@ -1,0 +1,14 @@
+---
+- name: Verify the consumer guest responds
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Read the guest hostname
+      ansible.builtin.command: hostname
+      register: __hostname
+      changed_when: false
+
+    - name: Verify the converged hostname
+      ansible.builtin.assert:
+        that: __hostname.stdout == 'molecule-consumer'
+        fail_msg: The provisioned guest did not converge correctly.

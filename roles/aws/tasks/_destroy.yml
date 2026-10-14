@@ -1,0 +1,30 @@
+---
+- name: AWS | Clean every recorded guest regardless of current inventory
+  ansible.builtin.include_tasks: _destroy_host.yml
+  loop: '{{ __mp_aws_run.hosts.keys() | list }}'
+  loop_control:
+    loop_var: __mp_aws_host
+- name: AWS | Clean every recorded managed network
+  ansible.builtin.include_tasks: _destroy_network.yml
+  loop: '{{ __mp_aws_run.networks.keys() | list }}'
+  loop_control:
+    loop_var: __mp_aws_region
+- name: AWS | Remove only generated local key files
+  ansible.builtin.file:
+    path: '{{ item.0.key }}{{ item.1 }}'
+    state: absent
+  loop: |-
+    {{ (__mp_aws_run.local_keys | dict2items | selectattr('value.owned')
+    | list) | product(['', '.pub']) | list }}
+  loop_control:
+    label: generated key
+  when: not ansible_check_mode
+- name: AWS | Remove private replay and runtime state only after successful cleanup
+  ansible.builtin.file:
+    path: '{{ molecule_ephemeral_directory }}/{{ item }}'
+    state: absent
+  loop:
+    - aws-requests
+    - inventory/molecule_runtime.yml
+    - aws_run.yml
+  when: not ansible_check_mode

@@ -1,0 +1,17 @@
+---
+- name: AWS | Acquire the controller cleanup lease
+  david_igou.molecule_provisioners.aws_lock:
+    directory: '{{ molecule_ephemeral_directory }}'
+    state: held
+- name: AWS | Clean the recorded run
+  block:
+    - name: AWS | Read saved cleanup targets
+      ansible.builtin.include_tasks: _load.yml
+    - name: AWS | Destroy only recorded resources
+      ansible.builtin.include_tasks: _destroy.yml
+      when: __mp_aws_state_file.stat.exists
+  always:
+    - name: AWS | Release the controller cleanup lease
+      david_igou.molecule_provisioners.aws_lock:
+        directory: '{{ molecule_ephemeral_directory }}'
+        state: released

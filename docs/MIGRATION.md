@@ -207,7 +207,7 @@ Both should pass. If a host fails with "missing mp.<backend> in inventory", you 
 
 ## Unsupported configurations
 
-- Cloud-provider backends (AWS, Azure, GCP).
+- Azure and GCP backends.
 - QEMU via libvirtd, qemu+ssh remote URIs, or NAT/bridge networking. The QEMU backend runs local processes with SLIRP networking.
 - KubeVirt LoadBalancer or ClusterIP+port-forward services. `NodePort`, `None`, and `PodIP` are supported; see [SSH service types](../roles/kubevirt/README.md#ssh-service-types).
 - Mixing backends within a single scenario run.
@@ -238,3 +238,43 @@ mp:
 Four additional boot-source modes are available: `data_volume_url`,
 `data_volume_pvc`, `data_volume_source_ref`, and `pvc`. See
 [Boot sources](../roles/kubevirt/README.md#boot-sources).
+
+## AWS EC2 driver
+
+Replace the `ec2` driver and `platforms` with `mp_backend: aws`, native inventory
+and the public create/prepare/destroy imports. Use `mp_defaults.aws` for shared
+values and `mp.aws` for per-host values. Follow the [AWS walkthrough](AWS.md)
+for installation and a complete scenario; see [the reference](../roles/aws/README.md)
+for all supported fields. AWS requires collection version 0.0.7-alpha or later.
+
+| Molecule EC2 platform option | AWS provisioner field |
+| --- | --- |
+| `name` | Logical inventory host name |
+| `image` | `image_id` |
+| `image_name`, `image_owner`, `image_filters` | Same names |
+| `instance_type`, `region` | Same names |
+| `aws_profile` | `profile` |
+| `vpc_subnet_id`, `vpc_id` | `subnet_id`, `vpc_id` |
+| VPC/subnet filters | `vpc_filters`, `subnet_filters`; selection must be unique |
+| `assign_public_ip` | Same name; `connection_address` selects management address |
+| `security_groups` | Same name; existing groups are never modified |
+| `security_group_name`, `security_group_description` | Same names; generated names include run identity |
+| `security_group_rules`, `security_group_rules_egress` | Same names; explicit ingress required |
+| `key_inject_method`, `key_name`, `private_key_path` | Same names |
+| `public_key_path` | Not needed; derive public material from the private key |
+| `cloud_config` | `cloud_init.user_data` (structured mapping) |
+| `user_data` | Same name; opaque payload, use `ec2` or `none` injection |
+| `volumes` | Same module-shaped block mappings; disposable generated disks |
+| `network_interfaces`, `network_interfaces_ids` | Generated interfaces or explicit existing references |
+| `iam_instance_profile` | Same name; applied to the instance |
+| `tags` | Same name; ownership/Name keys reserved |
+| `instance_options` | Supported compute/placement/metadata settings; see reference |
+| `ssh_user`, `ssh_port`, `connection` | Same names |
+| `connection_options` | `connection_vars` |
+| `admin_user`, `boot_wait_seconds` | Same names |
+
+This backend's `network.mode: auto` creates an isolated run-owned network when no
+existing target is selected. Generated ingress has no unrestricted internet defaults. Launches
+use stable client tokens and cleanup follows recorded ownership rather than names.
+Windows listeners remain image/bootstrap responsibilities; choose WinRM or PSRP
+explicitly. For RDP use a client that prompts for credentials.

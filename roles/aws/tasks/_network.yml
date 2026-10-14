@@ -1,0 +1,61 @@
+---
+- name: AWS | Select the managed regional network
+  ansible.builtin.set_fact:
+    __mp_aws_net: '{{ __mp_aws_run.networks[__mp_aws_region] }}'
+    __mp_aws_net_name: mp-{{ __mp_aws_run.id }}-{{ __mp_aws_region }}
+    __mp_aws_deleting: false
+- name: AWS | Materialize the managed network in its recorded region
+  module_defaults:
+    group/amazon.aws.aws:
+      region: '{{ __mp_aws_region }}'
+      profile: '{{ __mp_aws_net.profile | default(omit, true) }}'
+  block:
+    - name: AWS | Reconcile resources after partial creation
+      ansible.builtin.include_tasks: _network_info.yml
+    - name: AWS | Refuse foreign route-table associations
+      ansible.builtin.assert:
+        that: |-
+          __mp_aws_found_route.route_tables | map(attribute='associations')
+          | flatten | selectattr('subnet_id', 'defined') | map(attribute='subnet_id')
+          | difference([__mp_aws_net.subnet_id | default('')]) | length == 0
+        fail_msg: The owned route table has a foreign association; state was retained.
+    - name: AWS | Create missing network resources
+      ansible.builtin.include_tasks: _network_create.yml
+    - name: AWS | Complete a verified gateway attachment after an interrupted create
+      amazon.aws.ec2_vpc_igw:
+        internet_gateway_id: '{{ __mp_aws_net.gateway_id }}'
+        vpc_id: '{{ __mp_aws_net.vpc_id }}'
+        state: present
+        tags: |-
+          {{ __mp_aws_run.id | david_igou.molecule_provisioners.aws_tags | combine({'Name':
+          __mp_aws_net_name ~ '-gateway'}) }}
+      when:
+        - __mp_aws_found_gateway.internet_gateways | length == 1
+        - __mp_aws_found_gateway.internet_gateways[0].attachments | length == 0
+    - name: AWS | Complete owned routes and subnet association after interrupted creation
+      amazon.aws.ec2_vpc_route_table:
+        route_table_id: '{{ __mp_aws_net.route_table_id }}'
+        lookup: id
+        vpc_id: '{{ __mp_aws_net.vpc_id }}'
+        subnets:
+          - '{{ __mp_aws_net.subnet_id }}'
+        routes:
+          - dest: 0.0.0.0/0
+            gateway_id: '{{ __mp_aws_net.gateway_id }}'
+        tags: |-
+          {{ __mp_aws_run.id | david_igou.molecule_provisioners.aws_tags | combine({'Name':
+          __mp_aws_net_name ~ '-route'}) }}
+        state: present
+      register: __mp_aws_final_routes
+    - name: AWS | Journal the dedicated route association IDs
+      ansible.builtin.set_fact:
+        __mp_aws_net: |-
+          {{ __mp_aws_net | combine({'association_ids': __mp_aws_final_routes.route_table.associations
+          | map(attribute='route_table_association_id') | list}) }}
+    - name: AWS | Retain the resolved regional network
+      ansible.builtin.set_fact:
+        __mp_aws_run: |-
+          {{ __mp_aws_run | combine({'networks': __mp_aws_run.networks | combine({__mp_aws_region:
+          __mp_aws_net})}) }}
+    - name: AWS | Save completed network ownership
+      ansible.builtin.include_tasks: _save.yml

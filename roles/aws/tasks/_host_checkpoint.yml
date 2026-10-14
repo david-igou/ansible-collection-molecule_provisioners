@@ -1,0 +1,8 @@
+---
+- name: AWS | Update the host ownership journal
+  ansible.builtin.set_fact:
+    __mp_aws_run: |-
+      {{ __mp_aws_run | combine({'hosts': __mp_aws_run.hosts | combine({__mp_aws_host:
+      __mp_aws_guest})}) }}
+- name: AWS | Persist the host checkpoint
+  ansible.builtin.include_tasks: _save.yml

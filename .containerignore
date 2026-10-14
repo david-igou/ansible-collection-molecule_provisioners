@@ -1,0 +1,10 @@
+.git
+.venv
+.build
+.ansible
+.env
+collections
+*.tar.gz
+
+.pytest_cache
+tests/output

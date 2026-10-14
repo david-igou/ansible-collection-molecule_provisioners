@@ -1,0 +1,8 @@
+---
+- name: AWS | Update the network ownership journal
+  ansible.builtin.set_fact:
+    __mp_aws_run: |-
+      {{ __mp_aws_run | combine({'networks': __mp_aws_run.networks | combine({__mp_aws_region:
+      __mp_aws_net})}) }}
+- name: AWS | Persist the network checkpoint
+  ansible.builtin.include_tasks: _save.yml

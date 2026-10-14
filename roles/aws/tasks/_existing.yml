@@ -1,0 +1,111 @@
+---
+- name: AWS | Resolve caller-owned security groups
+  amazon.aws.ec2_security_group_info:
+    filters: |-
+      {{ {('group-id' if (__mp_aws_spec.security_groups | first) is match('^sg-')
+      else 'group-name'): __mp_aws_spec.security_groups} }}
+  register: __mp_aws_groups
+  when: __mp_aws_spec.security_groups | default([]) | length > 0
+- name: AWS | Require unambiguous security-group references
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_groups.security_groups | length == __mp_aws_spec.security_groups | length
+      - __mp_aws_groups.security_groups | map(attribute='vpc_id') | unique | length == 1
+    fail_msg: Supply unambiguous security-group IDs or names from one VPC.
+  when: __mp_aws_spec.security_groups | default([]) | length > 0
+- name: AWS | Preserve resolved security-group IDs
+  ansible.builtin.set_fact:
+    __mp_aws_group_ids: '{{ __mp_aws_groups.security_groups | map(attribute=''group_id'') | list }}'
+  when: __mp_aws_spec.security_groups | default([]) | length > 0
+- name: AWS | Inspect referenced network interfaces
+  amazon.aws.ec2_eni_info:
+    filters:
+      network-interface-id: '{{ __mp_aws_spec.network_interfaces_ids | map(attribute=''id'') | list }}'
+  register: __mp_aws_existing_nics
+  when: __mp_aws_spec.network_interfaces_ids | default([]) | length > 0
+- name: AWS | Require all referenced interfaces
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_existing_nics.network_interfaces | length == __mp_aws_spec.network_interfaces_ids | length
+      - |-
+        __mp_aws_existing_nics.network_interfaces | map(attribute='availability_zone')
+        | unique | length == 1
+      - __mp_aws_existing_nics.network_interfaces | map(attribute='vpc_id') | unique | length == 1
+    fail_msg: Referenced interfaces must exist in one VPC and availability zone.
+  when: __mp_aws_spec.network_interfaces_ids | default([]) | length > 0
+- name: AWS | Resolve existing VPC selection
+  amazon.aws.ec2_vpc_net_info:
+    vpc_ids: '{{ [__mp_aws_spec.vpc_id] if __mp_aws_spec.vpc_id is defined else omit }}'
+    filters: '{{ __mp_aws_spec.vpc_filters | default(omit) }}'
+  register: __mp_aws_vpcs
+  when: __mp_aws_spec.vpc_id is defined or __mp_aws_spec.vpc_filters is defined
+- name: AWS | Require one selected VPC
+  ansible.builtin.assert:
+    that: __mp_aws_vpcs.vpcs | length == 1
+    fail_msg: Existing VPC selection must identify exactly one VPC.
+  when: __mp_aws_spec.vpc_id is defined or __mp_aws_spec.vpc_filters is defined
+- name: AWS | Build precise subnet selectors
+  ansible.builtin.set_fact:
+    __mp_aws_subnet_id: |-
+      {{ __mp_aws_spec.subnet_id | default( (__mp_aws_spec.network_interfaces
+      | default([]) | first).subnet_id | default( (__mp_aws_existing_nics.network_interfaces
+      | default([]) | first).subnet_id | default(''))) }}
+    __mp_aws_vpc_id: |-
+      {{ (__mp_aws_vpcs.vpcs | first).vpc_id if (__mp_aws_vpcs.vpcs | default([])
+      | length == 1) else (__mp_aws_groups.security_groups | default([])
+      | first).vpc_id | default('') }}
+- name: AWS | Describe the existing subnet
+  amazon.aws.ec2_vpc_subnet_info:
+    subnet_ids: '{{ [__mp_aws_subnet_id] if __mp_aws_subnet_id else omit }}'
+    filters: |-
+      {{ __mp_aws_spec.subnet_filters | default({}) | combine( {'vpc-id':
+      __mp_aws_vpc_id} if __mp_aws_vpc_id else {}) }}
+  register: __mp_aws_subnets
+- name: AWS | Require one consistent eligible subnet
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_subnets.subnets | length == 1
+      - __mp_aws_subnets.subnets[0].availability_zone in __mp_aws_identity.zones
+      - not __mp_aws_vpc_id or __mp_aws_subnets.subnets[0].vpc_id == __mp_aws_vpc_id
+      - |-
+        __mp_aws_group_ids | length == 0 or (__mp_aws_groups.security_groups
+        | first).vpc_id == __mp_aws_subnets.subnets[0].vpc_id
+      - |-
+        __mp_aws_spec.instance_options.placement.availability_zone |
+        default(__mp_aws_subnets.subnets[0].availability_zone) ==
+        __mp_aws_subnets.subnets[0].availability_zone
+    fail_msg: Existing network selectors must identify one compatible subnet; no replacement network was created.
+- name: AWS | Retain existing subnet identity
+  ansible.builtin.set_fact:
+    __mp_aws_subnet: '{{ __mp_aws_subnets.subnets[0] }}'
+- name: AWS | Validate all existing ENI attachments and subnet consistency
+  ansible.builtin.assert:
+    that:
+      - item.vpc_id == __mp_aws_subnet.vpc_id
+      - item.availability_zone == __mp_aws_subnet.availability_zone
+      - |-
+        item.attachment.instance_id | default(__mp_aws_saved_host.instance_id
+        | default('')) == __mp_aws_saved_host.instance_id | default('')
+      - not (item.attachment.delete_on_termination | default(false))
+    fail_msg: |-
+      Existing ENIs must be in the selected VPC/AZ, retained on termination
+      and unattached or owned by this saved guest.
+  loop: '{{ __mp_aws_existing_nics.network_interfaces | default([]) }}'
+  loop_control:
+    label: '{{ item.network_interface_id }}'
+- name: AWS | Inspect each generated interface subnet before mutation
+  amazon.aws.ec2_vpc_subnet_info:
+    subnet_ids:
+      - '{{ item.subnet_id }}'
+  loop: '{{ __mp_aws_spec.network_interfaces | default([]) | selectattr(''subnet_id'', ''defined'') | list }}'
+  register: __mp_aws_nic_subnets
+- name: AWS | Require all generated interfaces in the same VPC and AZ
+  ansible.builtin.assert:
+    that:
+      - item.subnets | length == 1
+      - item.subnets[0].vpc_id == __mp_aws_subnet.vpc_id
+      - item.subnets[0].availability_zone == __mp_aws_subnet.availability_zone
+    fail_msg: Generated interface subnets must share the primary VPC and AZ.
+  loop: '{{ __mp_aws_nic_subnets.results | default([]) }}'
+  loop_control:
+    label: '{{ item.item.subnet_id }}'

@@ -1,0 +1,8 @@
+---
+- name: AWS | Persist ownership before the next mutation
+  ansible.builtin.copy:
+    dest: '{{ molecule_ephemeral_directory }}/aws_run.yml'
+    content: '{{ __mp_aws_run | to_nice_yaml }}'
+    mode: '0600'
+  diff: false
+  when: not ansible_check_mode

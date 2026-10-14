@@ -1,0 +1,124 @@
+---
+- name: AWS | Select guest authentication requirements
+  ansible.builtin.set_fact:
+    __mp_aws_key_path: |-
+      {{ __mp_aws_spec.private_key_path |
+      default(__mp_aws_spec.connection_vars.ansible_ssh_private_key_file
+      | default(mp_aws_ssh_key_path)) }}
+    __mp_aws_key_needed: |-
+      {{ __mp_aws_spec.key_inject_method == 'cloud-init' or (__mp_aws_spec.key_inject_method
+      == 'ec2' and __mp_aws_spec.key_name is not defined) or (__mp_aws_spec.connection
+      in ['winrm', 'psrp'] and __mp_aws_spec.connection_vars.ansible_password
+      is not defined) or __mp_aws_spec.private_key_path is defined or
+      __mp_aws_spec.connection_vars.ansible_ssh_private_key_file is defined
+      }}
+    __mp_aws_public_key: ''
+    __mp_aws_key_name: |-
+      {{ __mp_aws_spec.key_name | default('mp-' ~ __mp_aws_run.id ~ '-'
+      ~ __mp_aws_host ~ '-key') }}
+  no_log: true
+- name: AWS | Locate the required local key
+  ansible.builtin.stat:
+    path: '{{ __mp_aws_key_path }}'
+  register: __mp_aws_key_stat
+  when: __mp_aws_key_needed
+- name: AWS | Require supplied keys and preserve saved key identity
+  ansible.builtin.assert:
+    that:
+      - |-
+        not (__mp_aws_spec.private_key_path is defined or __mp_aws_spec.key_name
+        is defined) or __mp_aws_key_stat.stat.exists
+      - __mp_aws_key_path not in __mp_aws_run.local_keys or __mp_aws_key_stat.stat.exists
+    fail_msg: Restore the matching private key before resuming; keys are never replaced automatically.
+  when: __mp_aws_key_needed
+- name: AWS | Record local key ownership before generation
+  ansible.builtin.set_fact:
+    __mp_aws_run: |-
+      {{ __mp_aws_run | combine({'local_keys': __mp_aws_run.local_keys |
+      combine({__mp_aws_key_path: { 'owned': not __mp_aws_key_stat.stat.exists}})})
+      }}
+  when:
+    - __mp_aws_key_needed
+    - __mp_aws_key_path not in __mp_aws_run.local_keys
+- name: AWS | Save key ownership intent
+  ansible.builtin.include_tasks: _save.yml
+  when: __mp_aws_key_needed
+- name: AWS | Generate or inspect the scenario RSA key
+  community.crypto.openssh_keypair:
+    path: '{{ __mp_aws_key_path }}'
+    type: rsa
+    size: 4096
+    private_key_format: pkcs1
+    backend: cryptography
+    regenerate: never
+    mode: '{{ ''0600'' if __mp_aws_run.local_keys[__mp_aws_key_path].owned else omit }}'
+  check_mode: '{{ not __mp_aws_run.local_keys[__mp_aws_key_path].owned }}'
+  no_log: true
+  register: __mp_aws_local_key
+  when: __mp_aws_key_needed
+- name: AWS | Verify the saved public-key fingerprint
+  ansible.builtin.assert:
+    that:
+      - |-
+        __mp_aws_run.local_keys[__mp_aws_key_path].fingerprint | default(__mp_aws_local_key.fingerprint)
+        == __mp_aws_local_key.fingerprint
+      - |-
+        __mp_aws_spec.connection not in ['winrm', 'psrp'] or __mp_aws_local_key.public_key
+        is match('^ssh-rsa ')
+    fail_msg: The saved key does not match, or Windows password decryption requires an RSA key.
+  when: __mp_aws_key_needed
+- name: AWS | Retain the verified public key and fingerprint
+  ansible.builtin.set_fact:
+    __mp_aws_public_key: '{{ __mp_aws_local_key.public_key }}'
+    __mp_aws_run: |-
+      {{ __mp_aws_run | combine({'local_keys': __mp_aws_run.local_keys |
+      combine({__mp_aws_key_path: __mp_aws_run.local_keys[__mp_aws_key_path]
+      | combine({'fingerprint': __mp_aws_local_key.fingerprint})})}) }}
+  no_log: true
+  when: __mp_aws_key_needed
+- name: AWS | Inspect the exact EC2 key-pair identity
+  amazon.aws.ec2_key_info:
+    filters:
+      key-name: '{{ __mp_aws_key_name }}'
+    include_public_key: true
+  register: __mp_aws_cloud_key
+  when: __mp_aws_spec.key_inject_method == 'ec2'
+- name: AWS | Check generated EC2 key ownership
+  ansible.builtin.assert:
+    that: |-
+      __mp_aws_cloud_key.keypairs | david_igou.molecule_provisioners.aws_owned(__mp_aws_run.id)
+      is sequence
+    fail_msg: An existing key name is not owned by this run.
+  when:
+    - __mp_aws_spec.key_inject_method == 'ec2'
+    - __mp_aws_spec.key_name is not defined
+- name: AWS | Verify caller EC2 keys are present and match supplied material
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_cloud_key.keypairs | length == 1
+      - |-
+        not __mp_aws_key_needed or (__mp_aws_cloud_key.keypairs[0].public_key.split()[:2]
+        == __mp_aws_public_key.split()[:2])
+    fail_msg: Supply an existing EC2 key pair and its matching private key.
+  when:
+    - __mp_aws_spec.key_inject_method == 'ec2'
+    - __mp_aws_spec.key_name is defined
+- name: AWS | Record the EC2 key-pair cleanup contract
+  ansible.builtin.set_fact:
+    __mp_aws_guest: |-
+      {{ __mp_aws_guest | combine({'key_name': __mp_aws_key_name, 'key_owned':
+      __mp_aws_spec.key_name is not defined, 'private_key_path': __mp_aws_key_path
+      if __mp_aws_key_needed else ''}) }}
+  when: __mp_aws_spec.key_inject_method == 'ec2'
+- name: AWS | Save EC2 key-pair ownership before import
+  ansible.builtin.include_tasks: _host_checkpoint.yml
+- name: AWS | Import the owned public EC2 key
+  amazon.aws.ec2_key:
+    name: '{{ __mp_aws_key_name }}'
+    key_material: '{{ __mp_aws_public_key }}'
+    tags: '{{ __mp_aws_run.id | david_igou.molecule_provisioners.aws_tags(__mp_aws_host) }}'
+    state: present
+  when:
+    - __mp_aws_spec.key_inject_method == 'ec2'
+    - __mp_aws_spec.key_name is not defined
+    - __mp_aws_cloud_key.keypairs | length == 0

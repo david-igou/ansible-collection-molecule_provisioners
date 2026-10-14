@@ -1,0 +1,92 @@
+---
+- name: AWS | Collect inventory inputs
+  ansible.builtin.set_fact:
+    __mp_aws_inputs: |-
+      {{ dict(groups['molecule'] | zip(groups['molecule'] | map('extract',
+      hostvars) | map(attribute='mp.aws') | list)) }}
+    __mp_aws_plans: {}
+    __mp_aws_templates: {}
+    __mp_aws_runtime: {}
+  no_log: true
+- name: AWS | Validate host count and complete inventory
+  ansible.builtin.assert:
+    that:
+      - groups['molecule'] | length <= mp_aws_max_instances | int
+      - |-
+        __mp_aws_inputs | david_igou.molecule_provisioners.aws_normalize(mp_aws_role_defaults
+        | combine(mp_defaults.aws | default({}), recursive=true)) is mapping
+    fail_msg: Correct AWS inventory and instance limits before creating resources.
+- name: AWS | Resolve host specifications
+  ansible.builtin.set_fact:
+    __mp_aws_specs: |-
+      {{ __mp_aws_inputs | david_igou.molecule_provisioners.aws_normalize(
+      mp_aws_role_defaults | combine(mp_defaults.aws | default({}), recursive=true))
+      }}
+  no_log: true
+- name: AWS | Load run identity
+  ansible.builtin.include_tasks: _load.yml
+- name: AWS | Retain immutable inventory for this run
+  ansible.builtin.set_fact:
+    __mp_aws_intent: '{{ __mp_aws_specs | david_igou.molecule_provisioners.aws_intent }}'
+- name: AWS | Require unchanged create intent
+  ansible.builtin.assert:
+    that: __mp_aws_run.intent == __mp_aws_intent
+    fail_msg: Destroy the saved run before changing its immutable inventory.
+  when: __mp_aws_state_file.stat.exists
+- name: AWS | Resolve every host before any mutation
+  ansible.builtin.include_tasks: _preflight.yml
+  loop: '{{ groups[''molecule''] }}'
+  loop_control:
+    loop_var: __mp_aws_host
+    label: '{{ __mp_aws_host }}'
+- name: AWS | Plan shared regional networks
+  ansible.builtin.set_fact:
+    __mp_aws_networks: '{{ __mp_aws_specs | david_igou.molecule_provisioners.aws_network_plan(__mp_aws_plans) }}'
+- name: AWS | Report validated check-mode intent
+  ansible.builtin.debug:
+    msg: |-
+      Validated {{ __mp_aws_specs | length }} guests and {{ __mp_aws_networks
+      | length }} managed networks; no resources were created.
+  when: ansible_check_mode
+- name: AWS | Materialize the validated run
+  when: not ansible_check_mode
+  block:
+    - name: AWS | Generate a run identity before provisioning
+      ansible.builtin.set_fact:
+        __mp_aws_run:
+          version: 1
+          id: '{{ lookup(''ansible.builtin.password'', ''/dev/null'', length=32, chars=''0123456789abcdef'') }}'
+          account: '{{ __mp_aws_identity.account }}'
+          partition: '{{ __mp_aws_identity.partition }}'
+          intent: '{{ __mp_aws_intent }}'
+          hosts: '{{ __mp_aws_plans }}'
+          networks: '{{ __mp_aws_networks }}'
+          local_keys: {}
+      when: not __mp_aws_state_file.stat.exists
+    - name: AWS | Save initial ownership
+      ansible.builtin.include_tasks: _save.yml
+    - name: AWS | Create or resume regional network foundations
+      ansible.builtin.include_tasks: _network.yml
+      loop: '{{ __mp_aws_run.networks.keys() | list }}'
+      loop_control:
+        loop_var: __mp_aws_region
+    - name: AWS | Create or resume individual guests
+      ansible.builtin.include_tasks: _host.yml
+      loop: '{{ groups[''molecule''] }}'
+      loop_control:
+        loop_var: __mp_aws_host
+        label: '{{ __mp_aws_host }}'
+    - name: AWS | Create private runtime inventory directory
+      ansible.builtin.file:
+        path: '{{ molecule_ephemeral_directory }}/inventory'
+        state: directory
+        mode: '0700'
+    - name: AWS | Persist native guest connection inventory
+      ansible.builtin.copy:
+        dest: '{{ molecule_ephemeral_directory }}/inventory/molecule_runtime.yml'
+        content: '{{ {''all'': {''hosts'': __mp_aws_runtime}} | to_nice_yaml }}'
+        mode: '0600'
+      no_log: true
+      diff: false
+    - name: AWS | Refresh runtime connection inventory
+      ansible.builtin.meta: refresh_inventory

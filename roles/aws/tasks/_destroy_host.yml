@@ -1,0 +1,156 @@
+---
+- name: AWS | Select the recorded guest cleanup targets
+  ansible.builtin.set_fact:
+    __mp_aws_guest: '{{ __mp_aws_run.hosts[__mp_aws_host] }}'
+- name: AWS | Verify cleanup account identity
+  david_igou.molecule_provisioners.aws_instance:
+    operation: identity
+    region: '{{ __mp_aws_guest.region }}'
+    profile: '{{ __mp_aws_guest.profile | default(omit, true) }}'
+  register: __mp_aws_cleanup_identity
+- name: AWS | Require the recorded account and partition
+  ansible.builtin.assert:
+    that:
+      - __mp_aws_cleanup_identity.account == __mp_aws_run.account
+      - __mp_aws_cleanup_identity.partition == __mp_aws_run.partition
+    fail_msg: Cleanup credentials do not match the saved account and partition.
+- name: AWS | Reconcile and delete only this guest's owned cloud resources
+  module_defaults:
+    group/amazon.aws.aws:
+      region: '{{ __mp_aws_guest.region }}'
+      profile: '{{ __mp_aws_guest.profile | default(omit, true) }}'
+  block:
+    - name: AWS | Locate accepted launches including lost responses
+      amazon.aws.ec2_instance_info:
+        filters: |-
+          {{ {'instance-id': __mp_aws_guest.instance_id} if __mp_aws_guest.instance_id
+          is defined else {'tag:molecule-provisioners:run-id': __mp_aws_run.id,
+          'tag:molecule-provisioners:host': __mp_aws_host} }}
+      register: __mp_aws_cleanup_instances
+    - name: AWS | Require verified guest ownership
+      ansible.builtin.assert:
+        that:
+          - __mp_aws_cleanup_instances.instances | length <= 1
+          - |-
+            __mp_aws_cleanup_instances.instances |
+            david_igou.molecule_provisioners.aws_owned(__mp_aws_run.id) is sequence
+        fail_msg: Refusing to terminate an unverified or ambiguous instance.
+    - name: AWS | Discover secondary interfaces whose creation response was lost
+      amazon.aws.ec2_eni_info:
+        filters:
+          tag:molecule-provisioners:run-id: '{{ __mp_aws_run.id }}'
+          tag:molecule-provisioners:host: '{{ __mp_aws_host }}'
+      register: __mp_aws_orphan_enis
+    - name: AWS | Preserve generated descendant IDs before termination
+      ansible.builtin.set_fact:
+        __mp_aws_guest: |-
+          {{ __mp_aws_guest | combine({ 'volumes': ((__mp_aws_guest.volumes
+          | default([])) + (__mp_aws_cleanup_instances.instances | map(attribute='block_device_mappings')
+          | flatten | selectattr('ebs', 'defined') | map(attribute='ebs.volume_id')
+          | list)) | unique | difference(__mp_aws_guest.external_volumes | default([])),
+          'enis': ((__mp_aws_guest.enis | default([])) + (__mp_aws_orphan_enis.network_interfaces
+          | map(attribute='network_interface_id') | list) + (__mp_aws_cleanup_instances.instances
+          | map(attribute='network_interfaces') | flatten | map(attribute='network_interface_id')
+          | list)) | unique | difference(__mp_aws_guest.external_enis | default([]))})
+          }}
+    - name: AWS | Save descendant cleanup evidence
+      ansible.builtin.include_tasks: _host_checkpoint.yml
+      when: not ansible_check_mode
+    - name: AWS | Verify descendants and references before terminating
+      ansible.builtin.include_tasks: _check_descendants.yml
+    - name: AWS | Terminate verified instances and wait for completion
+      amazon.aws.ec2_instance:
+        instance_ids: |-
+          {{ __mp_aws_cleanup_instances.instances | rejectattr('state.name',
+          'equalto', 'terminated') | map(attribute='instance_id') | list }}
+        state: absent
+        wait: true
+        wait_timeout: '{{ mp_aws_cleanup_timeout }}'
+      when:
+        - not ansible_check_mode
+        - |-
+          __mp_aws_cleanup_instances.instances | rejectattr('state.name', 'equalto',
+          'terminated') | list | length > 0
+    - name: AWS | Wait for generated disks to detach or disappear
+      amazon.aws.ec2_vol_info:
+        filters:
+          volume-id: '{{ __mp_aws_guest.volumes }}'
+      register: __mp_aws_remaining_volumes
+      until: __mp_aws_remaining_volumes.volumes | selectattr('status', 'equalto', 'in-use') | list | length == 0
+      retries: '{{ ([1, (mp_aws_cleanup_timeout | int / 5) | int] | max) }}'
+      delay: 5
+      when:
+        - not ansible_check_mode
+        - __mp_aws_guest.volumes | length > 0
+    - name: AWS | Delete verified generated disks that remain
+      amazon.aws.ec2_vol:
+        id: '{{ item.id }}'
+        state: absent
+      loop: |-
+        {{ __mp_aws_remaining_volumes.volumes | default([]) |
+        david_igou.molecule_provisioners.aws_owned(__mp_aws_run.id) }}
+      loop_control:
+        label: '{{ item.id }}'
+      when: not ansible_check_mode
+    - name: AWS | Wait for generated interfaces to release
+      amazon.aws.ec2_eni_info:
+        filters:
+          network-interface-id: '{{ __mp_aws_guest.enis }}'
+      register: __mp_aws_remaining_enis
+      until: |-
+        __mp_aws_remaining_enis.network_interfaces | selectattr('status',
+        'equalto', 'in-use') | list | length == 0
+      retries: '{{ ([1, (mp_aws_cleanup_timeout | int / 5) | int] | max) }}'
+      delay: 5
+      when:
+        - not ansible_check_mode
+        - __mp_aws_guest.enis | length > 0
+    - name: AWS | Delete verified generated interfaces that remain
+      amazon.aws.ec2_eni:
+        eni_id: '{{ item.network_interface_id }}'
+        state: absent
+      loop: |-
+        {{ __mp_aws_remaining_enis.network_interfaces | default([]) |
+        david_igou.molecule_provisioners.aws_owned(__mp_aws_run.id) }}
+      loop_control:
+        label: '{{ item.network_interface_id }}'
+      when: not ansible_check_mode
+    - name: AWS | Inspect any owned security groups including partial creation
+      amazon.aws.ec2_security_group_info:
+        filters: |-
+          {{ {'group-id': __mp_aws_guest.groups} if __mp_aws_guest.sg_owned
+          | default(false) else {'tag:molecule-provisioners:run-id': __mp_aws_run.id,
+          'tag:molecule-provisioners:host': __mp_aws_host} }}
+      register: __mp_aws_cleanup_groups
+    - name: AWS | Delete only verified run security groups
+      amazon.aws.ec2_security_group:
+        group_id: '{{ item.group_id }}'
+        state: absent
+      loop: |-
+        {{ __mp_aws_cleanup_groups.security_groups |
+        david_igou.molecule_provisioners.aws_owned(__mp_aws_run.id) }}
+      loop_control:
+        label: '{{ item.group_id }}'
+      register: __mp_aws_group_deleted
+      until: __mp_aws_group_deleted is succeeded
+      retries: '{{ ([1, (mp_aws_cleanup_timeout | int / 5) | int] | max) }}'
+      delay: 5
+      when: not ansible_check_mode
+    - name: AWS | Inspect the owned EC2 key pair
+      amazon.aws.ec2_key_info:
+        filters:
+          key-name: '{{ __mp_aws_guest.key_name }}'
+      register: __mp_aws_cleanup_keys
+      when: __mp_aws_guest.key_owned | default(false)
+    - name: AWS | Remove only verified generated EC2 key pairs
+      amazon.aws.ec2_key:
+        name: '{{ item.key_name }}'
+        state: absent
+      loop: |-
+        {{ __mp_aws_cleanup_keys.keypairs | default([]) |
+        david_igou.molecule_provisioners.aws_owned(__mp_aws_run.id) }}
+      loop_control:
+        label: '{{ item.key_name }}'
+      when:
+        - not ansible_check_mode
+        - __mp_aws_guest.key_owned | default(false)
