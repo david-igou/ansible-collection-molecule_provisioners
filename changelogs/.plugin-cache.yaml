@@ -1,5 +1,9 @@
 objects:
   role:
+    aws:
+      description: null
+      name: aws
+      version_added: null
     docker:
       description: "Default entry point \u2014 does nothing on its own; use tasks_from=create|destroy|prepare."
       name: docker
@@ -13,7 +17,7 @@ objects:
       name: podman
       version_added: null
     qemu:
-      description: Use tasks_from=create, destroy, or prepare for lifecycle operations.
+      description: Use create, destroy or prepare lifecycle entry points.
       name: qemu
       version_added: null
 plugins:
@@ -22,14 +26,57 @@ plugins:
   callback: {}
   cliconf: {}
   connection: {}
-  filter: {}
+  filter:
+    qemu_argv:
+      description: Build launch arguments from the QEMU role specification
+      name: qemu_argv
+      version_added: 0.0.7
+    qemu_network_data:
+      description: Build NoCloud network data while preserving management DHCP
+      name: qemu_network_data
+      version_added: 0.0.7
+    qemu_requests:
+      description: Build non-secret QEMU allocation requests
+      name: qemu_requests
+      version_added: 0.0.7
+    qemu_size:
+      description: Convert an absolute QEMU disk size to bytes
+      name: qemu_size
+      version_added: 0.0.7
+    qemu_specs:
+      description: Normalize merged QEMU host specifications
+      name: qemu_specs
+      version_added: 0.0.7
+    qemu_user_data:
+      description: Build NoCloud user data for an owned QEMU guest
+      name: qemu_user_data
+      version_added: 0.0.7
+    qemu_valid:
+      description: Validate merged QEMU host specifications
+      name: qemu_valid
+      version_added: 0.0.7
   httpapi: {}
   inventory: {}
   lookup: {}
-  module: {}
+  module:
+    aws_instance:
+      description: Launch a disposable EC2 instance with a stable client token
+      name: aws_instance
+      namespace: ''
+      version_added: 0.0.7
+    aws_lock:
+      description: Serialize AWS lifecycle operations within one ephemeral directory
+      name: aws_lock
+      namespace: ''
+      version_added: 0.0.7
+    qemu_process:
+      description: Manage Linux QEMU run ownership and port reservations
+      name: qemu_process
+      namespace: ''
+      version_added: 0.0.7
   netconf: {}
   shell: {}
   strategy: {}
   test: {}
   vars: {}
-version: 0.0.6-alpha
+version: 0.0.7-alpha

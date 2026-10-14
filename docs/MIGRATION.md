@@ -2,7 +2,7 @@
 
 If you have a molecule scenario using the upstream `platforms:` + `driver:` shape (now called _pre ansible-native_ in molecule's own docs) and you want to use this collection, here is the field-by-field translation.
 
-## QEMU testing features (unreleased)
+## QEMU testing features in 0.0.7-alpha
 
 QEMU now allocates management ports automatically and verifies VM ownership
 using persisted state. Destroy existing guests with the provisioner version
@@ -170,7 +170,7 @@ Pin the dependency in `extensions/molecule/requirements-test.yml`:
 ```yaml
 collections:
   - name: david_igou.molecule_provisioners
-    version: 0.0.6-alpha
+    version: 0.0.7-alpha
 ```
 
 Copy [`examples/config.yml`](examples/config.yml) to
