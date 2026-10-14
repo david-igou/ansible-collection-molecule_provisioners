@@ -4,6 +4,56 @@ David\_igou Molecule\_provisioners Collection Release Notes
 
 .. contents:: Topics
 
+v0.0.7-alpha
+============
+
+Release Summary
+---------------
+
+Added an AWS EC2 provisioner with automatic or existing networking and ownership-checked cleanup. QEMU now supports isolated runs, managed disks, configurable bootstrap, additional networks and application endpoints. Destroy legacy QEMU guests with the version that created them before upgrading.
+
+Minor Changes
+-------------
+
+- Added an AWS EC2 provisioner with automatic or existing networking, saved run ownership, stable launch retries, Linux/Windows connections and scoped cleanup (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/77).
+- qemu - added managed data disks, configurable NoCloud bootstrap, isolated socket links, structured extra NICs, TCP/UDP service forwards, network_cli access and private boot diagnostics.
+
+Breaking Changes / Porting Guide
+--------------------------------
+
+- qemu - enabled automatic management-port allocation by default and required persisted VM ownership for cleanup. Destroy legacy guests with their original provisioner before upgrading; identity and host-forward overrides in extra_args are now reserved (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/74).
+
+Bugfixes
+--------
+
+- qemu - preserved per-guest UEFI variables and bootstrap media on repeated create, rejected implicit image-backed disk shrink and verified PID start time plus QMP UUID before signaling guests.
+
+Documentation Changes
+---------------------
+
+- Updated consumer examples to pin 0.0.7-alpha and added an AWS walkthrough covering setup, networking, storage, Windows and cleanup.
+
+New Plugins
+-----------
+
+Filter
+~~~~~~
+
+- qemu_argv - Build launch arguments from the QEMU role specification
+- qemu_network_data - Build NoCloud network data while preserving management DHCP
+- qemu_requests - Build non\-secret QEMU allocation requests
+- qemu_size - Convert an absolute QEMU disk size to bytes
+- qemu_specs - Normalize merged QEMU host specifications
+- qemu_user_data - Build NoCloud user data for an owned QEMU guest
+- qemu_valid - Validate merged QEMU host specifications
+
+New Modules
+-----------
+
+- aws_instance - Launch a disposable EC2 instance with a stable client token
+- aws_lock - Serialize AWS lifecycle operations within one ephemeral directory
+- qemu_process - Manage Linux QEMU run ownership and port reservations
+
 v0.0.6-alpha
 ============
 

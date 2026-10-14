@@ -269,3 +269,66 @@ releases:
     - mit-license.yml
     - podman-startup-check.yml
     release_date: '2026-10-09'
+  0.0.7-alpha:
+    changes:
+      breaking_changes:
+      - qemu - enabled automatic management-port allocation by default and required
+        persisted VM ownership for cleanup. Destroy legacy guests with their original
+        provisioner before upgrading; identity and host-forward overrides in extra_args
+        are now reserved (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/74).
+      bugfixes:
+      - qemu - preserved per-guest UEFI variables and bootstrap media on repeated
+        create, rejected implicit image-backed disk shrink and verified PID start
+        time plus QMP UUID before signaling guests.
+      doc_changes:
+      - Updated consumer examples to pin 0.0.7-alpha and added an AWS walkthrough
+        covering setup, networking, storage, Windows and cleanup.
+      minor_changes:
+      - Added an AWS EC2 provisioner with automatic or existing networking, saved
+        run ownership, stable launch retries, Linux/Windows connections and scoped
+        cleanup (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/77).
+      - qemu - added managed data disks, configurable NoCloud bootstrap, isolated
+        socket links, structured extra NICs, TCP/UDP service forwards, network_cli
+        access and private boot diagnostics.
+      release_summary: Added an AWS EC2 provisioner with automatic or existing networking
+        and ownership-checked cleanup. QEMU now supports isolated runs, managed disks,
+        configurable bootstrap, additional networks and application endpoints. Destroy
+        legacy QEMU guests with the version that created them before upgrading.
+    fragments:
+    - 73-qemu-testing.yml
+    - aws-provisioner.yml
+    - release-summary.yml
+    modules:
+    - description: Launch a disposable EC2 instance with a stable client token
+      name: aws_instance
+      namespace: ''
+    - description: Serialize AWS lifecycle operations within one ephemeral directory
+      name: aws_lock
+      namespace: ''
+    - description: Manage Linux QEMU run ownership and port reservations
+      name: qemu_process
+      namespace: ''
+    plugins:
+      filter:
+      - description: Build launch arguments from the QEMU role specification
+        name: qemu_argv
+        namespace: null
+      - description: Build NoCloud network data while preserving management DHCP
+        name: qemu_network_data
+        namespace: null
+      - description: Build non\-secret QEMU allocation requests
+        name: qemu_requests
+        namespace: null
+      - description: Convert an absolute QEMU disk size to bytes
+        name: qemu_size
+        namespace: null
+      - description: Normalize merged QEMU host specifications
+        name: qemu_specs
+        namespace: null
+      - description: Build NoCloud user data for an owned QEMU guest
+        name: qemu_user_data
+        namespace: null
+      - description: Validate merged QEMU host specifications
+        name: qemu_valid
+        namespace: null
+    release_date: '2026-10-14'

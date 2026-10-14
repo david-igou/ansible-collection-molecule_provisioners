@@ -49,7 +49,7 @@ per-scenario `collections.yml` that drifts independently:
 ```yaml
 collections:
   - name: david_igou.molecule_provisioners
-    version: 0.0.6-alpha
+    version: 0.0.7-alpha
 ```
 
 **2. Wire it into every scenario once via `extensions/molecule/config.yml`:**

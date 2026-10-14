@@ -6,9 +6,9 @@ The controller needs Linux with pidfd support, Python 3.9+, `qemu-system-x86_64`
 `qemu-img`, `file`, and either `cloud-localds` or `genisoimage`. KVM is selected
 when `/dev/kvm` is accessible; otherwise the role uses TCG.
 
-The isolation, disk, bootstrap, network, and access features below are unreleased
-changes associated with [#73](https://github.com/david-igou/ansible-collection-molecule_provisioners/issues/73).
-They are not available in Galaxy `0.0.6-alpha`.
+The isolation, disk, bootstrap, network, and access features below require
+`0.0.7-alpha` or later. See [#73](https://github.com/david-igou/ansible-collection-molecule_provisioners/issues/73)
+for their design.
 
 ## Inventory and defaults
 
