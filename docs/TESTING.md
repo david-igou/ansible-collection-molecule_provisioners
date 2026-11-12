@@ -221,3 +221,15 @@ Actions remain lint-only. Full driver parity additionally needs Tools-based Linu
 bootstrap, Windows/Sysprep/HTTPS WinRM, full/snapshot/linked disk backing, static and
 distributed networking, negative ownership/recovery cases and dependency-version
 coverage. Passing the initial GuestInfo consumer does not close that milestone.
+
+Verified on 2026-11-12 against vSphere 8.0.2 using the existing Ubuntu 24.04 LTS
+and CentOS Stream 9 GuestInfo templates and DHCP networking. The final native
+`make test-vmware` run passed both guests without manual NIC recovery, including
+real check mode without VM/key/journal creation, datasource detection, SSH/sudo,
+login/list, converge/idempotence, stable identities/keys on retry, overlay recovery,
+private persisted worker files and repeated cleanup. Its independent SDK audit
+confirmed the created instance UUIDs were absent and original VM/template identity
+and annotation fingerprints were unchanged. Temporary guest routes were removed.
+Controller: Python 3.12.15, ansible-core 2.19.14, community.vmware 6.5.0,
+vmware.vmware 2.10.0, vcf-sdk 9.0.0.0. This evidence covers GuestInfo Linux;
+it does not certify the remaining parity cases above.
