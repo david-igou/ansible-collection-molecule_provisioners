@@ -40,6 +40,7 @@ install: ## Install python + ansible collection dependencies
 	pip install -r lint-requirements.txt -r requirements.txt -r test-requirements.txt
 	ansible-galaxy collection install containers.podman kubernetes.core community.crypto community.docker community.general ansible.netcommon community.routeros \
 	  'amazon.aws:>=9.0.0,<12.0.0' 'community.aws:>=9.0.0,<12.0.0' 'ansible.windows:>=2.5.0,<4.0.0'
+	ansible-galaxy collection install -r requirements-vmware.yml
 
 lint: ## Lint Ansible, YAML and changelog fragments
 	ansible-lint

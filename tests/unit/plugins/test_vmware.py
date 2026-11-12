@@ -287,6 +287,8 @@ def test_unique_inventory_resolution_rejects_ambiguous_names():
 
 
 def test_observation_refuses_markerless_and_replaced_vms(monkeypatch):
+    # This policy test needs no SDK or vCenter: the inventory view is a stub.
+    monkeypatch.setattr(inspect, "vim", SimpleNamespace(VirtualMachine=object), raising=False)
     vm = SimpleNamespace(
         name="physical",
         parent=object(),

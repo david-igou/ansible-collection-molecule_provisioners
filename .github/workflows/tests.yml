@@ -42,6 +42,7 @@ jobs:
             'amazon.aws:>=9.0.0,<12.0.0' \
             'community.aws:>=9.0.0,<12.0.0' \
             'ansible.windows:>=2.5.0,<4.0.0'
+          ansible-galaxy collection install -r requirements-vmware.yml
 
       - name: Lint collection
         working-directory: ansible_collections/david_igou/molecule_provisioners
