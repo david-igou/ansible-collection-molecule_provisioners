@@ -74,6 +74,33 @@
              hostvars[groups['molecule'][0]].mp_aws_role_defaults | default(omit)) }}
       when: _mp_backend == 'aws'
 
+    - name: Pull VMware role options from molecule group hostvars
+      ansible.builtin.set_fact:
+        __mp_vmware_options_loaded: true
+        mp_vmware_provision_timeout: >-
+          {{ mp_vmware_provision_timeout | default(hostvars[groups['molecule'][0]].mp_vmware_provision_timeout |
+          default(omit))
+          }}
+        mp_vmware_tools_timeout: >-
+          {{ mp_vmware_tools_timeout | default(hostvars[groups['molecule'][0]].mp_vmware_tools_timeout |
+          default(omit)) }}
+        mp_vmware_wait_timeout: >-
+          {{ mp_vmware_wait_timeout | default(hostvars[groups['molecule'][0]].mp_vmware_wait_timeout | default(omit)) }}
+        mp_vmware_windows_wait_timeout: >-
+          {{ mp_vmware_windows_wait_timeout |
+          default(hostvars[groups['molecule'][0]].mp_vmware_windows_wait_timeout | default(omit))
+          }}
+        mp_vmware_cleanup_timeout: >-
+          {{ mp_vmware_cleanup_timeout | default(hostvars[groups['molecule'][0]].mp_vmware_cleanup_timeout |
+          default(omit))
+          }}
+        mp_vmware_concurrency: >-
+          {{ mp_vmware_concurrency | default(hostvars[groups['molecule'][0]].mp_vmware_concurrency | default(omit)) }}
+        mp_vmware_role_defaults: >-
+          {{ mp_vmware_role_defaults | default(hostvars[groups['molecule'][0]].mp_vmware_role_defaults |
+          default(omit)) }}
+      when: _mp_backend == 'vmware'
+
     - name: Run provisioner create
       ansible.builtin.include_role:
         name: "david_igou.molecule_provisioners.{{ _mp_backend }}"

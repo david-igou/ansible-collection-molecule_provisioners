@@ -1,0 +1,16 @@
+---
+- name: VMware | Acquire the controller lease
+  david_igou.molecule_provisioners.vmware_lock:
+    directory: "{{ molecule_ephemeral_directory }}"
+    state: held
+- name: VMware | Execute the create lifecycle
+  vars:
+    ansible_async_dir: "{{ molecule_ephemeral_directory }}/.vmware-async"
+  block:
+    - name: VMware | Run scoped lifecycle tasks
+      ansible.builtin.include_tasks: _create.yml
+  always:
+    - name: VMware | Release the controller lease
+      david_igou.molecule_provisioners.vmware_lock:
+        directory: "{{ molecule_ephemeral_directory }}"
+        state: released

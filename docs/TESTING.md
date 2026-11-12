@@ -187,3 +187,37 @@ The tests exercise authenticated Linux/sudo, Windows WinRM and PSRP password
 decryption, repeated create, existing-network preservation, inventory removal,
 run isolation, failure recovery and independent SDK cleanup checks. Backend
 validation/rendering and launch retry tests are also part of `make test-unit`.
+
+## VMware
+
+Build the local Python 3.12 controller EE with `make ee-vmware`. The opt-in
+`make test-vmware` target needs the vCenter environment credentials and all of:
+
+- `MP_TEST_VMWARE_EXPECTED_UUID`: exact vCenter instance UUID, checked before mutation.
+- `MP_TEST_VMWARE_DATACENTER`, `MP_TEST_VMWARE_CLUSTER`, `MP_TEST_VMWARE_FOLDER`:
+  existing designated test placement.
+- `MP_TEST_VMWARE_DATASTORE`, `MP_TEST_VMWARE_NETWORK`: existing writable datastore
+  and DHCP port group.
+- `MP_TEST_VMWARE_TEMPLATE`, `MP_TEST_VMWARE_SECOND_TEMPLATE`: Linux sources prepared
+  for VMware GuestInfo/cloud-init, SSH, Python and sudo.
+
+For the Signal9 split-DNS setup, also set `MP_TEST_VMWARE_DNS=127.0.0.53`.
+
+Credentials alone never start a live test. The installed-consumer fixture creates
+one clone from each template, checks authenticated SSH/sudo, converge/idempotence,
+Molecule list/login, repeated create with stable identities/keys, runtime overlay
+recovery, repeated destroy and independent SDK verification that original VMs and
+templates retain their names/template status/annotations. Failure evidence stays
+private under `.build/vmware-live/`; preserve it after incomplete cleanup.
+
+The optional `MP_TEST_VMWARE_ROUTE_HOST` is specific to the current lab's VPN/Docker
+subnet overlap. With an existing SSH agent and known-hosts file, it adds only missing
+private guest `/32` routes on that host through the existing `igou` interface and
+removes precisely those routes in teardown. Ordinary routed environments should
+leave it unset. The production role does not alter controller/VPN routes.
+
+Offline validation/ownership/bootstrap tests run with `make test-unit`. Hosted
+Actions remain lint-only. Full driver parity additionally needs Tools-based Linux
+bootstrap, Windows/Sysprep/HTTPS WinRM, full/snapshot/linked disk backing, static and
+distributed networking, negative ownership/recovery cases and dependency-version
+coverage. Passing the initial GuestInfo consumer does not close that milestone.

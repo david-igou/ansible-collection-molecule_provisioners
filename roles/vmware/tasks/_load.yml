@@ -1,0 +1,50 @@
+---
+- name: VMware | Initialize host inputs
+  ansible.builtin.set_fact:
+    __mp_vmware_inputs: {}
+- name: VMware | Collect each host's VMware settings
+  ansible.builtin.set_fact:
+    __mp_vmware_inputs: "{{ __mp_vmware_inputs | combine({item: hostvars[item].mp.vmware | default({})}) }}"
+  loop: '{{ groups["molecule"] }}'
+  no_log: true
+- name: VMware | Validate all effective host settings
+  ansible.builtin.set_fact:
+    __mp_vmware_specs: >-
+      {{ __mp_vmware_inputs | david_igou.molecule_provisioners.vmware_normalize(mp_defaults.vmware |
+      default({}), mp_vmware_role_defaults)
+      }}
+  no_log: true
+  when: not (__mp_vmware_destroy | default(false))
+- name: VMware | Select the shared API connection
+  ansible.builtin.set_fact:
+    __mp_vmware_vcenter: >-
+      {{ (mp_vmware_role_defaults.vcenter | default({}) |
+      david_igou.molecule_provisioners.vmware_merge(mp_defaults.vmware.vcenter
+      | default({})) |
+      david_igou.molecule_provisioners.vmware_merge(hostvars[groups['molecule'][0]].mp.vmware.vcenter |
+      default({})))
+      if (__mp_vmware_destroy | default(false)) else (__mp_vmware_specs.values() | first).vcenter }}
+  no_log: true
+- name: VMware | Locate saved run state
+  ansible.builtin.stat:
+    path: "{{ molecule_ephemeral_directory }}/vmware_run.yml"
+  register: __mp_vmware_state_file
+- name: VMware | Read and validate saved run state
+  ansible.builtin.set_fact:
+    __mp_vmware_run: >-
+      {{ (lookup('ansible.builtin.file', molecule_ephemeral_directory ~ '/vmware_run.yml') |
+      from_yaml | david_igou.molecule_provisioners.vmware_validate_run)
+      if __mp_vmware_state_file.stat.exists else {} }}
+- name: VMware | Check operation limits
+  ansible.builtin.assert:
+    that:
+      - item is integer
+      - item > 0
+    fail_msg: VMware limits must be positive integers.
+  loop:
+    - "{{ mp_vmware_provision_timeout }}"
+    - "{{ mp_vmware_tools_timeout }}"
+    - "{{ mp_vmware_wait_timeout }}"
+    - "{{ mp_vmware_windows_wait_timeout }}"
+    - "{{ mp_vmware_cleanup_timeout }}"
+    - "{{ mp_vmware_concurrency }}"

@@ -7,7 +7,7 @@ authors:
   - David Igou <igou.david@gmail.com>
 
 description: >-
-  Reusable Molecule provisioner playbooks and roles (podman, kubevirt, qemu, docker, aws) for
+  Reusable Molecule provisioner playbooks and roles (podman, kubevirt, qemu, docker, aws, vmware) for
   testing other Ansible collections without copy-pasting create/destroy/prepare
   automation per repo.
 
@@ -21,6 +21,7 @@ tags:
   - qemu
   - docker
   - aws
+  - vmware
 
 dependencies:
   amazon.aws: ">=9.0.0,<12.0.0"

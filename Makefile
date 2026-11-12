@@ -123,3 +123,12 @@ $(CANONICAL):
 	@for item in $$(ls -A $(CURDIR) | grep -v '^\.build$$'); do \
 	  ln -sfn $(CURDIR)/$$item $(CANONICAL)/$$item; \
 	done
+
+VMWARE_TEST_IMAGE ?= localhost/mp-vmware-ee:dev
+
+.PHONY: ee-vmware test-vmware
+ee-vmware: ## Build the optional Python 3.12 VMware controller EE
+	podman build -f tests/ee/vmware/Containerfile -t $(VMWARE_TEST_IMAGE) .
+
+test-vmware: ## Opt-in installed VMware consumer tests; requires expected identity and fixtures
+	VMWARE_TEST_IMAGE=$(VMWARE_TEST_IMAGE) bash scripts/test-vmware.sh

@@ -19,11 +19,13 @@ retry, cleanup and lost-state recovery.
 | `qemu` | Real VMs via direct `qemu-system` process (no libvirtd) |
 | `docker` | Containers using a local Docker daemon |
 | `aws` | Disposable EC2 guests with managed or existing networking |
+| `vmware` | vCenter template clones with Linux SSH or Windows WinRM |
 
 See the [Podman](roles/podman/README.md), [KubeVirt](roles/kubevirt/README.md),
 [QEMU](roles/qemu/README.md), [Docker](roles/docker/README.md), and
 [AWS](roles/aws/README.md) role READMEs
-for their settings and requirements. KubeVirt and AWS also support Windows guests
+for their settings and requirements. See the [VMware reference](roles/vmware/README.md)
+for its optional dependencies, bootstrap modes and current parity limits. KubeVirt and AWS also support Windows guests
 over PSRP or WinRM. AWS supports appliance readiness probes.
 
 AWS supports either existing networking or automatic VPC/public-subnet creation.
@@ -172,7 +174,7 @@ mp_defaults:
     privileged: true
 ```
 
-Switch backends at runtime: `PROVISIONER=podman molecule test` (or `kubevirt`, `qemu`, `docker`, `aws`).
+Switch backends at runtime: `PROVISIONER=podman molecule test` (or `kubevirt`, `qemu`, `docker`, `aws`, `vmware`).
 
 A single-backend scenario may hardcode `mp_backend: qemu`, but the env-driven
 form above is preferred — it keeps the `PROVISIONER=<backend>` override working
@@ -272,7 +274,7 @@ Every backend writes runtime connection details for the hosts in the inventory's
 - qemu remote / non-controller-local hosts
 - qemu NAT or bridge networking (SLIRP only)
 - LoadBalancer / ClusterIP+port-forward kubevirt service types
-- Windows guests on backends other than KubeVirt or AWS; macOS guests
+- Windows guests on backends other than KubeVirt, AWS or VMware; macOS guests
 - AWS VPC peering and automatic IPv6 network creation
 - Docker image build at create time, private-registry login, remote/TLS docker daemons
 - Molecule `shared_state` / shared default-scenario pattern

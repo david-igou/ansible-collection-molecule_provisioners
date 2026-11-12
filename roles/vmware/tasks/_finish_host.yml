@@ -1,0 +1,60 @@
+---
+- name: VMware | Wait for the saved worker to finish
+  ansible.builtin.async_status:
+    jid: "{{ __mp_vmware_run.hosts[__mp_vmware_host].job_id }}"
+  register: __mp_vmware_finished
+  until: __mp_vmware_finished.finished
+  delay: 5
+  retries: '{{ (mp_vmware_provision_timeout / 5) | round(0, "ceil") | int + 1 }}'
+  no_log: true
+  when: __mp_vmware_run.hosts[__mp_vmware_host].phase == 'submitted'
+- name: VMware | Restrict completed worker evidence to the controller account
+  ansible.builtin.file:
+    path: '{{ molecule_ephemeral_directory }}/.vmware-async/{{ __mp_vmware_run.hosts[__mp_vmware_host].job_id }}'
+    mode: '0600'
+  when: __mp_vmware_run.hosts[__mp_vmware_host].phase == 'submitted'
+- name: VMware | Verify the created VM ownership
+  david_igou.molecule_provisioners.vmware_inspect:
+    vcenter: "{{ __mp_vmware_vcenter }}"
+    records: "{{ {__mp_vmware_host: __mp_vmware_run.hosts[__mp_vmware_host]} }}"
+    expected_vcenter_uuid: "{{ __mp_vmware_run.vcenter_uuid }}"
+  register: __mp_vmware_guest
+  until: >-
+    __mp_vmware_guest.observations[__mp_vmware_host].exists and
+    __mp_vmware_guest.observations[__mp_vmware_host].pending_tasks | length == 0
+  retries: '{{ (mp_vmware_tools_timeout / 5) | round(0, "ceil") | int + 1 }}'
+  delay: 5
+- name: VMware | Pin instance identity and clone disk leaves before bootstrap
+  ansible.builtin.set_fact:
+    __mp_vmware_run: >-
+      {{ __mp_vmware_run | david_igou.molecule_provisioners.vmware_update_host(__mp_vmware_host,
+      __mp_vmware_guest.observations[__mp_vmware_host]
+      | combine({'phase': 'created'})) }}
+  when: __mp_vmware_run.hosts[__mp_vmware_host].phase != 'ready'
+- name: VMware | Checkpoint the created VM
+  ansible.builtin.include_tasks: _save.yml
+- name: VMware | Configure GuestInfo networking before first boot
+  ansible.builtin.include_tasks: _guestinfo.yml
+  when:
+    - __mp_vmware_run.hosts[__mp_vmware_host].phase != 'ready'
+    - __mp_vmware_specs[__mp_vmware_host].bootstrap.method == 'guestinfo'
+- name: VMware | Wait for running VMware Tools
+  david_igou.molecule_provisioners.vmware_inspect:
+    vcenter: "{{ __mp_vmware_vcenter }}"
+    records: "{{ {__mp_vmware_host: __mp_vmware_run.hosts[__mp_vmware_host]} }}"
+    expected_vcenter_uuid: "{{ __mp_vmware_run.vcenter_uuid }}"
+  register: __mp_vmware_tools
+  until: __mp_vmware_tools.observations[__mp_vmware_host].tools_running
+  retries: '{{ (mp_vmware_tools_timeout / 5) | round(0, "ceil") | int + 1 }}'
+  delay: 5
+- name: VMware | Bootstrap access to the clone
+  ansible.builtin.include_tasks: _bootstrap.yml
+  when:
+    - __mp_vmware_run.hosts[__mp_vmware_host].phase != 'ready'
+    - __mp_vmware_specs[__mp_vmware_host].bootstrap.method == 'tools'
+- name: VMware | Mark successful bootstrap
+  ansible.builtin.set_fact:
+    __mp_vmware_run: >-
+      {{ __mp_vmware_run | david_igou.molecule_provisioners.vmware_update_host(__mp_vmware_host, {'phase': 'ready'}) }}
+- name: VMware | Checkpoint guest readiness
+  ansible.builtin.include_tasks: _save.yml

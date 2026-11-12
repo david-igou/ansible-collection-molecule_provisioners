@@ -1,0 +1,90 @@
+---
+- name: VMware | Attempt scoped cleanup and retain any failure
+  block:
+    - name: VMware | Require a known clone submission outcome
+      ansible.builtin.assert:
+        that: __mp_vmware_run.hosts[__mp_vmware_host].phase not in ['submitting', 'delete_submitting']
+        fail_msg: A submission was interrupted before its worker checkpoint; explicit operator recovery is required.
+    - name: VMware | Settle the recorded clone worker
+      ansible.builtin.include_tasks: _settle.yml
+    - name: VMware | Settle a previous deletion worker before retrying
+      ansible.builtin.async_status:
+        jid: "{{ __mp_vmware_run.hosts[__mp_vmware_host].delete_job_id }}"
+      register: __mp_vmware_deleted_worker
+      until: __mp_vmware_deleted_worker.finished | default(false)
+      delay: 5
+      retries: '{{ (mp_vmware_cleanup_timeout / 5) | round(0, "ceil") | int + 1 }}'
+      failed_when: >-
+        not (__mp_vmware_deleted_worker.finished | default(false)) or
+        'could not find job' in (__mp_vmware_deleted_worker.msg | default(''))
+      no_log: true
+      when: __mp_vmware_run.hosts[__mp_vmware_host].delete_job_id is defined
+    - name: VMware | Wait for owned vCenter tasks to settle before deletion
+      david_igou.molecule_provisioners.vmware_inspect:
+        vcenter: "{{ __mp_vmware_vcenter }}"
+        records: "{{ {__mp_vmware_host: __mp_vmware_run.hosts[__mp_vmware_host]} }}"
+        expected_vcenter_uuid: "{{ __mp_vmware_run.vcenter_uuid }}"
+      register: __mp_vmware_before_delete
+      until: >-
+        not __mp_vmware_before_delete.observations[__mp_vmware_host].exists or
+        __mp_vmware_before_delete.observations[__mp_vmware_host].pending_tasks | length == 0
+      delay: 5
+      retries: '{{ (mp_vmware_cleanup_timeout / 5) | round(0, "ceil") | int + 1 }}'
+    - name: VMware | Delete a verified existing clone
+      when: __mp_vmware_before_delete.observations[__mp_vmware_host].exists
+      block:
+        - name: VMware | Checkpoint delete submission intent
+          ansible.builtin.set_fact:
+            __mp_vmware_run: >-
+              {{ __mp_vmware_run | david_igou.molecule_provisioners.vmware_update_host(__mp_vmware_host,
+              {'phase': 'delete_submitting'})
+              }}
+        - name: VMware | Save intent before destructive submission
+          ansible.builtin.include_tasks: _save.yml
+        - name: VMware | Remove the exact owned VM and clone disks
+          community.vmware.vmware_guest:
+            uuid: "{{ __mp_vmware_before_delete.observations[__mp_vmware_host].instance_uuid }}"
+            use_instance_uuid: true
+            state: absent
+            force: true
+            delete_from_inventory: false
+          async: "{{ mp_vmware_cleanup_timeout }}"
+          poll: 0
+          register: __mp_vmware_delete
+          no_log: true
+        - name: VMware | Record the deletion worker
+          ansible.builtin.set_fact:
+            __mp_vmware_run: >-
+              {{ __mp_vmware_run | david_igou.molecule_provisioners.vmware_update_host(__mp_vmware_host,
+              {'phase': 'deleting',
+              'delete_job_id': __mp_vmware_delete.ansible_job_id}) }}
+        - name: VMware | Save the deletion worker
+          ansible.builtin.include_tasks: _save.yml
+        - name: VMware | Wait for confirmed deletion
+          ansible.builtin.async_status:
+            jid: "{{ __mp_vmware_delete.ansible_job_id }}"
+          register: __mp_vmware_deleted
+          until: __mp_vmware_deleted.finished
+          delay: 5
+          retries: '{{ (mp_vmware_cleanup_timeout / 5) | round(0, "ceil") | int + 1 }}'
+          no_log: true
+    - name: VMware | Independently confirm the owned guest is absent
+      david_igou.molecule_provisioners.vmware_inspect:
+        vcenter: "{{ __mp_vmware_vcenter }}"
+        records: "{{ {__mp_vmware_host: __mp_vmware_run.hosts[__mp_vmware_host]} }}"
+        expected_vcenter_uuid: "{{ __mp_vmware_run.vcenter_uuid }}"
+      register: __mp_vmware_absence
+    - name: VMware | Require confirmed absence before forgetting ownership
+      ansible.builtin.assert:
+        that: not __mp_vmware_absence.observations[__mp_vmware_host].exists
+    - name: VMware | Forget only the successfully removed guest
+      ansible.builtin.set_fact:
+        __mp_vmware_run: "{{ __mp_vmware_run | david_igou.molecule_provisioners.vmware_remove_host(__mp_vmware_host) }}"
+    - name: VMware | Checkpoint successful cleanup
+      ansible.builtin.include_tasks: _save.yml
+    - name: VMware | Prune only cleaned hosts from the runtime overlay
+      ansible.builtin.include_tasks: _prune.yml
+  rescue:
+    - name: VMware | Retain failed resource ownership for retry
+      ansible.builtin.set_fact:
+        __mp_vmware_failed_hosts: "{{ __mp_vmware_failed_hosts + [__mp_vmware_host] }}"

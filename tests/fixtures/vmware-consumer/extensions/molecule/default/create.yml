@@ -1,0 +1,3 @@
+---
+- name: Create VMware guests
+  ansible.builtin.import_playbook: david_igou.molecule_provisioners.create

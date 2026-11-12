@@ -1,0 +1,9 @@
+---
+- name: VMware | Finish each host without abandoning other workers
+  block:
+    - name: VMware | Complete clone and bootstrap
+      ansible.builtin.include_tasks: _finish_host.yml
+  rescue:
+    - name: VMware | Retain this host for retry and report a sanitized failure
+      ansible.builtin.set_fact:
+        __mp_vmware_failed_hosts: "{{ __mp_vmware_failed_hosts + [__mp_vmware_host] }}"

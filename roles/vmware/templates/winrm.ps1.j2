@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+$ErrorActionPreference = 'Stop'
+Set-Service -Name WinRM -StartupType Automatic
+Start-Service -Name WinRM
+$port = {{ __mp_vmware_spec.connection_port }}
+$listener = @(Get-ChildItem WSMan:\localhost\Listener | Where-Object { $_.Keys -contains 'Transport=HTTPS' })
+if ($listener.Count -eq 0) {
+    $cert = New-SelfSignedCertificate -DnsName $env:COMPUTERNAME -CertStoreLocation Cert:\LocalMachine\My
+    New-Item WSMan:\localhost\Listener -Transport HTTPS -Address '*' -CertificateThumbPrint $cert.Thumbprint -Port $port -Force | Out-Null
+} elseif ($listener.Count -eq 1) {
+    Set-Item ($listener[0].PSPath + '\Port') -Value $port
+} else {
+    throw 'Multiple HTTPS listeners require a prepared listener configuration'
+}
+$rule = Get-NetFirewallRule -Name 'MoleculeProvisionerWinRM' -ErrorAction SilentlyContinue
+if ($rule) { Remove-NetFirewallRule -Name 'MoleculeProvisionerWinRM' }
+New-NetFirewallRule -Name 'MoleculeProvisionerWinRM' -DisplayName 'Molecule WinRM HTTPS' -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow | Out-Null

@@ -1,0 +1,8 @@
+FROM registry.access.redhat.com/ubi10/python-312-minimal@sha256:53551377558591bd254aac2a24be315e0f7da50697791199ec0ab05531457468
+USER 0
+RUN microdnf install -y openssh-clients make git && microdnf clean all
+COPY lint-requirements.txt test-requirements.txt requirements.txt requirements-vmware.txt requirements-vmware.yml /tmp/requirements/
+RUN python -m pip install --no-cache-dir -r /tmp/requirements/lint-requirements.txt -r /tmp/requirements/test-requirements.txt -r /tmp/requirements/requirements.txt -r /tmp/requirements/requirements-vmware.txt black flake8
+RUN ansible-galaxy collection install -r /tmp/requirements/requirements-vmware.yml && ansible-galaxy collection install containers.podman kubernetes.core community.crypto community.docker community.general ansible.netcommon 'amazon.aws:>=9.0.0,<12.0.0' 'community.aws:>=9.0.0,<12.0.0' 'ansible.windows:>=2.5.0,<4.0.0'
+ENV ANSIBLE_COLLECTIONS_PATH=/work/.build:/opt/app-root/src/.ansible/collections:/root/.ansible/collections
+WORKDIR /work

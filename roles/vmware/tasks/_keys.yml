@@ -1,0 +1,10 @@
+---
+- name: VMware | Initialize public key material
+  ansible.builtin.set_fact:
+    __mp_vmware_public_keys: {}
+- name: VMware | Prepare each Linux management key
+  ansible.builtin.include_tasks: _key.yml
+  loop: '{{ groups["molecule"] }}'
+  loop_control:
+    loop_var: __mp_vmware_key_host
+  when: __mp_vmware_specs[__mp_vmware_key_host].instance_os_type == 'linux'
