@@ -1,0 +1,41 @@
+---
+- name: launch | Reject a missing previously created guest
+  ansible.builtin.assert:
+    that: >-
+      __mp_vmware_run.hosts[__mp_vmware_host].phase == 'planned' or
+      __mp_vmware_run.hosts[__mp_vmware_host].job_id is defined or
+      __mp_vmware_inspection.observations[__mp_vmware_host].exists
+    fail_msg: A saved guest disappeared; destroy saved state before creating a replacement.
+- name: launch | Refuse an uncheckpointed submission
+  ansible.builtin.assert:
+    that: >-
+      __mp_vmware_run.hosts[__mp_vmware_host].phase != 'submitting' and
+      not (__mp_vmware_run.hosts[__mp_vmware_host].phase == 'planned' and
+      __mp_vmware_inspection.observations[__mp_vmware_host].exists)
+    fail_msg: Clone submission outcome is uncertain; retain state for operator recovery.
+- name: launch | Record submission intent before starting a worker
+  ansible.builtin.set_fact:
+    __mp_vmware_run: >-
+      {{ __mp_vmware_run | david_igou.molecule_provisioners.vmware_update_host(__mp_vmware_host, {'phase':
+      'submitting'})
+      }}
+  when: __mp_vmware_run.hosts[__mp_vmware_host].phase == 'planned'
+- name: launch | Checkpoint submission intent
+  ansible.builtin.include_tasks: _save.yml
+- name: launch | Launch one clone using the pinned intent
+  when:
+    - __mp_vmware_run.hosts[__mp_vmware_host].phase == 'submitting'
+    - __mp_vmware_run.hosts[__mp_vmware_host].job_id is not defined
+    - not __mp_vmware_inspection.observations[__mp_vmware_host].exists
+  block:
+    - name: launch | Submit the clone request
+      ansible.builtin.include_tasks: _clone.yml
+      vars:
+        __mp_vmware_validate_clone: false
+    - name: launch | Save the worker identity immediately
+      ansible.builtin.set_fact:
+        __mp_vmware_run: >-
+          {{ __mp_vmware_run | david_igou.molecule_provisioners.vmware_update_host(__mp_vmware_host,
+          {'job_id': __mp_vmware_launch.ansible_job_id, 'phase': 'submitted'}) }}
+- name: launch | Checkpoint the worker
+  ansible.builtin.include_tasks: _save.yml

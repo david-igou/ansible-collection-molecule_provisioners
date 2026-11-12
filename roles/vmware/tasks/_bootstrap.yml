@@ -1,0 +1,33 @@
+---
+- name: bootstrap | Select guest bootstrap settings
+  ansible.builtin.set_fact:
+    __mp_vmware_spec: "{{ __mp_vmware_specs[__mp_vmware_host] }}"
+  no_log: true
+- name: bootstrap | Add the management key without replacing existing authorized keys
+  community.vmware.vmware_vm_shell:
+    vm_id: "{{ __mp_vmware_run.hosts[__mp_vmware_host].instance_uuid }}"
+    vm_id_type: instance_uuid
+    vm_username: "{{ __mp_vmware_spec.guest.credentials.username }}"
+    vm_password: "{{ __mp_vmware_spec.guest.credentials.password }}"
+    vm_shell: /bin/bash
+    vm_shell_args: >-
+      {{ __mp_vmware_public_keys[__mp_vmware_host] |
+      david_igou.molecule_provisioners.vmware_linux_command }}
+    wait_for_process: true
+    timeout: "{{ mp_vmware_provision_timeout }}"
+  no_log: true
+  when: __mp_vmware_spec.instance_os_type == 'linux'
+- name: bootstrap | Configure HTTPS WinRM through Tools
+  community.vmware.vmware_vm_shell:
+    vm_id: "{{ __mp_vmware_run.hosts[__mp_vmware_host].instance_uuid }}"
+    vm_id_type: instance_uuid
+    vm_username: "{{ __mp_vmware_spec.guest.credentials.username }}"
+    vm_password: "{{ __mp_vmware_spec.guest.credentials.password }}"
+    vm_shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+    vm_shell_args: >-
+      -NoProfile -NonInteractive -EncodedCommand {{ lookup('ansible.builtin.template',
+      role_path ~ '/templates/winrm.ps1.j2') | b64encode(encoding='utf-16-le') }}
+    wait_for_process: true
+    timeout: "{{ mp_vmware_provision_timeout }}"
+  no_log: true
+  when: __mp_vmware_spec.instance_os_type == 'windows'

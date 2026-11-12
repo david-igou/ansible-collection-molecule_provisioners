@@ -1,0 +1,22 @@
+---
+- name: settle | Settle any saved clone worker
+  ansible.builtin.async_status:
+    jid: "{{ __mp_vmware_run.hosts[__mp_vmware_host].job_id }}"
+  register: __mp_vmware_settled
+  until: __mp_vmware_settled.finished | default(false)
+  delay: 5
+  retries: '{{ (mp_vmware_provision_timeout / 5) | round(0, "ceil") | int + 1 }}'
+  failed_when: >-
+    not (__mp_vmware_settled.finished | default(false)) or
+    'could not find job' in (__mp_vmware_settled.msg | default(''))
+  no_log: true
+  when:
+    - __mp_vmware_run.hosts[__mp_vmware_host].job_id is defined
+    - __mp_vmware_run.hosts[__mp_vmware_host].phase == 'submitted'
+- name: settle | Keep failed completed worker evidence private
+  ansible.builtin.file:
+    path: '{{ molecule_ephemeral_directory }}/.vmware-async/{{ __mp_vmware_run.hosts[__mp_vmware_host].job_id }}'
+    mode: '0600'
+  when:
+    - __mp_vmware_run.hosts[__mp_vmware_host].job_id is defined
+    - __mp_vmware_run.hosts[__mp_vmware_host].phase == 'submitted'
