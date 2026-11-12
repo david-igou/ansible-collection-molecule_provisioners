@@ -23,5 +23,5 @@ fi
 if [[ -n "${MP_TEST_VMWARE_DNS:-}" ]]; then
   args+=(--dns "$MP_TEST_VMWARE_DNS")
 fi
-args+=("${VMWARE_TEST_IMAGE:-localhost/mp-vmware-ee:dev}")
+args+=("${TEST_IMAGE:-localhost/mp-ee:dev}")
 podman "${args[@]}" sh -c 'make -B /work/.build/ansible_collections/david_igou/molecule_provisioners && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/integration/vmware -v -o addopts=""'

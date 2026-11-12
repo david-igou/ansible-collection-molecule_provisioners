@@ -314,7 +314,7 @@ def main():
         supports_check_mode=True,
     )
     if not HAS_VMOMI:
-        module.fail_json(msg="Install the optional VMware Python requirements on the controller")
+        module.fail_json(msg="Install the collection's requirements.txt on the controller")
     si = None
     try:
         vc = module.params["vcenter"]

@@ -1,3 +1,0 @@
-# Optional VMware controller dependencies; install alongside requirements-vmware.yml.
-vcf-sdk==9.0.0.0
-pywinrm==0.5.0

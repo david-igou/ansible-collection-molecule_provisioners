@@ -1,6 +1,9 @@
 ---
 minor_changes:
-  - Added an optional VMware backend with native inventory, template and snapshot cloning,
+  - Added a VMware backend with native inventory, template and snapshot cloning,
     guest customization, Tools bootstrap for Linux SSH and Windows WinRM, and ownership-checked cleanup
     (https://github.com/david-igou/ansible-collection-molecule_provisioners/pull/82).
   - Added Linux GuestInfo bootstrap for key-only cloud templates and opt-in installed-consumer VMware tests.
+breaking_changes:
+  - Raised the collection's minimum Ansible Core version to 2.19 and centralized runtime
+    dependencies in galaxy.yml and the packaged requirements.txt. All backends now use these dependencies.

@@ -1,9 +1,7 @@
-# TO-DO: add python packages that are required for testing this collection
+# Development and functional-test tools; runtime packages are in requirements.txt.
 pytest-ansible
 pytest-xdist
 molecule
-kubernetes
-docker
 # Authenticated network_cli regression with the RouterOS connection plugin.
 paramiko
 pexpect

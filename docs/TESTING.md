@@ -17,8 +17,10 @@ source .venv/bin/activate
 make install
 ```
 
-`make install` installs the pinned lint tools, test dependencies, and Ansible
-collections. Run all commands below from the collection root. Test targets
+`make install` installs the pinned lint tools, Python requirements and this
+collection with its `galaxy.yml` dependencies. `test-requirements.yml` adds the
+RouterOS collection used by appliance tests. Run all commands below from the
+collection root. Test targets
 create an ignored `.build/ansible_collections/` layout so they work before a
 Molecule scenario has created its own collection links.
 
@@ -36,20 +38,19 @@ or container backend. `make sanity` uses `ansible-test sanity --docker` and
 requires a Docker-compatible container engine. Use `SANITY_ARGS` to select
 checks or a Python version.
 
-Renderer changes also need a check on an older supported Ansible version.
-This example runs the offline suite with ansible-core 2.16 in a clean container:
+The supported Ansible Core minimum is 2.19. `lint-requirements.txt` pins the
+tested 2.19 release. Build the shared Python 3.12 EE and run the offline checks
+inside it:
 
 ```bash
-podman run --rm \
-  -v "$PWD:/work/ansible_collections/david_igou/molecule_provisioners" \
-  -w /work/ansible_collections/david_igou/molecule_provisioners \
-  -e ANSIBLE_COLLECTIONS_PATH=/work \
-  python:3.12-slim bash -c '
-    python -m pip install "ansible-core>=2.16,<2.17" pytest pyyaml
-    ansible-galaxy collection install containers.podman kubernetes.core community.crypto community.docker community.general
-    PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/unit -q -o addopts=""
-  '
+make ee
+podman run --rm -v "$PWD:/work:Z" localhost/mp-ee:dev make lint test-unit build
 ```
+
+Both `make test-aws` and `make test-vmware` use this image. Override `TEST_IMAGE`
+to select another shared image. Its build installs Python packages from the
+root requirements files and collection dependencies through `galaxy.yml`.
+The packaged runtime `requirements.txt` is also discovered by Ansible Builder.
 
 ## Backend tests
 
@@ -67,6 +68,7 @@ podman run --rm \
 | `make test-kubevirt-access` | Custom SSH, TCP/UDP endpoints, Service updates | KubeVirt cluster with reachable NodePorts |
 | `make test-kubevirt-storage` | Managed-disk I/O, retries, cleanup, external storage | KubeVirt, CDI, suitable storage class |
 | `make test-aws` | EC2 lifecycle, networking, storage, transports and recovery | Podman, exported AWS credentials and explicit test account; [AWS setup](#aws) |
+| `make test-vmware` | Installed native consumer lifecycle, retries and cleanup | Podman, vCenter credentials, expected identity and existing fixtures; [VMware setup](#vmware) |
 
 Backend tests create and delete test infrastructure. Choose a test namespace
 and verify the cluster identity before running against an existing cluster.
@@ -190,7 +192,7 @@ validation/rendering and launch retry tests are also part of `make test-unit`.
 
 ## VMware
 
-Build the local Python 3.12 controller EE with `make ee-vmware`. The opt-in
+Build the shared Python 3.12 controller EE with `make ee`. The opt-in
 `make test-vmware` target needs the vCenter environment credentials and all of:
 
 - `MP_TEST_VMWARE_EXPECTED_UUID`: exact vCenter instance UUID, checked before mutation.

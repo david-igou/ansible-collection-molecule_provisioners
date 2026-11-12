@@ -11,11 +11,11 @@ lists replace defaults. The native inventory overlay supports SSH, WinRM, PSRP a
 Requires `david_igou.molecule_provisioners` 0.0.7-alpha or later. For a complete
 consumer scenario, follow the [AWS walkthrough](../../docs/AWS.md).
 
-The controller needs Python 3.10+, ansible-core 2.17+, `amazon.aws` 9–11,
+The controller needs Python 3.11+, Ansible Core 2.19+, `amazon.aws` 9–11,
 `community.aws` 9–11, `community.crypto`, boto3, botocore and cryptography. Install
 this collection's Galaxy and Python requirements in your execution environment.
-Windows additionally needs `ansible.windows` and pywinrm or pypsrp. Appliances
-need their platform collection and an Ansible network connection dependency.
+Those requirements include `ansible.windows`, pywinrm and pypsrp for Windows.
+Appliances need their platform collection and an Ansible network connection dependency.
 
 Use AWS's normal credential chain or a named SDK profile. Credentials stay outside
 inventory and source control. No default region is imposed: set `region` or configure

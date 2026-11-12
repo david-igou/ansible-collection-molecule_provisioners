@@ -1,6 +1,0 @@
----
-collections:
-  - name: community.vmware
-    version: 6.5.0
-  - name: vmware.vmware
-    version: 2.10.0

@@ -10,19 +10,13 @@ Runtime parity requires the live acceptance evidence listed there. See
 
 ## Requirements
 
-Install the optional backend dependencies on the controller or in its execution
-environment. They are deliberately separate from unconditional Galaxy dependencies
-so VMware's ansible-core requirement does not raise other backends' minimum:
+The collection requires Ansible Core 2.19 or newer. Installing it also installs
+`community.vmware` and `vmware.vmware` through `galaxy.yml`. Install controller-side
+Python dependencies from the packaged `requirements.txt`, or let Ansible Builder
+discover them. See [collection installation](../../README.md#installing).
 
-```bash
-python -m pip install 'ansible-core>=2.19' -r requirements-vmware.txt
-ansible-galaxy collection install -r requirements-vmware.yml
-```
-
-The supplied files pin `community.vmware` 6.5.0, `vmware.vmware` 2.10.0,
-`vcf-sdk` 9.0.0.0 and pywinrm 0.5.0. The local VMware test EE uses Python 3.12.
-Linux access requires an SSH client and ssh-keygen. The optional collection files
-ship in the collection artifact. `make ee-vmware` builds the local test EE.
+Linux access requires an SSH client and ssh-keygen. `make ee` builds the shared
+Python 3.12 test EE used by the AWS and VMware test targets.
 
 Set `VMWARE_HOST`, `VMWARE_USER`, `VMWARE_PASSWORD`, optional `VMWARE_PORT`
 and `VMWARE_VALIDATE_CERTS` in the controller environment, or supply the

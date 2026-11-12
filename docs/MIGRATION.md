@@ -2,6 +2,18 @@
 
 If you have a molecule scenario using the upstream `platforms:` + `driver:` shape (now called _pre ansible-native_ in molecule's own docs) and you want to use this collection, here is the field-by-field translation.
 
+## Controller requirements
+
+The collection now requires Ansible Core 2.19 or newer for every backend.
+Galaxy installs runtime collection dependencies from `galaxy.yml`, including
+the VMware collections. Install controller-side Python dependencies from the
+packaged `requirements.txt`, or let Ansible Builder discover them. The separate
+VMware requirement files have been removed.
+
+Local AWS and VMware tests share `make ee` and the `TEST_IMAGE` override.
+Replace `make ee-vmware` with `make ee`, and replace `AWS_TEST_IMAGE` or
+`VMWARE_TEST_IMAGE` overrides with `TEST_IMAGE`.
+
 ## QEMU testing features in 0.0.7-alpha
 
 QEMU now allocates management ports automatically and verifies VM ownership
@@ -305,6 +317,6 @@ inventory. The complete contract and prerequisites are in the
 A snapshot now implies `linked_clone: true`, correcting the old driver's documented
 intent. Set `linked_clone: false` explicitly for a full clone from a snapshot.
 Windows uses a scoped listener firewall rule, and existing Linux authorized keys
-are preserved. VMware-specific requirements are optional and explicitly installed;
-the old standalone driver's pyvmomi-only prerequisites do not describe the pinned
-modern VMware collection dependencies.
+are preserved. VMware dependencies use the collection's standard Galaxy and Python
+requirements; the old standalone driver's pyvmomi-only prerequisites do not
+describe the modern VMware collection dependencies.

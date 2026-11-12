@@ -25,7 +25,7 @@ See the [Podman](roles/podman/README.md), [KubeVirt](roles/kubevirt/README.md),
 [QEMU](roles/qemu/README.md), [Docker](roles/docker/README.md), and
 [AWS](roles/aws/README.md) role READMEs
 for their settings and requirements. See the [VMware reference](roles/vmware/README.md)
-for its optional dependencies, bootstrap modes and current parity limits. KubeVirt and AWS also support Windows guests
+for its bootstrap modes and current parity limits. KubeVirt and AWS also support Windows guests
 over PSRP or WinRM. AWS supports appliance readiness probes.
 
 AWS supports either existing networking or automatic VPC/public-subnet creation.
@@ -34,6 +34,17 @@ CIDRs. See [the AWS walkthrough](docs/AWS.md) for installation, a complete scena
 and networking examples.
 
 ## Installing
+
+Requires **Ansible Core 2.19 or newer**. Runtime Ansible collection dependencies
+are declared in `galaxy.yml` and installed by `ansible-galaxy`. Controller-side
+Python dependencies are listed in the packaged `requirements.txt`; Ansible
+Builder discovers that file automatically when building an execution environment.
+For a controller virtual environment, install it after installing this collection.
+With the default Galaxy installation path:
+
+```bash
+python -m pip install -r "$HOME/.ansible/collections/ansible_collections/david_igou/molecule_provisioners/requirements.txt"
+```
 
 The collection is published on [Ansible Galaxy](https://galaxy.ansible.com/ui/repo/published/david_igou/molecule_provisioners/).
 This README describes `main`. For a pinned release, use the documentation at
@@ -229,8 +240,9 @@ unit, sanity, and backend integration suites run locally.
 | `podman` | `podman` |
 | `kubevirt` | `kubectl` + a kubeconfig pointing at a KubeVirt-enabled cluster |
 | `qemu` | `qemu-system-x86_64`, `qemu-img`, `cloud-localds` (or `genisoimage`); OVMF firmware only when a host sets `firmware: uefi` |
-| `docker` | A reachable local docker daemon and the `docker` python package (`pip install docker`) |
-| `aws` | ansible-core 2.17+, boto3, botocore, cryptography, AWS credentials and an SSH client; [setup and transport dependencies](docs/AWS.md#install) |
+| `docker` | A reachable local Docker daemon |
+| `aws` | AWS credentials and an SSH client; [setup](docs/AWS.md#install) |
+| `vmware` | vCenter credentials, existing placement/templates/networks, an SSH client and guest reachability; [setup](roles/vmware/README.md#requirements) |
 
 On a Debian/Ubuntu controller, the `qemu` backend's system prerequisites are:
 
