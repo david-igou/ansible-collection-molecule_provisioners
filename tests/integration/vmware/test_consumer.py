@@ -42,9 +42,14 @@ def test_installed_consumer_lifecycle():
         assert os.environ.get(name), "Set " + name
     si = SmartConnect(
         host=os.environ["VMWARE_HOST"],
+        port=int(os.environ.get("VMWARE_PORT", "443")),
         user=os.environ["VMWARE_USER"],
         pwd=os.environ["VMWARE_PASSWORD"],
-        sslContext=ssl._create_unverified_context(),
+        sslContext=(
+            ssl.create_default_context()
+            if os.environ.get("VMWARE_VALIDATE_CERTS", "true").lower() not in ("false", "0", "no")
+            else ssl._create_unverified_context()
+        ),
         httpConnectionTimeout=30,
     )
     content = si.RetrieveContent()

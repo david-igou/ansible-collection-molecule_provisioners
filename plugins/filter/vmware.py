@@ -36,6 +36,5 @@ class FilterModule:
                 "runtime",
                 "linux_command",
                 "remove_host",
-                "merge",
             )
         }

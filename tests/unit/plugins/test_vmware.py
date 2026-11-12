@@ -4,6 +4,10 @@ import base64
 import copy
 import importlib.util
 import json
+import os
+import shlex
+import stat
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -235,9 +239,24 @@ def test_ownership_isolated_and_never_persists_credentials():
     assert spec.remove_host(updated, "instance")["hosts"] == {}
 
 
-def test_linux_key_bootstrap_quotes_data_and_preserves_other_keys():
-    command = spec.linux_command("ssh-ed25519 AAAA comment'withquote")
-    assert "grep -qxF" in command and ">>" in command and "chmod 600" in command
+@pytest.mark.parametrize(
+    "existing", ["", "ssh-ed25519 BBBB existing", "ssh-ed25519 BBBB existing\n"]
+)
+def test_linux_key_bootstrap_preserves_access_and_installs_once(tmp_path, existing):
+    authorized = tmp_path / ".ssh/authorized_keys"
+    authorized.parent.mkdir()
+    authorized.write_text(existing)
+    public_key = "ssh-ed25519 AAAA comment'$(touch injected);withquote"
+    command = ["/bin/bash", *shlex.split(spec.linux_command(public_key))]
+    for _ in range(2):
+        subprocess.run(command, env=dict(os.environ, HOME=str(tmp_path)), cwd=tmp_path, check=True)
+    assert authorized.read_text() == existing + "\n" + public_key + "\n"
+    assert not (tmp_path / "injected").exists()
+    assert stat.S_IMODE(authorized.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(authorized.stat().st_mode) == 0o600
+
+
+def test_linux_key_bootstrap_rejects_invalid_keys():
     with pytest.raises(ValueError):
         spec.linux_command("not a public key")
 
@@ -262,6 +281,10 @@ def test_guestinfo_bootstrap_is_key_only_and_not_sysprep():
 @pytest.mark.parametrize(
     "overrides",
     [
+        {"networks": None},
+        {"networks": "network"},
+        {"networks": ["network"]},
+        {"networks": []},
         {"networks": [{"name": "one"}, {"name": "two"}]},
         {"instance_os_type": "windows"},
         {
@@ -349,3 +372,92 @@ def test_worker_ids_cannot_escape_the_private_cache():
     state["hosts"]["instance"]["job_id"] = "../../foreign"
     with pytest.raises(ValueError, match="worker identity"):
         spec.validate_run(state)
+
+
+@pytest.mark.parametrize("record", [None, [], "record", {}, {"phase": "unknown"}])
+def test_journal_rejects_malformed_host_records(record):
+    state = run()
+    state["hosts"]["instance"] = record
+    with pytest.raises(ValueError, match="ownership record"):
+        spec.validate_run(state)
+
+
+@pytest.mark.parametrize("changes", [{"phase": "unknown"}, {"fingerprint": "bad"}])
+def test_journal_rejects_invalid_lifecycle_state(changes):
+    state = run()
+    state["hosts"]["instance"].update(changes)
+    with pytest.raises(ValueError, match="ownership record"):
+        spec.validate_run(state)
+
+
+def test_journal_requires_an_explicit_generated_key_flag():
+    state = run()
+    state["generated_key"] = "false"
+    with pytest.raises(ValueError, match="ownership journal"):
+        spec.validate_run(state)
+
+
+@pytest.mark.parametrize("method", ["tools", "guestinfo"])
+def test_ansible_clone_preflight_and_resume_keep_host_workers_separate(tmp_path, method):
+    """Run real role includes; stub only the vendor action so no cloud calls occur."""
+    collection = tmp_path / "ansible_collections/community/vmware/plugins/action"
+    collection.mkdir(parents=True)
+    (collection / "vmware_guest.py").write_text("""
+import json
+from pathlib import Path
+from ansible.plugins.action import ActionBase
+
+class ActionModule(ActionBase):
+    _supports_async = True
+    _supports_check_mode = True
+
+    def run(self, tmp=None, task_vars=None):
+        with Path(task_vars['output_path']).open('a') as output:
+            output.write(json.dumps({
+                'args': self._task.args,
+                'check_mode': self._task.check_mode,
+                'async': self._task.async_val,
+                'no_log': self._task.no_log,
+            }) + '\\n')
+        return {'changed': not self._task.check_mode, 'ansible_job_id': '123.456'}
+""")
+    value = guest(bootstrap={"method": method})
+    specs = {host: value for host in ("fresh", "ready")}
+    plans = {host: run()["hosts"]["instance"]["plan"] for host in specs}
+    state = spec.new_run(specs, plans, "vc-test")
+    state["hosts"]["ready"].update(phase="ready", job_id="222.333")
+    calls = tmp_path / "calls.jsonl"
+    result = subprocess.run(
+        [
+            "ansible-playbook",
+            str(Path(__file__).with_name("vmware_launch_harness.yml")),
+            "-i",
+            "localhost,",
+            "-e",
+            json.dumps(
+                {
+                    "test_specs": specs,
+                    "test_run": state,
+                    "molecule_ephemeral_directory": str(tmp_path),
+                    "output_path": str(calls),
+                }
+            ),
+        ],
+        env=dict(
+            os.environ,
+            ANSIBLE_COLLECTIONS_PATH=str(tmp_path) + ":" + os.environ["ANSIBLE_COLLECTIONS_PATH"],
+        ),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    preflight, submitted = [json.loads(line) for line in calls.read_text().splitlines()]
+    assert preflight["args"] == submitted["args"]
+    assert preflight["check_mode"] and preflight["async"] == 0
+    assert not submitted["check_mode"] and submitted["async"] == 300
+    assert preflight["no_log"] and submitted["no_log"]
+    journal = yaml.safe_load((tmp_path / "vmware_run.yml").read_text())
+    assert journal["hosts"]["fresh"]["phase"] == "submitted"
+    assert journal["hosts"]["fresh"]["job_id"] == "123.456"
+    assert journal["hosts"]["ready"] == state["hosts"]["ready"]

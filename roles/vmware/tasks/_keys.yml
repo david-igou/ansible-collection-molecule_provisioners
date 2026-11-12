@@ -1,8 +1,14 @@
 ---
-- name: VMware | Initialize public key material
+- name: keys | Initialize public key material
   ansible.builtin.set_fact:
     __mp_vmware_public_keys: {}
-- name: VMware | Prepare each Linux management key
+- name: keys | Generate the shared scenario key when needed
+  community.crypto.openssh_keypair:
+    path: "{{ molecule_ephemeral_directory }}/identity_file"
+    type: ed25519
+    mode: "0600"
+  when: __mp_vmware_run.generated_key
+- name: keys | Prepare each Linux management key
   ansible.builtin.include_tasks: _key.yml
   loop: '{{ groups["molecule"] }}'
   loop_control:

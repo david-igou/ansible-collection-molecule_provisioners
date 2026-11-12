@@ -128,13 +128,6 @@ def normalize(hosts, defaults=None, role_defaults=None):
             and not spec.get("ssh_key_path")
         ):
             raise ValueError("Prepared Linux requires ssh_key_path")
-        if bootstrap["method"] == "guestinfo" and (
-            os_type != "linux"
-            or len(spec.get("networks", [])) != 1
-            or spec["networks"][0].get("type", "dhcp") != "dhcp"
-            or spec["networks"][0].get("ip")
-        ):
-            raise ValueError("GuestInfo bootstrap currently requires Linux with one DHCP NIC")
         custom = spec["customization"]
         allowed = {
             "hostname",
@@ -192,6 +185,13 @@ def normalize(hosts, defaults=None, role_defaults=None):
                 if network.get("gateway"):
                     ipaddress.IPv4Address(network["gateway"])
         if bootstrap["method"] == "guestinfo":
+            if (
+                os_type != "linux"
+                or len(networks) != 1
+                or networks[0].get("type", "dhcp") != "dhcp"
+                or networks[0].get("ip")
+            ):
+                raise ValueError("GuestInfo bootstrap currently requires Linux with one DHCP NIC")
             network = networks[0]
             allowed_network = {
                 "name",
@@ -297,13 +297,32 @@ def validate_run(run):
         or not re.fullmatch(r"[a-f0-9]{32}", str(run.get("id", "")))
     ):
         raise ValueError("Restore a valid vmware_run.yml before retrying")
-    if not isinstance(run.get("hosts"), dict) or not run.get("vcenter_uuid"):
+    if (
+        not isinstance(run.get("hosts"), dict)
+        or not isinstance(run.get("vcenter_uuid"), str)
+        or not run["vcenter_uuid"]
+        or type(run.get("generated_key")) is not bool
+    ):
         raise ValueError("Invalid VMware ownership journal")
     for host, record in run["hosts"].items():
         if (
-            record.get("annotation") != marker(run["id"], host)
-            or not record.get("name")
+            not isinstance(host, str)
+            or not isinstance(record, dict)
+            or record.get("annotation") != marker(run["id"], host)
+            or not isinstance(record.get("name"), str)
+            or not record["name"]
             or not isinstance(record.get("plan"), dict)
+            or record.get("phase")
+            not in (
+                "planned",
+                "submitting",
+                "submitted",
+                "created",
+                "ready",
+                "delete_submitting",
+                "deleting",
+            )
+            or not re.fullmatch(r"[a-f0-9]{64}", str(record.get("fingerprint", "")))
         ):
             raise ValueError("Invalid VMware host ownership record")
         for field in ("job_id", "delete_job_id"):
@@ -443,12 +462,17 @@ def linux_command(public_key):
     """Install only a public key; preserve existing access and quote shell data."""
     if not public_key.strip().startswith(("ssh-", "ecdsa-")) or "\n" in public_key.strip():
         raise ValueError("Invalid SSH public key")
-    script = (
-        'set -eu; umask 077; mkdir -p "$HOME/.ssh"; touch "$HOME/.ssh/authorized_keys"; '
-        'chmod 700 "$HOME/.ssh"; chmod 600 "$HOME/.ssh/authorized_keys"; key=%s; '
-        'grep -qxF -- "$key" "$HOME/.ssh/authorized_keys" || '
-        'printf "%%s\\n" "$key" >> "$HOME/.ssh/authorized_keys"' % shlex.quote(public_key.strip())
-    )
+    script = """set -eu
+umask 077
+mkdir -p "$HOME/.ssh"
+touch "$HOME/.ssh/authorized_keys"
+chmod 700 "$HOME/.ssh"
+chmod 600 "$HOME/.ssh/authorized_keys"
+key=%s
+if ! grep -qxF -- "$key" "$HOME/.ssh/authorized_keys"; then
+    printf '\\n%%s\\n' "$key" >> "$HOME/.ssh/authorized_keys"
+fi
+""" % shlex.quote(public_key.strip())
     return "-c " + shlex.quote(script)
 
 

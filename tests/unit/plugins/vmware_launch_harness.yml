@@ -1,0 +1,34 @@
+---
+- name: Exercise clone validation and resumed host submission without vCenter
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    __mp_vmware_specs: "{{ test_specs }}"
+    __mp_vmware_run: "{{ test_run }}"
+    __mp_vmware_inspection:
+      observations:
+        fresh:
+          exists: false
+        ready:
+          exists: true
+    __mp_vmware_public_keys:
+      fresh: ssh-ed25519 AAAA test
+    mp_vmware_provision_timeout: 300
+  tasks:
+    - name: Validate the clone through the vendor action stub
+      ansible.builtin.include_role:
+        name: david_igou.molecule_provisioners.vmware
+        tasks_from: _clone
+      vars:
+        __mp_vmware_host: fresh
+        __mp_vmware_validate_clone: true
+    - name: Submit a new host followed by an already ready host
+      ansible.builtin.include_role:
+        name: david_igou.molecule_provisioners.vmware
+        tasks_from: _launch
+      loop:
+        - fresh
+        - ready
+      loop_control:
+        loop_var: __mp_vmware_host

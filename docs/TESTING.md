@@ -202,9 +202,14 @@ Build the local Python 3.12 controller EE with `make ee-vmware`. The opt-in
   for VMware GuestInfo/cloud-init, SSH, Python and sudo.
 
 For the Signal9 split-DNS setup, also set `MP_TEST_VMWARE_DNS=127.0.0.53`.
+The consumer and independent SDK audit honor `VMWARE_PORT` and
+`VMWARE_VALIDATE_CERTS`; certificate validation defaults to true. Install the CA
+in the controller EE, or explicitly set `VMWARE_VALIDATE_CERTS=false` for a lab
+with a self-signed certificate.
 
 Credentials alone never start a live test. The installed-consumer fixture creates
-one clone from each template, checks authenticated SSH/sudo, converge/idempotence,
+one clone from each template, creates a workload account and executes as that
+account, and checks authenticated SSH/sudo, converge/idempotence,
 Molecule list/login, repeated create with stable identities/keys, runtime overlay
 recovery, repeated destroy and independent SDK verification that original VMs and
 templates retain their names/template status/annotations. Failure evidence stays
@@ -232,4 +237,6 @@ confirmed the created instance UUIDs were absent and original VM/template identi
 and annotation fingerprints were unchanged. Temporary guest routes were removed.
 Controller: Python 3.12.15, ansible-core 2.19.14, community.vmware 6.5.0,
 vmware.vmware 2.10.0, vcf-sdk 9.0.0.0. This evidence covers GuestInfo Linux;
-it does not certify the remaining parity cases above.
+it does not certify the remaining parity cases above. That live result predates
+the clone/key refactor and workload-account fixture. Those changes have offline
+coverage and await another live run.

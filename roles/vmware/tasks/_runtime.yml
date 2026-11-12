@@ -1,14 +1,14 @@
 ---
-- name: VMware | Inspect management NIC addresses
+- name: runtime | Inspect management NIC addresses
   david_igou.molecule_provisioners.vmware_inspect:
     vcenter: "{{ __mp_vmware_vcenter }}"
     records: "{{ __mp_vmware_run.hosts }}"
     expected_vcenter_uuid: "{{ __mp_vmware_run.vcenter_uuid }}"
   register: __mp_vmware_runtime_inspection
-- name: VMware | Initialize the runtime overlay
+- name: runtime | Initialize the runtime overlay
   ansible.builtin.set_fact:
     __mp_vmware_runtime: {}
-- name: VMware | Build private native connection entries
+- name: runtime | Build private native connection entries
   ansible.builtin.set_fact:
     __mp_vmware_runtime: >-
       {{ __mp_vmware_runtime | combine({item: __mp_vmware_specs[item] |
@@ -17,12 +17,12 @@
       __mp_vmware_specs[item].ssh_key_path | default(molecule_ephemeral_directory ~ '/identity_file'))}) }}
   loop: '{{ groups["molecule"] }}'
   no_log: true
-- name: VMware | Create private runtime inventory directory
+- name: runtime | Create private runtime inventory directory
   ansible.builtin.file:
     path: "{{ molecule_ephemeral_directory }}/inventory"
     state: directory
     mode: "0700"
-- name: VMware | Write private connection inventory atomically
+- name: runtime | Write private connection inventory atomically
   vars:
     __mp_vmware_inventory:
       all:
@@ -33,5 +33,5 @@
     mode: "0600"
   no_log: true
   diff: false
-- name: VMware | Refresh connection inventory
+- name: runtime | Refresh connection inventory
   ansible.builtin.meta: refresh_inventory

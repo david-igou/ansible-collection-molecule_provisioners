@@ -1,27 +1,27 @@
 ---
-- name: VMware | Initialize batch failure reporting
+- name: batch | Initialize batch failure reporting
   ansible.builtin.set_fact:
     __mp_vmware_failed_hosts: []
-- name: VMware | Submit and finish the bounded batch
+- name: batch | Submit and finish the bounded batch
   block:
-    - name: VMware | Submit guests and checkpoint each worker
+    - name: batch | Submit guests and checkpoint each worker
       ansible.builtin.include_tasks: _launch.yml
       loop: "{{ __mp_vmware_batch }}"
       loop_control:
         loop_var: __mp_vmware_host
-    - name: VMware | Complete every submitted guest
+    - name: batch | Complete every submitted guest
       ansible.builtin.include_tasks: _finish.yml
       loop: "{{ __mp_vmware_batch }}"
       loop_control:
         loop_var: __mp_vmware_host
-    - name: VMware | Report all failed hosts with retained recovery evidence
+    - name: batch | Report all failed hosts with retained recovery evidence
       ansible.builtin.assert:
         that: __mp_vmware_failed_hosts | length == 0
         fail_msg: >-
           VMware hosts failed: {{ __mp_vmware_failed_hosts | join(", ") }}.
           Retain vmware_run.yml and retry or destroy.
   always:
-    - name: VMware | Account for all recorded workers before returning
+    - name: batch | Account for all recorded workers before returning
       ansible.builtin.include_tasks: _settle.yml
       loop: "{{ __mp_vmware_batch }}"
       loop_control:

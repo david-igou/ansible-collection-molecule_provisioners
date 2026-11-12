@@ -3,8 +3,9 @@
   hosts: molecule
   gather_facts: false
   tasks:
-    - name: Install a test marker
-      ansible.builtin.copy:
-        dest: /tmp/molecule-vmware-consumer
-        content: verified
-        mode: "0600"
+    - name: Create the consumer workload account
+      ansible.builtin.user:
+        name: molecule_consumer
+        shell: /bin/bash
+        state: present
+      become: true

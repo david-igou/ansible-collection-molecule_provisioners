@@ -1,13 +1,13 @@
 ---
-- name: VMware | Initialize host inputs
+- name: load | Initialize host inputs
   ansible.builtin.set_fact:
     __mp_vmware_inputs: {}
-- name: VMware | Collect each host's VMware settings
+- name: load | Collect each host's VMware settings
   ansible.builtin.set_fact:
     __mp_vmware_inputs: "{{ __mp_vmware_inputs | combine({item: hostvars[item].mp.vmware | default({})}) }}"
   loop: '{{ groups["molecule"] }}'
   no_log: true
-- name: VMware | Validate all effective host settings
+- name: load | Validate all effective host settings
   ansible.builtin.set_fact:
     __mp_vmware_specs: >-
       {{ __mp_vmware_inputs | david_igou.molecule_provisioners.vmware_normalize(mp_defaults.vmware |
@@ -15,27 +15,28 @@
       }}
   no_log: true
   when: not (__mp_vmware_destroy | default(false))
-- name: VMware | Select the shared API connection
+- name: load | Select the shared API connection
+  vars:
+    __mp_vmware_vcenter_defaults: >-
+      {{ mp_vmware_role_defaults.vcenter | default({}) |
+      combine(mp_defaults.vmware.vcenter | default({}), recursive=true) }}
+    __mp_vmware_vcenter_host: >-
+      {{ hostvars[groups['molecule'][0]].mp.vmware.vcenter | default({}) }}
   ansible.builtin.set_fact:
     __mp_vmware_vcenter: >-
-      {{ (mp_vmware_role_defaults.vcenter | default({}) |
-      david_igou.molecule_provisioners.vmware_merge(mp_defaults.vmware.vcenter
-      | default({})) |
-      david_igou.molecule_provisioners.vmware_merge(hostvars[groups['molecule'][0]].mp.vmware.vcenter |
-      default({})))
-      if (__mp_vmware_destroy | default(false)) else (__mp_vmware_specs.values() | first).vcenter }}
+      {{ __mp_vmware_vcenter_defaults | combine(__mp_vmware_vcenter_host, recursive=true) }}
   no_log: true
-- name: VMware | Locate saved run state
+- name: load | Locate saved run state
   ansible.builtin.stat:
     path: "{{ molecule_ephemeral_directory }}/vmware_run.yml"
   register: __mp_vmware_state_file
-- name: VMware | Read and validate saved run state
+- name: load | Read and validate saved run state
   ansible.builtin.set_fact:
     __mp_vmware_run: >-
       {{ (lookup('ansible.builtin.file', molecule_ephemeral_directory ~ '/vmware_run.yml') |
       from_yaml | david_igou.molecule_provisioners.vmware_validate_run)
       if __mp_vmware_state_file.stat.exists else {} }}
-- name: VMware | Check operation limits
+- name: load | Check operation limits
   ansible.builtin.assert:
     that:
       - item is integer

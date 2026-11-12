@@ -1,5 +1,5 @@
 ---
-- name: VMware | Save private ownership before the next operation
+- name: save | Save private ownership before the next operation
   ansible.builtin.copy:
     dest: "{{ molecule_ephemeral_directory }}/vmware_run.yml"
     content: "{{ __mp_vmware_run | to_nice_yaml }}"

@@ -1,10 +1,9 @@
 ---
-- name: VMware | Select teardown mode
-  ansible.builtin.set_fact:
-    __mp_vmware_destroy: true
-- name: VMware | Load saved ownership without requiring removed host settings
+- name: destroy | Load saved ownership without requiring removed host settings
   ansible.builtin.include_tasks: _load.yml
-- name: VMware | Remove only recorded owned resources
+  vars:
+    __mp_vmware_destroy: true
+- name: destroy | Remove only recorded owned resources
   when: __mp_vmware_state_file.stat.exists
   module_defaults:
     group/community.vmware.vmware:
@@ -14,27 +13,27 @@
       password: "{{ __mp_vmware_vcenter.credentials.password | default(omit) }}"
       validate_certs: "{{ __mp_vmware_vcenter.validate_certs | default(omit) }}"
   block:
-    - name: VMware | Verify target identity and all saved ownership markers
+    - name: destroy | Verify target identity and all saved ownership markers
       david_igou.molecule_provisioners.vmware_inspect:
         vcenter: "{{ __mp_vmware_vcenter }}"
         records: "{{ __mp_vmware_run.hosts }}"
         expected_vcenter_uuid: "{{ __mp_vmware_run.vcenter_uuid }}"
-    - name: VMware | Initialize cleanup failure reporting
+    - name: destroy | Initialize cleanup failure reporting
       ansible.builtin.set_fact:
         __mp_vmware_failed_hosts: []
-    - name: VMware | Clean each saved host including removed inventory entries
+    - name: destroy | Clean each saved host including removed inventory entries
       ansible.builtin.include_tasks: _destroy_host.yml
       loop: "{{ __mp_vmware_run.hosts.keys() | list }}"
       loop_control:
         loop_var: __mp_vmware_host
       when: not ansible_check_mode
-    - name: VMware | Report retained cleanup failures
+    - name: destroy | Report retained cleanup failures
       ansible.builtin.assert:
         that: __mp_vmware_failed_hosts | length == 0
         fail_msg: >-
           VMware cleanup incomplete for {{ __mp_vmware_failed_hosts | join(", ") }};
           retain state and retry destroy.
-    - name: VMware | Remove generated credentials only after confirmed cleanup
+    - name: destroy | Remove generated credentials only after confirmed cleanup
       ansible.builtin.file:
         path: "{{ molecule_ephemeral_directory }}/identity_file{{ item }}"
         state: absent
@@ -44,7 +43,7 @@
       when:
         - not ansible_check_mode
         - __mp_vmware_run.generated_key | default(false)
-    - name: VMware | Remove the completed run journal and runtime overlay
+    - name: destroy | Remove the completed run journal and runtime overlay
       ansible.builtin.file:
         path: "{{ molecule_ephemeral_directory }}/{{ item }}"
         state: absent

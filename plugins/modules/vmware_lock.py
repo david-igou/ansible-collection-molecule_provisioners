@@ -37,7 +37,7 @@ attributes:
     support: full
 """
 EXAMPLES = r"""
-- name: Serialize an VMware lifecycle operation
+- name: Serialize a VMware lifecycle operation
   david_igou.molecule_provisioners.vmware_lock:
     directory: /tmp/molecule-vmware-run
     state: held

@@ -1,11 +1,6 @@
 ---
-- name: VMware | Generate a private scenario key when not caller-owned
-  community.crypto.openssh_keypair:
-    path: "{{ molecule_ephemeral_directory }}/identity_file"
-    type: ed25519
-    mode: "0600"
-  when: __mp_vmware_specs[__mp_vmware_key_host].ssh_key_path is not defined
-- name: VMware | Validate key material and derive its public half
+# Derive the public half without rewriting a caller-owned private key.
+- name: key | Validate key material and derive its public half
   ansible.builtin.command:
     argv:
       - ssh-keygen
@@ -17,7 +12,7 @@
   register: __mp_vmware_key_result
   changed_when: false
   no_log: true
-- name: VMware | Retain only the public half for clone bootstrap
+- name: key | Retain only the public half for clone bootstrap
   ansible.builtin.set_fact:
     __mp_vmware_public_keys: "{{ __mp_vmware_public_keys | combine({__mp_vmware_key_host:
     __mp_vmware_key_result.stdout})

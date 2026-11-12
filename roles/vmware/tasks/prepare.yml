@@ -1,10 +1,11 @@
 ---
-- name: VMware | Wait for authenticated Ansible access
+- name: prepare | Wait for authenticated Ansible access
   ansible.builtin.wait_for_connection:
     timeout: '{{ mp_vmware_windows_wait_timeout if ansible_connection == "winrm" else mp_vmware_wait_timeout }}'
     sleep: 5
   when: not ansible_check_mode
-- name: VMware | Wait for GuestInfo cloud-init completion
+# Use cloud-init's own completion interface before handing the guest to the consumer.
+- name: prepare | Wait for GuestInfo cloud-init completion
   ansible.builtin.command:
     argv:
       - cloud-init

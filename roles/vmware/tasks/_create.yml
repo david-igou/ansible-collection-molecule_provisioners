@@ -1,14 +1,14 @@
 ---
-- name: VMware | Load and validate the entire run
+- name: create | Load and validate the entire run
   ansible.builtin.include_tasks: _load.yml
-- name: VMware | Discover sources and verify existing ownership
+- name: create | Discover sources and verify existing ownership
   david_igou.molecule_provisioners.vmware_inspect:
     vcenter: "{{ __mp_vmware_vcenter }}"
     specs: "{{ __mp_vmware_specs | david_igou.molecule_provisioners.vmware_discovery_specs }}"
     records: "{{ __mp_vmware_run.hosts | default({}) }}"
     expected_vcenter_uuid: '{{ __mp_vmware_run.vcenter_uuid | default("") }}'
   register: __mp_vmware_inspection
-- name: VMware | Require unchanged hosts and launch settings on resume
+- name: create | Require unchanged hosts and launch settings on resume
   ansible.builtin.assert:
     that:
       - groups['molecule'] | difference(__mp_vmware_run.hosts.keys() | list) | length == 0
@@ -19,20 +19,20 @@
   loop: '{{ groups["molecule"] }}'
   when: __mp_vmware_state_file.stat.exists
   no_log: true
-- name: VMware | Prepare new non-secret resource intents
+- name: create | Prepare new non-secret resource intents
   ansible.builtin.set_fact:
     __mp_vmware_run: >-
       {{ __mp_vmware_specs | david_igou.molecule_provisioners.vmware_new_run(__mp_vmware_inspection.plans,
       __mp_vmware_inspection.vcenter_uuid)
       }}
   when: not __mp_vmware_state_file.stat.exists
-- name: VMware | Reject fixed-name collisions before allocating any guest
+- name: create | Reject fixed-name collisions before allocating any guest
   david_igou.molecule_provisioners.vmware_inspect:
     vcenter: "{{ __mp_vmware_vcenter }}"
     records: "{{ __mp_vmware_run.hosts }}"
     expected_vcenter_uuid: "{{ __mp_vmware_run.vcenter_uuid }}"
   register: __mp_vmware_inspection
-- name: VMware | Execute vendor validation and provisioning
+- name: create | Execute vendor validation and provisioning
   module_defaults:
     group/community.vmware.vmware:
       hostname: "{{ __mp_vmware_vcenter.hostname | default(omit) }}"
@@ -41,35 +41,36 @@
       password: "{{ __mp_vmware_vcenter.credentials.password | default(omit) }}"
       validate_certs: "{{ __mp_vmware_vcenter.validate_certs | default(omit) }}"
   block:
-    - name: VMware | Validate every complete vendor request without mutation
-      community.vmware.vmware_guest: >-
-        {{ __mp_vmware_specs[item] | david_igou.molecule_provisioners.vmware_request(__mp_vmware_run.hosts[item]) }}
-      check_mode: true
+    - name: create | Validate every complete vendor request without mutation
+      ansible.builtin.include_tasks: _clone.yml
+      vars:
+        __mp_vmware_validate_clone: true
       loop: '{{ groups["molecule"] }}'
-      no_log: true
-    - name: VMware | Create the private state directory
+      loop_control:
+        loop_var: __mp_vmware_host
+    - name: create | Create the private state directory
       ansible.builtin.file:
         path: "{{ molecule_ephemeral_directory }}"
         state: directory
         mode: "0700"
       when: not ansible_check_mode
-    - name: VMware | Checkpoint planned guests
+    - name: create | Checkpoint planned guests
       ansible.builtin.include_tasks: _save.yml
-    - name: VMware | Create the persistent private worker directory
+    - name: create | Create the persistent private worker directory
       ansible.builtin.file:
         path: '{{ molecule_ephemeral_directory }}/.vmware-async'
         state: directory
         mode: '0700'
       when: not ansible_check_mode
-    - name: VMware | Prepare Linux management keys before clone submission
+    - name: create | Prepare Linux management keys before clone submission
       ansible.builtin.include_tasks: _keys.yml
       when: not ansible_check_mode
-    - name: VMware | Execute bounded batches
+    - name: create | Execute bounded batches
       ansible.builtin.include_tasks: _batch.yml
       loop: '{{ groups["molecule"] | batch(mp_vmware_concurrency) | list }}'
       loop_control:
         loop_var: __mp_vmware_batch
       when: not ansible_check_mode
-    - name: VMware | Write the final runtime inventory
+    - name: create | Write the final runtime inventory
       ansible.builtin.include_tasks: _runtime.yml
       when: not ansible_check_mode

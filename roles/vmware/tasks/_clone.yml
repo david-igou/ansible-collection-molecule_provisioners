@@ -1,0 +1,33 @@
+---
+- name: clone | Validate or submit the VMware clone request
+  vars:
+    __mp_vmware_clone_request: >-
+      {{ __mp_vmware_specs[__mp_vmware_host] |
+      david_igou.molecule_provisioners.vmware_request(__mp_vmware_run.hosts[__mp_vmware_host],
+      (__mp_vmware_public_keys | default({})).get(__mp_vmware_host, 'preflight')) }}
+  community.vmware.vmware_guest:
+    name: "{{ __mp_vmware_clone_request.name }}"
+    datacenter: "{{ __mp_vmware_clone_request.datacenter }}"
+    folder: "{{ __mp_vmware_clone_request.folder }}"
+    template: "{{ __mp_vmware_clone_request.template }}"
+    annotation: "{{ __mp_vmware_clone_request.annotation }}"
+    cluster: "{{ __mp_vmware_clone_request.cluster | default(omit) }}"
+    esxi_hostname: "{{ __mp_vmware_clone_request.esxi_hostname | default(omit) }}"
+    resource_pool: "{{ __mp_vmware_clone_request.resource_pool | default(omit) }}"
+    datastore: "{{ __mp_vmware_clone_request.datastore | default(omit) }}"
+    snapshot_src: "{{ __mp_vmware_clone_request.snapshot_src | default(omit) }}"
+    linked_clone: "{{ __mp_vmware_clone_request.linked_clone }}"
+    hardware: "{{ __mp_vmware_clone_request.hardware }}"
+    networks: "{{ __mp_vmware_clone_request.networks }}"
+    customization: "{{ __mp_vmware_clone_request.customization | default(omit) }}"
+    advanced_settings: "{{ __mp_vmware_clone_request.advanced_settings | default(omit) }}"
+    state: "{{ __mp_vmware_clone_request.state }}"
+    wait_for_ip_address: "{{ __mp_vmware_clone_request.wait_for_ip_address }}"
+    wait_for_customization: "{{ __mp_vmware_clone_request.wait_for_customization }}"
+    wait_for_ip_address_timeout: "{{ mp_vmware_provision_timeout }}"
+    wait_for_customization_timeout: "{{ mp_vmware_provision_timeout }}"
+  check_mode: "{{ __mp_vmware_validate_clone }}"
+  async: "{{ 0 if __mp_vmware_validate_clone else mp_vmware_provision_timeout }}"
+  poll: 0
+  register: __mp_vmware_launch
+  no_log: true

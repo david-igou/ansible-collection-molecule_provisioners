@@ -1,9 +1,9 @@
 ---
-- name: VMware | Locate the private connection overlay
+- name: prune | Locate the private connection overlay
   ansible.builtin.stat:
     path: "{{ molecule_ephemeral_directory }}/inventory/molecule_runtime.yml"
   register: __mp_vmware_overlay_file
-- name: VMware | Retain connection entries only for remaining resources
+- name: prune | Retain connection entries only for remaining resources
   vars:
     __mp_vmware_old_overlay: >-
       {{ lookup('ansible.builtin.file', molecule_ephemeral_directory ~ '/inventory/molecule_runtime.yml') | from_yaml }}

@@ -76,7 +76,6 @@
 
     - name: Pull VMware role options from molecule group hostvars
       ansible.builtin.set_fact:
-        __mp_vmware_options_loaded: true
         mp_vmware_provision_timeout: >-
           {{ mp_vmware_provision_timeout | default(hostvars[groups['molecule'][0]].mp_vmware_provision_timeout |
           default(omit))

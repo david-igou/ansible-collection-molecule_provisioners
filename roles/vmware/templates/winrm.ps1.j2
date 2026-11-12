@@ -13,5 +13,9 @@ if ($listener.Count -eq 0) {
     throw 'Multiple HTTPS listeners require a prepared listener configuration'
 }
 $rule = Get-NetFirewallRule -Name 'MoleculeProvisionerWinRM' -ErrorAction SilentlyContinue
-if ($rule) { Remove-NetFirewallRule -Name 'MoleculeProvisionerWinRM' }
-New-NetFirewallRule -Name 'MoleculeProvisionerWinRM' -DisplayName 'Molecule WinRM HTTPS' -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow | Out-Null
+if ($rule) {
+    $rule | Set-NetFirewallRule -Enabled True -Direction Inbound -Action Allow
+    $rule | Get-NetFirewallPortFilter | Set-NetFirewallPortFilter -Protocol TCP -LocalPort $port
+} else {
+    New-NetFirewallRule -Name 'MoleculeProvisionerWinRM' -DisplayName 'Molecule WinRM HTTPS' -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow | Out-Null
+}
