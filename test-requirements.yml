@@ -1,0 +1,5 @@
+---
+collections:
+  # RouterOS connection plugin used by the QEMU appliance tests.
+  - name: community.routeros
+    version: ">=3.0.0,<4.0.0"

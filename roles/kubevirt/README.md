@@ -597,12 +597,12 @@ What changes when `connection != ssh`:
   for psrp/winrm hosts — OOBE specialize + the unattend `FirstLogonCommands`
   routinely take several minutes — versus `mp_kubevirt_wait_timeout` (120s) for ssh.
 
-**Controller prerequisites (not shipped by this collection):** psrp needs
-[`pypsrp`](https://pypi.org/project/pypsrp/) on the controller (and `pypsrp[credssp]`
-when using CredSSP); `winrm` needs [`pywinrm`](https://pypi.org/project/pywinrm/).
-These are controller-side runtime deps of the Ansible connection plugins, so they
-are intentionally **not** in this collection's `requirements.txt` — install them in
-your Molecule execution environment / controller venv.
+**Controller prerequisites:** psrp needs
+[`pypsrp`](https://pypi.org/project/pypsrp/) on the controller; `winrm` needs
+[`pywinrm`](https://pypi.org/project/pywinrm/).
+Both packages are included in this collection's controller-side `requirements.txt`.
+Install that file in your Molecule execution environment or controller virtual
+environment. CredSSP requires the additional `pypsrp[credssp]` extra.
 
 **RBAC:** a `sysprep_secret` is a `Secret` the *consumer* creates (it is not managed
 by this role), so no extra Secret verbs are needed here. The golden-image clone

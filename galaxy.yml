@@ -7,7 +7,7 @@ authors:
   - David Igou <igou.david@gmail.com>
 
 description: >-
-  Reusable Molecule provisioner playbooks and roles (podman, kubevirt, qemu, docker, aws) for
+  Reusable Molecule provisioner playbooks and roles (podman, kubevirt, qemu, docker, aws, vmware) for
   testing other Ansible collections without copy-pasting create/destroy/prepare
   automation per repo.
 
@@ -21,6 +21,7 @@ tags:
   - qemu
   - docker
   - aws
+  - vmware
 
 dependencies:
   amazon.aws: ">=9.0.0,<12.0.0"
@@ -32,6 +33,8 @@ dependencies:
   community.docker: ">=4.0.0"
   community.general: ">=10.1.0" # decompress module (image cache)
   ansible.netcommon: ">=7.0.0" # QEMU appliance connections
+  community.vmware: ">=6.5.0,<7.0.0"
+  vmware.vmware: ">=2.10.0,<3.0.0"
 
 repository: https://github.com/david-igou/ansible-collection-molecule_provisioners
 documentation: https://github.com/david-igou/ansible-collection-molecule_provisioners
@@ -58,7 +61,6 @@ build_ignore:
   - changelogs/.plugin-cache.yaml
   - changelogs/fragments
   - devfile.yaml
-  - requirements.txt
   - lint-requirements.txt
   - .build
   - collections

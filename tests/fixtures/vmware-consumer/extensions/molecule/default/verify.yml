@@ -1,0 +1,37 @@
+---
+- name: Verify authenticated VMware guests
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Check functional account access
+      ansible.builtin.command: id -un
+      register: account
+      changed_when: false
+    - name: Verify effective account
+      ansible.builtin.assert:
+        that: account.stdout == ansible_user
+    - name: Check passwordless sudo
+      ansible.builtin.command: id -u
+      become: true
+      changed_when: false
+      register: privileged
+    - name: Verify privilege escalation
+      ansible.builtin.assert:
+        that: privileged.stdout == '0'
+    - name: Run a command as the workload account
+      ansible.builtin.command: id -un
+      become: true
+      become_user: molecule_consumer
+      changed_when: false
+      register: workload_account
+    - name: Assert workload result
+      ansible.builtin.assert:
+        that: workload_account.stdout == 'molecule_consumer'
+        fail_msg: The converged account must be usable for command execution.
+    - name: Verify the VMware cloud datasource
+      ansible.builtin.command: cloud-id
+      changed_when: false
+      register: datasource
+    - name: Confirm GuestInfo bootstrapping
+      ansible.builtin.assert:
+        that: datasource.stdout == 'vmware'

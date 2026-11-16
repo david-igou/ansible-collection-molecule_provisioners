@@ -1,0 +1,39 @@
+---
+argument_specs:
+  create:
+    short_description: Provision disposable VMware guests with saved ownership.
+    options: &vmware_options
+      mp_vmware_provision_timeout:
+        type: int
+        default: 7200
+        description: Per-guest provision timeout in seconds.
+      mp_vmware_tools_timeout:
+        type: int
+        default: 600
+        description: Per-guest tools timeout in seconds.
+      mp_vmware_wait_timeout:
+        type: int
+        default: 600
+        description: Per-guest wait timeout in seconds.
+      mp_vmware_windows_wait_timeout:
+        type: int
+        default: 900
+        description: Per-guest windows wait timeout in seconds.
+      mp_vmware_cleanup_timeout:
+        type: int
+        default: 7200
+        description: Per-guest cleanup timeout in seconds.
+      mp_vmware_concurrency:
+        type: int
+        default: 4
+        description: Maximum simultaneous per-host operations.
+      mp_vmware_role_defaults:
+        type: dict
+        default: {}
+        description: Base VMware host settings overridden by shared defaults and per-host settings.
+  prepare:
+    short_description: Authenticate disposable VMware guests with saved ownership.
+    options: *vmware_options
+  destroy:
+    short_description: Remove disposable VMware guests with saved ownership.
+    options: *vmware_options

@@ -22,14 +22,14 @@ collections:
 ```
 
 In the controller's virtual environment or execution environment, install
-Molecule, ansible-core 2.17+, boto3, botocore and cryptography. Installing the
-collection also installs its Galaxy dependencies, including `amazon.aws`,
+Molecule, Ansible Core 2.19+ and the collection's packaged `requirements.txt`.
+Installing the collection also installs its Galaxy dependencies, including `amazon.aws`,
 `community.aws` and `community.crypto`. SSH guests need an SSH client.
 
 ```bash
-python -m pip install molecule 'ansible-core>=2.17' \
-  'boto3>=1.35.0' 'botocore>=1.35.0' 'cryptography>=42.0.0'
+python -m pip install molecule 'ansible-core>=2.19'
 ansible-galaxy collection install -r extensions/molecule/requirements-test.yml
+python -m pip install -r "$HOME/.ansible/collections/ansible_collections/david_igou/molecule_provisioners/requirements.txt"
 ```
 
 To use a source checkout before its version is published, run `make build` there
@@ -218,8 +218,9 @@ Opaque shell, MIME or PowerShell payloads belong in `user_data` and require
 `key_inject_method: ec2` or `none`.
 
 For Windows, use a Windows AMI and a prepared HTTPS WinRM listener, or provide
-PowerShell `user_data` that configures it. Install pywinrm for `connection: winrm`
-or pypsrp for `connection: psrp` in the controller. The collection supplies
+PowerShell `user_data` that configures it. The controller's runtime requirements
+include pywinrm for `connection: winrm` and pypsrp for `connection: psrp`. The
+collection supplies
 `ansible.windows`. For a disposable guest with a self-signed listener certificate,
 the host override can be:
 
@@ -236,7 +237,7 @@ connection_vars:
 Use a Windows AMI ID in place of the example. For a trusted listener certificate,
 set `ansible_winrm_server_cert_validation: validate`. For PSRP, set
 `connection: psrp`, replace the WinRM options with `ansible_psrp_auth: ntlm`
-and the equivalent `ansible_psrp_cert_validation` policy, and install pypsrp.
+and the equivalent `ansible_psrp_cert_validation` policy.
 The role decrypts the EC2 Administrator password using the matching RSA key
 unless `connection_vars.ansible_password` is supplied. See
 [Windows and appliances](../roles/aws/README.md#windows-and-appliances) for the

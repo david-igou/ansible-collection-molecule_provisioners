@@ -17,8 +17,10 @@ source .venv/bin/activate
 make install
 ```
 
-`make install` installs the pinned lint tools, test dependencies, and Ansible
-collections. Run all commands below from the collection root. Test targets
+`make install` installs the pinned lint tools, Python requirements and this
+collection with its `galaxy.yml` dependencies. `test-requirements.yml` adds the
+RouterOS collection used by appliance tests. Run all commands below from the
+collection root. Test targets
 create an ignored `.build/ansible_collections/` layout so they work before a
 Molecule scenario has created its own collection links.
 
@@ -36,20 +38,19 @@ or container backend. `make sanity` uses `ansible-test sanity --docker` and
 requires a Docker-compatible container engine. Use `SANITY_ARGS` to select
 checks or a Python version.
 
-Renderer changes also need a check on an older supported Ansible version.
-This example runs the offline suite with ansible-core 2.16 in a clean container:
+The supported Ansible Core minimum is 2.19. `lint-requirements.txt` pins the
+tested 2.19 release. Build the shared Python 3.12 EE and run the offline checks
+inside it:
 
 ```bash
-podman run --rm \
-  -v "$PWD:/work/ansible_collections/david_igou/molecule_provisioners" \
-  -w /work/ansible_collections/david_igou/molecule_provisioners \
-  -e ANSIBLE_COLLECTIONS_PATH=/work \
-  python:3.12-slim bash -c '
-    python -m pip install "ansible-core>=2.16,<2.17" pytest pyyaml
-    ansible-galaxy collection install containers.podman kubernetes.core community.crypto community.docker community.general
-    PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest tests/unit -q -o addopts=""
-  '
+make ee
+podman run --rm -v "$PWD:/work:Z" localhost/mp-ee:dev make lint test-unit build
 ```
+
+Both `make test-aws` and `make test-vmware` use this image. Override `TEST_IMAGE`
+to select another shared image. Its build installs Python packages from the
+root requirements files and collection dependencies through `galaxy.yml`.
+The packaged runtime `requirements.txt` is also discovered by Ansible Builder.
 
 ## Backend tests
 
@@ -67,6 +68,7 @@ podman run --rm \
 | `make test-kubevirt-access` | Custom SSH, TCP/UDP endpoints, Service updates | KubeVirt cluster with reachable NodePorts |
 | `make test-kubevirt-storage` | Managed-disk I/O, retries, cleanup, external storage | KubeVirt, CDI, suitable storage class |
 | `make test-aws` | EC2 lifecycle, networking, storage, transports and recovery | Podman, exported AWS credentials and explicit test account; [AWS setup](#aws) |
+| `make test-vmware` | Installed native consumer lifecycle, retries and cleanup | Podman, vCenter credentials, expected identity and existing fixtures; [VMware setup](#vmware) |
 
 Backend tests create and delete test infrastructure. Choose a test namespace
 and verify the cluster identity before running against an existing cluster.
@@ -187,3 +189,56 @@ The tests exercise authenticated Linux/sudo, Windows WinRM and PSRP password
 decryption, repeated create, existing-network preservation, inventory removal,
 run isolation, failure recovery and independent SDK cleanup checks. Backend
 validation/rendering and launch retry tests are also part of `make test-unit`.
+
+## VMware
+
+Build the shared Python 3.12 controller EE with `make ee`. The opt-in
+`make test-vmware` target needs the vCenter environment credentials and all of:
+
+- `MP_TEST_VMWARE_EXPECTED_UUID`: exact vCenter instance UUID, checked before mutation.
+- `MP_TEST_VMWARE_DATACENTER`, `MP_TEST_VMWARE_CLUSTER`, `MP_TEST_VMWARE_FOLDER`:
+  existing designated test placement.
+- `MP_TEST_VMWARE_DATASTORE`, `MP_TEST_VMWARE_NETWORK`: existing writable datastore
+  and DHCP port group.
+- `MP_TEST_VMWARE_TEMPLATE`, `MP_TEST_VMWARE_SECOND_TEMPLATE`: Linux sources prepared
+  for VMware GuestInfo/cloud-init, SSH, Python and sudo.
+
+For the Signal9 split-DNS setup, also set `MP_TEST_VMWARE_DNS=127.0.0.53`.
+The consumer and independent SDK audit honor `VMWARE_PORT` and
+`VMWARE_VALIDATE_CERTS`; certificate validation defaults to true. Install the CA
+in the controller EE, or explicitly set `VMWARE_VALIDATE_CERTS=false` for a lab
+with a self-signed certificate.
+
+Credentials alone never start a live test. The installed-consumer fixture creates
+one clone from each template, creates a workload account and executes as that
+account, and checks authenticated SSH/sudo, converge/idempotence,
+Molecule list/login, repeated create with stable identities/keys, runtime overlay
+recovery, repeated destroy and independent SDK verification that original VMs and
+templates retain their names/template status/annotations. Failure evidence stays
+private under `.build/vmware-live/`; preserve it after incomplete cleanup.
+
+The optional `MP_TEST_VMWARE_ROUTE_HOST` is specific to the current lab's VPN/Docker
+subnet overlap. With an existing SSH agent and known-hosts file, it adds only missing
+private guest `/32` routes on that host through the existing `igou` interface and
+removes precisely those routes in teardown. Ordinary routed environments should
+leave it unset. The production role does not alter controller/VPN routes.
+
+Offline validation/ownership/bootstrap tests run with `make test-unit`. Hosted
+Actions remain lint-only. Full driver parity additionally needs Tools-based Linux
+bootstrap, Windows/Sysprep/HTTPS WinRM, full/snapshot/linked disk backing, static and
+distributed networking, negative ownership/recovery cases and dependency-version
+coverage. Passing the initial GuestInfo consumer does not close that milestone.
+
+Verified on 2026-11-12 against vSphere 8.0.2 using the existing Ubuntu 24.04 LTS
+and CentOS Stream 9 GuestInfo templates and DHCP networking. The final native
+`make test-vmware` run passed both guests without manual NIC recovery, including
+real check mode without VM/key/journal creation, datasource detection, SSH/sudo,
+login/list, converge/idempotence, stable identities/keys on retry, overlay recovery,
+private persisted worker files and repeated cleanup. Its independent SDK audit
+confirmed the created instance UUIDs were absent and original VM/template identity
+and annotation fingerprints were unchanged. Temporary guest routes were removed.
+Controller: Python 3.12.15, ansible-core 2.19.14, community.vmware 6.5.0,
+vmware.vmware 2.10.0, vcf-sdk 9.0.0.0. This evidence covers GuestInfo Linux;
+it does not certify the remaining parity cases above. That live result predates
+the clone/key refactor and workload-account fixture. Those changes have offline
+coverage and await another live run.

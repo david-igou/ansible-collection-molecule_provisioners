@@ -5,7 +5,7 @@ galaxy_info:
   description: Molecule provisioner role using KubeVirt VMs in Kubernetes
   company: ""
   license: MIT
-  min_ansible_version: "2.15"
+  min_ansible_version: "2.19"
   platforms:
     - name: GenericLinux
       versions:

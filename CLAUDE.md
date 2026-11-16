@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project type
 
-Ansible Collection `david_igou.molecule_provisioners`. Provides reusable Molecule provisioner playbooks and roles (podman, kubevirt, qemu, docker) so other collections can test themselves without copy-pasting `create.yml`/`destroy.yml`/`prepare.yml` per repo. Targets `ansible-core >= 2.15`.
+Ansible Collection `david_igou.molecule_provisioners`. Provides reusable Molecule provisioner playbooks and roles (podman, kubevirt, qemu, docker, aws, vmware) so other collections can test themselves without copy-pasting `create.yml`/`destroy.yml`/`prepare.yml` per repo. Targets `ansible-core >= 2.19`.
 
 This project is in alpha. Breaking changes do not require a version bump during alpha.
 
@@ -188,9 +188,9 @@ are removed. `release.yml` publishes to Galaxy when a release is published.
 
 ## Local verification
 
-Use `make test-unit` for offline renderer/validation checks. For renderer
-changes, also check an older supported ansible-core in a clean container;
-2.19+ preserves native types that 2.16/2.17 can string-coerce.
+Use `make test-unit` for offline renderer/validation checks against the supported
+Ansible Core 2.19 minimum. `make ee` builds the shared test image from the standard
+requirements and `galaxy.yml`; use `TEST_IMAGE` to override its name.
 
 `make test-kubevirt-kind` creates and cleans up a disposable local KubeVirt/CDI
 cluster. `make test-kubevirt-lifecycle`, `make test-kubevirt-access`, and
@@ -199,7 +199,7 @@ These targets mutate test infrastructure; live-cluster authorization still
 applies. Run relevant functional tests locally before handing a change over.
 
 See [docs/TESTING.md](docs/TESTING.md) for prerequisites, backend targets,
-older-core checks, and cluster selection. `make sanity` and `make build` remain
+supported-version checks, and cluster selection. `make sanity` and `make build` remain
 local checks. Use an execution environment for agent verification.
 
 ## Out of scope

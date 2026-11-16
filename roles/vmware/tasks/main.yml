@@ -1,0 +1,4 @@
+---
+- name: main | Explain lifecycle entry points
+  ansible.builtin.fail:
+    msg: Use the public create, prepare and destroy playbook imports.

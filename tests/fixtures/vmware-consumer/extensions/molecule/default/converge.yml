@@ -1,0 +1,11 @@
+---
+- name: Configure a disposable guest
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Create the consumer workload account
+      ansible.builtin.user:
+        name: molecule_consumer
+        shell: /bin/bash
+        state: present
+      become: true

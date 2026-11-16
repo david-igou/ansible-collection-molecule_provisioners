@@ -1,0 +1,23 @@
+---
+- name: guestinfo | Connect the existing management NIC without OS customization
+  community.vmware.vmware_guest_network:
+    uuid: "{{ __mp_vmware_run.hosts[__mp_vmware_host].instance_uuid }}"
+    use_instance_uuid: true
+    datacenter: "{{ __mp_vmware_specs[__mp_vmware_host].datacenter }}"
+    mac_address: "{{ __mp_vmware_run.hosts[__mp_vmware_host].primary_mac }}"
+    network_name: "{{ __mp_vmware_specs[__mp_vmware_host].networks[0].name }}"
+    device_type: '{{ __mp_vmware_specs[__mp_vmware_host].networks[0].device_type | default("vmxnet3") }}'
+    switch: "{{ __mp_vmware_specs[__mp_vmware_host].networks[0].dvswitch_name | default(omit) }}"
+    connected: true
+    start_connected: true
+    state: present
+  no_log: true
+- name: guestinfo | Power on the owned GuestInfo clone and wait for its address
+  community.vmware.vmware_guest:
+    uuid: "{{ __mp_vmware_run.hosts[__mp_vmware_host].instance_uuid }}"
+    use_instance_uuid: true
+    state: poweredon
+    wait_for_ip_address: true
+    wait_for_ip_address_timeout: "{{ mp_vmware_provision_timeout }}"
+    state_change_timeout: "{{ mp_vmware_provision_timeout }}"
+  no_log: true

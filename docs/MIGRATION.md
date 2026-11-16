@@ -2,6 +2,18 @@
 
 If you have a molecule scenario using the upstream `platforms:` + `driver:` shape (now called _pre ansible-native_ in molecule's own docs) and you want to use this collection, here is the field-by-field translation.
 
+## Controller requirements
+
+The collection now requires Ansible Core 2.19 or newer for every backend.
+Galaxy installs runtime collection dependencies from `galaxy.yml`, including
+the VMware collections. Install controller-side Python dependencies from the
+packaged `requirements.txt`, or let Ansible Builder discover them. The separate
+VMware requirement files have been removed.
+
+Local AWS and VMware tests share `make ee` and the `TEST_IMAGE` override.
+Replace `make ee-vmware` with `make ee`, and replace `AWS_TEST_IMAGE` or
+`VMWARE_TEST_IMAGE` overrides with `TEST_IMAGE`.
+
 ## QEMU testing features in 0.0.7-alpha
 
 QEMU now allocates management ports automatically and verifies VM ownership
@@ -278,3 +290,33 @@ existing target is selected. Generated ingress has no unrestricted internet defa
 use stable client tokens and cleanup follows recorded ownership rather than names.
 Windows listeners remain image/bootstrap responsibilities; choose WinRM or PSRP
 explicitly. For RDP use a client that prompts for credentials.
+
+## VMware driver
+
+Select `mp_backend: vmware` and replace `driver: vmware` / `platforms` with native
+inventory. The complete contract and prerequisites are in the
+[VMware role reference](../roles/vmware/README.md).
+
+| Old setting | Native inventory replacement |
+| --- | --- |
+| `platforms[].name` | Host under the `molecule` group; optional `mp.vmware.name` for a fixed VM display name |
+| `driver.vcenter_hostname` | `mp_defaults.vmware.vcenter.hostname` or `VMWARE_HOST` |
+| `driver.vcenter_username/password` | `vcenter.credentials.username/password` or `VMWARE_USER` / `VMWARE_PASSWORD` |
+| `driver.validate_certs` | `vcenter.validate_certs`; new default true, explicit false supported |
+| `driver.datacenter/cluster/esxi_hostname/folder` | Same fields under shared or per-host VMware settings |
+| `platforms[].template/snapshot_src/resource_pool/hardware/networks` | Same fields under `mp.vmware` |
+| `driver.instance_os_type` | `instance_os_type`, default linux; per host |
+| `driver.vm_username/vm_password` | `guest.credentials.username/password` |
+| `driver.dns_servers` | `customization.dns_servers` |
+| Windows `platforms[].customization.fullname/orgname` | `customization.fullname/orgname` |
+| `driver.winrm_port/connection` | `connection_port/connection` |
+| `driver.winrm_transport/winrm_server_cert_validation` | `connection_vars.ansible_winrm_transport/ansible_winrm_server_cert_validation` |
+| `driver.ssh_connection_options` | `connection_vars.ansible_ssh_common_args` |
+| Instance config and safe files | Private native runtime inventory and retained ownership journal |
+
+A snapshot now implies `linked_clone: true`, correcting the old driver's documented
+intent. Set `linked_clone: false` explicitly for a full clone from a snapshot.
+Windows uses a scoped listener firewall rule, and existing Linux authorized keys
+are preserved. VMware dependencies use the collection's standard Galaxy and Python
+requirements; the old standalone driver's pyvmomi-only prerequisites do not
+describe the modern VMware collection dependencies.

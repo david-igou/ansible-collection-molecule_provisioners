@@ -1,0 +1,7 @@
+---
+galaxy_info:
+  author: David Igou
+  description: Provision disposable vCenter guests for native Molecule scenarios.
+  license: MIT
+  min_ansible_version: "2.19"
+dependencies: []

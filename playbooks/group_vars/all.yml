@@ -6,3 +6,4 @@ mp_supported_backends:
   - qemu
   - docker
   - aws
+  - vmware

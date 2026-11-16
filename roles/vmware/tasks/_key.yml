@@ -1,0 +1,20 @@
+---
+# Derive the public half without rewriting a caller-owned private key.
+- name: key | Validate key material and derive its public half
+  ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -y
+      - -f
+      - '{{ __mp_vmware_specs[__mp_vmware_key_host].ssh_key_path | default(molecule_ephemeral_directory ~
+        "/identity_file")
+        }}'
+  register: __mp_vmware_key_result
+  changed_when: false
+  no_log: true
+- name: key | Retain only the public half for clone bootstrap
+  ansible.builtin.set_fact:
+    __mp_vmware_public_keys: "{{ __mp_vmware_public_keys | combine({__mp_vmware_key_host:
+    __mp_vmware_key_result.stdout})
+      }}"
+  no_log: true
