@@ -1,0 +1,7 @@
+---
+- name: Converge
+  hosts: molecule
+  tasks:
+    - name: Apply the role under test
+      ansible.builtin.include_role:
+        name: my_namespace.my_collection.my_role

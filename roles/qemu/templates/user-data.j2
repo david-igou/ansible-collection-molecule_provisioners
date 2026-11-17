@@ -1,2 +1,0 @@
-#cloud-config
-{{ _mp_specs[_host] | david_igou.molecule_provisioners.qemu_user_data(temporary_ssh_public_key | default('')) | to_nice_yaml }}

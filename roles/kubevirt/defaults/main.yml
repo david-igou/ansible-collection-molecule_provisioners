@@ -1,58 +1,12 @@
 ---
-# Defaults for david_igou.molecule_provisioners.kubevirt.
-
-# Isolate runs by default. State is retained until cleanup succeeds.
-mp_kubevirt_run_isolation: true
-mp_kubevirt_cleanup_timeout: 120
-
-# SSH keypair lives in the molecule ephemeral dir so destroy can find it.
-mp_kubevirt_ssh_key_path: "{{ molecule_ephemeral_directory }}/identity_file"
-
-# wait_for_connection timeout (seconds) for prepare phase (ssh/Linux hosts).
-mp_kubevirt_wait_timeout: 120
-
-# wait_for_connection timeout (seconds) for Windows (psrp/winrm) hosts. A
-# generalized golden boots into OOBE specialize + the unattend FirstLogon
-# Commands before WinRM answers — this can take several minutes, so the default
-# is deliberately generous. Override per-scenario if your golden is faster/slower.
-mp_kubevirt_windows_wait_timeout: 900
-
-# Allowed ssh_service.type values.
-#   NodePort — create a NodePort Service per VM; connect via Node InternalIP.
-#   None     — skip Service creation; consumer supplies connection_ip per host
-#              (e.g. external Route/Ingress, controller-reachable pod IP).
-#   PodIP    — skip Service creation; connect to the VMI's pod-network address
-#              (masquerade interface = virt-launcher pod IP). For controllers
-#              running IN the cluster (e.g. a Dev Spaces workspace) — needs
-#              neither `services` nor cluster-wide `nodes` RBAC.
-mp_kubevirt_allowed_ssh_service_types:
-  - NodePort
-  - "None"
-  - PodIP
-
-# PodIP mode: retries x delay bound the wait for the VMI to report
-# the configured pod network's IP after the VirtualMachine is created.
-mp_kubevirt_podip_lookup_retries: 60
-mp_kubevirt_podip_lookup_delay: 5
-
-# Allowed connection values (per-host mp.kubevirt.connection discriminator).
-#   ssh          — Linux golden; SSH key injected via cloud-init (default).
-#   psrp | winrm — Windows golden; WinRM-over-HTTPS (5986), NTLM, cert ignore.
-mp_kubevirt_allowed_connections:
-  - ssh
-  - psrp
-  - winrm
-
-# Per-host field defaults. Layered as: this dict <- mp_defaults.kubevirt <- hostvars[item].mp.kubevirt.
-# boot_source is required and is therefore not present here.
-mp_kubevirt_role_defaults:
+# Every host's VM starts from this dict. mp_defaults.kubevirt and then the
+# host's mp.kubevirt are merged over it (recursively). The merged result is
+# validated against the `instance` entry point in meta/argument_specs.yml.
+mp_kubevirt_instance_defaults:
   namespace: molecule
   ssh_user: cloud-user
-  memory: 1Gi
   connection: ssh
   connection_vars: {}
-  application_ports: []
-  # Empty cloud_init keeps the connection-dependent bootstrap defaults.
   cloud_init: {}
   interfaces:
     - name: default
@@ -60,5 +14,20 @@ mp_kubevirt_role_defaults:
   networks:
     - name: default
       pod: {}
+  boot_disk: {}
+  data_disks: []
+  node_selector: {}
+  tolerations: []
+  affinity: {}
   ssh_service:
     type: NodePort
+  application_ports: []
+  vm_overrides: {}
+
+# Seconds to wait for a VM to become Ready (including disk imports), for its
+# pod IP, for deletion, and in prepare for an SSH guest to accept connections.
+mp_kubevirt_wait_timeout: 600
+
+# Seconds prepare waits for a Windows (psrp/winrm) guest. Sysprep specialize
+# and first-logon commands run before WinRM answers.
+mp_kubevirt_windows_wait_timeout: 900

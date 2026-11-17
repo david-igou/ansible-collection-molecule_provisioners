@@ -1,0 +1,12 @@
+---
+mp_backend: kubevirt
+mp_defaults:
+  kubevirt:
+    namespace: "{{ lookup('ansible.builtin.env', 'MOLECULE_NAMESPACE') | default('molecule', true) }}"
+    boot_source:
+      type: container_disk
+      image: quay.io/containerdisks/ubuntu:24.04
+    ssh_user: ubuntu
+    memory: 1Gi
+    cpu:
+      cores: 2

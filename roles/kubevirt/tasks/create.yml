@@ -1,144 +1,88 @@
 ---
-- name: Resolve per-host kubevirt configuration
-  ansible.builtin.include_tasks: _spec_merge.yml
+- name: Validate the instance settings
+  ansible.builtin.validate_argument_spec:
+    argument_spec: >-
+      {{ (lookup('ansible.builtin.file', role_path ~ '/meta/argument_specs.yml') | from_yaml)
+         .argument_specs.instance.options }}
+    provided_arguments:
+      kubevirt: "{{ _mp_spec }}"
 
-- name: Validate per-host specs
-  ansible.builtin.include_tasks: _validate.yml
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
+- name: Generate the SSH key pair
+  community.crypto.openssh_keypair:
+    path: "{{ _mp_key }}"
+    type: ed25519
+  run_once: true
 
-- name: Load any saved run identity
-  ansible.builtin.include_tasks: _load_run.yml
-
-- name: Initialize or resume run isolation
-  ansible.builtin.include_tasks: _init_run.yml
-
-- name: Check isolated resources before provisioning
-  ansible.builtin.include_tasks: _check_run_host.yml
-  loop: "{{ __mp_kubevirt_run.hosts | dict2items }}"
-  loop_control:
-    loop_var: run_host
-    label: "{{ run_host.key }}"
-  when: mp_kubevirt_run_isolation | bool
-
-# SSH connections use this key even when cloud-init injection is disabled.
-# Explicit injection also needs a key; ordinary all-Windows scenarios skip it.
-- name: Check the caller's SSH key for full definitions
-  ansible.builtin.stat:
-    path: "{{ mp_kubevirt_ssh_key_path }}"
-  register: __mp_kubevirt_full_definition_key
-  when: >-
-    _mp_specs.values() | selectattr('vm_definition', 'defined')
-    | selectattr('connection', 'equalto', 'ssh') | list | length > 0
-
-- name: Require an existing SSH key for full definitions
+- name: Check rules that span several settings
   ansible.builtin.assert:
     that:
-      - __mp_kubevirt_full_definition_key.stat.isreg | default(false)
-      - __mp_kubevirt_full_definition_key.stat.size | default(0) > 0
+      - _mp_vm.spec.template.spec.domain.devices.interfaces | map(attribute='name') | sort
+        == _mp_vm.spec.template.spec.networks | map(attribute='name') | sort
+      - _mp_spec.ssh_service.type != 'None' or _mp_spec.connection_ip is defined
+      - _mp_spec.ssh_service.type == 'None' or _mp_pod_networks | length > 0
     fail_msg: >-
-      vm_definition does not inject SSH access. Provide a private key at
-      mp_kubevirt_ssh_key_path and configure the guest to accept its public key.
-  when: __mp_kubevirt_full_definition_key is not skipped
+      Every interface needs a network of the same name; ssh_service.type None
+      needs connection_ip; NodePort and PodIP need a pod network.
 
-- name: Determine whether any host needs an SSH key
-  ansible.builtin.set_fact:
-    __mp_kubevirt_any_ssh: >-
-      {{ _mp_specs.values() | rejectattr('vm_definition', 'defined')
-         | map(attribute='connection', default='ssh')
-         | select('equalto', 'ssh')
-         | list | length > 0
-         or (_mp_specs.values() | rejectattr('vm_definition', 'defined')
-             | map(attribute='cloud_init.inject_ssh_key', default=false)
-             | map('bool') | select('equalto', true) | list | length > 0) }}
+- name: Store the cloud-init data
+  kubernetes.core.k8s:
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ _mp_name }}-cloudinit"
+        namespace: "{{ _mp_spec.namespace }}"
+        labels: "{{ _mp_labels }}"
+      data:
+        userdata: "{{ ('#cloud-config\n' ~ _mp_cloud_config | to_nice_yaml(indent=2)) | b64encode }}"
+        networkdata: "{{ _mp_spec.cloud_init.network_data | default({}) | to_nice_yaml(indent=2) | b64encode }}"
+  when: _mp_cloud_init | bool
+  no_log: "{{ _mp_spec.cloud_init.user_data is defined }}" # user data may hold credentials
 
-- name: Generate SSH key pair
-  community.crypto.openssh_keypair:
-    path: "{{ mp_kubevirt_ssh_key_path }}"
-    type: ed25519
-    regenerate: "{{ 'never' if __mp_kubevirt_full_definition_key is not skipped else omit }}"
-  register: __mp_kubevirt_ssh_keypair
-  when: __mp_kubevirt_any_ssh | bool
+- name: Create the VirtualMachine and wait until it is ready
+  kubernetes.core.k8s:
+    definition: "{{ _mp_vm }}"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_timeout: "{{ mp_kubevirt_wait_timeout }}"
 
-- name: Set SSH public key fact
-  ansible.builtin.set_fact:
-    temporary_ssh_public_key: "{{ __mp_kubevirt_ssh_keypair.public_key }}"
-  when: __mp_kubevirt_any_ssh | bool
+- name: Publish the management and application ports
+  kubernetes.core.k8s:
+    definition: "{{ lookup('ansible.builtin.template', 'service.yml.j2') | from_yaml }}"
+    apply: true
+    server_side_apply:
+      field_manager: molecule_provisioners
+  register: _mp_service
+  when: _mp_spec.ssh_service.type == 'NodePort'
 
-- name: Create VirtualMachine in KubeVirt
-  ansible.builtin.include_tasks: _create_vm.yml
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
-
-- name: Create guest NodePort Kubernetes service
-  ansible.builtin.include_tasks: _create_service.yml
-  when: (_mp_specs[item].ssh_service.type | default('NodePort')) == 'NodePort'
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
-
-# Cluster-Node lookup is only needed for NodePort hosts that don't pin their
-# own connection_ip. 'None' mode requires connection_ip (validated) and
-# 'PodIP' mode reads the VMI's pod address instead — skipping the lookup
-# keeps namespace-scoped service accounts without cluster-wide
-# `nodes [get,list]` RBAC viable. See #30.
-- name: Determine whether any host needs the cluster-Node lookup
-  ansible.builtin.set_fact:
-    __mp_kubevirt_needs_node_lookup: >-
-      {{ _mp_specs.values()
-         | rejectattr('connection_ip', 'defined')
-         | map(attribute='ssh_service', default={})
-         | map(attribute='type', default='NodePort')
-         | select('equalto', 'NodePort')
-         | list | length > 0 }}
-
-# Look up cluster nodes once, before the per-VM dictionary loop, so every VM
-# without an explicit connection_ip uses the same node IP. Subsequent
-# dictionary build is purely local.
-- name: Look up cluster nodes (for NodePort connection IP)
+- name: Find a node to reach the NodePorts on
   kubernetes.core.k8s_info:
-    api_version: v1
     kind: Node
-  register: __mp_kubevirt_nodes
-  when: __mp_kubevirt_needs_node_lookup
+  register: _mp_nodes
+  when:
+    - _mp_spec.ssh_service.type == 'NodePort'
+    - _mp_spec.connection_ip is not defined
 
-- name: Assert at least one cluster node is available
-  ansible.builtin.assert:
-    that: __mp_kubevirt_nodes.resources | length > 0
-    fail_msg: "No cluster nodes returned from Kubernetes API. Check kubeconfig and cluster health."
-  when: __mp_kubevirt_needs_node_lookup
+- name: Wait for the pod network address
+  kubernetes.core.k8s_info:
+    api_version: kubevirt.io/v1
+    kind: VirtualMachineInstance
+    name: "{{ _mp_name }}"
+    namespace: "{{ _mp_spec.namespace }}"
+  register: _mp_vmi
+  until: >-
+    _mp_vmi.resources[0].status.interfaces | default([])
+    | selectattr('name', 'equalto', _mp_pod_networks[0].name)
+    | selectattr('ipAddress', 'defined') | list | length > 0
+  retries: "{{ mp_kubevirt_wait_timeout // 5 }}"
+  delay: 5
+  when: _mp_spec.ssh_service.type == 'PodIP'
 
-- name: Choose first node InternalIP
+- name: Record the connection settings
   ansible.builtin.set_fact:
-    __mp_kubevirt_node_ip: >-
-      {{ (__mp_kubevirt_nodes.resources[0].status.addresses
-          | selectattr('type', 'equalto', 'InternalIP') | list | first).address }}
-  when: __mp_kubevirt_needs_node_lookup
-
-- name: Initialize VM runtime inventory dict
-  ansible.builtin.set_fact:
-    __mp_kubevirt_runtime_hosts: {}
-
-- name: Build VM runtime entries
-  ansible.builtin.include_tasks: _create_vm_dictionary.yml
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
-
-# no_log: the runtime inventory now carries ansible_password for Windows
-# (psrp/winrm) hosts. Keep mode restrictive (0600) since a secret lands on disk.
-- name: Write runtime connection inventory file
-  vars:
-    runtime_inventory:
-      all:
-        hosts: "{{ __mp_kubevirt_runtime_hosts }}"
-  ansible.builtin.copy:
-    content: "{{ runtime_inventory | to_nice_yaml }}"
-    dest: "{{ molecule_ephemeral_directory }}/inventory/molecule_runtime.yml"
-    mode: "0600"
-  no_log: true
-
-- name: Refresh inventory
-  ansible.builtin.meta: refresh_inventory
+    mp_runtime: >-
+      {{ lookup('ansible.builtin.template', 'runtime.yml.j2') | from_yaml
+         | combine(_mp_spec.connection_vars) }}
+  no_log: "{{ _mp_spec.connection_vars | length > 0 }}" # may hold passwords

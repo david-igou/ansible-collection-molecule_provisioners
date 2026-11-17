@@ -1,0 +1,4 @@
+---
+_mp_spec: >-
+  {{ mp_docker_instance_defaults
+     | combine(mp_defaults.docker | default({}), mp.docker | default({}), recursive=true) }}

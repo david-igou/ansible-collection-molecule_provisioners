@@ -1,0 +1,3 @@
+---
+- name: Create the instances
+  import_playbook: david_igou.molecule_provisioners.create

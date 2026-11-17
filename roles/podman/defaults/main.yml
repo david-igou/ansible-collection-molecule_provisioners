@@ -1,38 +1,12 @@
 ---
-# Defaults for david_igou.molecule_provisioners.podman.
-# These are the role-level overrides; per-platform values come from
-# molecule.yml platforms[].podman.*
+# Settings every container starts from. mp_defaults.podman and then each
+# host's mp.podman are merged over this dict and passed to
+# containers.podman.podman_container.
+mp_podman_instance_defaults:
+  command: sleep infinity
 
-# Reserved network names that must NOT be (re)created/deleted as standalone networks.
-# 'ns' and 'private' are podman-specific (network namespace modes); 'slirp4netns'
-# is the rootless default.
-mp_podman_reserved_networks:
-  - bridge
-  - none
-  - host
-  - slirp4netns
-  - ns
-  - private
+# Arguments for containers.podman.podman_network, one dict per network.
+# Created before the containers and removed after them.
+mp_podman_networks: []
 
-# Async timing for create/destroy bulk operations.
-# Note: retries * delay should equal (or exceed) async_timeout; otherwise
-# async_status can give up while the underlying job is still healthy.
-mp_podman_async_timeout: 7200
-mp_podman_async_retries: 300
-mp_podman_async_delay: 24
-
-# Operator override: swap `podman` for `podman-remote` (or similar) via env var.
-# Threaded through every containers.podman.podman_* module call.
-mp_podman_executable: "{{ lookup('env', 'MOLECULE_PODMAN_EXECUTABLE') | default('podman', true) }}"
-
-# Per-host field defaults. Layered as: this dict <- mp_defaults.podman <- hostvars[item].mp.podman.
-# Only `image` is required. Fields whose role default is "omit" (podman_network,
-# tmpfs, exposed_ports, published_ports, systemd, cgroupns) are intentionally absent
-# — the role's module calls use `| default(omit)` so the podman_container module's
-# own defaults apply.
-mp_podman_role_defaults:
-  command: /sbin/init
-  privileged: false
-  volumes: []
-  capabilities: []
-  env: {}
+mp_podman_executable: "{{ lookup('ansible.builtin.env', 'MOLECULE_PODMAN_EXECUTABLE') | default('podman', true) }}"

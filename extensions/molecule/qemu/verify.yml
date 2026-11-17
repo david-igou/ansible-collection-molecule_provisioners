@@ -1,0 +1,63 @@
+---
+- name: Verify the QEMU guests
+  hosts: molecule
+  gather_facts: true
+  vars:
+    _spec: "{{ mp_defaults.qemu | combine(mp.qemu | default({})) }}"
+  tasks:
+    - name: Check sizing and the management user
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.processor_vcpus == _spec.cpus
+          - ansible_facts.memtotal_mb > _spec.memory * 0.8
+          - ansible_facts.memtotal_mb <= _spec.memory
+          - (ansible_facts.mounts | selectattr('mount', '==', '/') | first).size_total > 6 * 1024 ** 3
+          - ansible_facts.user_id == 'tester'
+        fail_msg: >-
+          {{ inventory_hostname }}: {{ ansible_facts.processor_vcpus }} vCPUs,
+          {{ ansible_facts.memtotal_mb }} MiB, mounts {{ ansible_facts.mounts | map(attribute='mount') }}.
+
+    - name: Check that the guest booted with the expected firmware
+      ansible.builtin.stat:
+        path: /sys/firmware/efi
+      register: _efi
+
+    - name: Read the user_data effects
+      ansible.builtin.command: cat /etc/mp-selftest
+      register: _marker
+      changed_when: false
+
+    - name: Look up the user_data user
+      ansible.builtin.command: getent passwd auditor
+      changed_when: false
+
+    - name: Check firmware and user_data
+      ansible.builtin.assert:
+        that:
+          - _efi.stat.exists == (_spec.firmware | default('bios') == 'uefi')
+          - _marker.stdout == 'from user_data'
+
+    - name: Check the data disk and extra NIC
+      when: inventory_hostname == 'mp-uefi'
+      block:
+        - name: Write to the data disk
+          ansible.builtin.command: >-
+            dd if=/dev/zero of=/dev/disk/by-id/virtio-scratch bs=1M count=1 oflag=direct
+          become: true
+          changed_when: true
+
+        - name: Read the data disk size
+          ansible.builtin.command: blockdev --getsize64 /dev/disk/by-id/virtio-scratch
+          become: true
+          register: _scratch
+          changed_when: false
+
+        - name: Check the data disk and the extra_args NIC
+          ansible.builtin.assert:
+            that:
+              - _scratch.stdout | int == 1024 ** 3
+              - >-
+                '52:54:00:12:34:99' in (ansible_facts.interfaces
+                | map('regex_replace', '-', '_')
+                | map('extract', ansible_facts) | selectattr('macaddress', 'defined')
+                | map(attribute='macaddress'))

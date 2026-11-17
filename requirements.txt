@@ -1,9 +1,8 @@
-# Controller-side Python dependencies; also discovered by Ansible Builder.
-boto3>=1.35.0
-botocore>=1.35.0
-cryptography>=42.0.0
-docker
-kubernetes
-pypsrp
-pywinrm==0.5.0
-vcf-sdk==9.0.0.0
+# Controller-side Python packages; ansible-builder reads this file too.
+cryptography # community.crypto.openssh_keypair (qemu, kubevirt)
+kubernetes # kubernetes.core (kubevirt)
+pycdlib # community.general.iso_create (qemu seed ISO)
+requests # community.docker (docker)
+pypsrp # psrp connection to Windows guests (kubevirt)
+pywinrm # winrm connection to Windows guests (kubevirt)
+pyvmomi # community.vmware (vmware)

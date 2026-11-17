@@ -1,111 +1,12 @@
 ---
-- name: Molecule provisioner — destroy
-  hosts: localhost
-  connection: local
+- name: Destroy Molecule instances
+  hosts: molecule
   gather_facts: false
-  # Per-host mp.<backend> validation is intentionally absent here:
-  # destroy is idempotent for hosts that were never created with the
-  # active backend.
+  vars_files:
+    - vars/controller.yml
   tasks:
-    - name: Assert molecule group exists in inventory
-      ansible.builtin.assert:
-        that:
-          - "'molecule' in groups"
-          - groups['molecule'] | length > 0
-        fail_msg: "Inventory must define a 'molecule' group with at least one host."
-
-    - name: Determine backend from molecule group
-      ansible.builtin.set_fact:
-        _mp_backend: "{{ hostvars[groups['molecule'][0]].mp_backend | default(none) }}"
-
-    # group_vars/molecule.yml is the documented home for mp_defaults, but this
-    # play runs on localhost, which isn't in the molecule group — so that file
-    # is out of scope here. Pull from the first molecule host's hostvars so
-    # _spec_merge sees the consumer's overrides.
-    - name: Pull mp_defaults from molecule group hostvars
-      ansible.builtin.set_fact:
-        mp_defaults: "{{ hostvars[groups['molecule'][0]].mp_defaults }}"
-      when:
-        - mp_defaults is not defined
-        - hostvars[groups['molecule'][0]].mp_defaults is defined
-
-    - name: Pull KubeVirt run isolation from molecule group hostvars
-      ansible.builtin.set_fact:
-        mp_kubevirt_run_isolation: "{{ hostvars[groups['molecule'][0]].mp_kubevirt_run_isolation }}"
-      when:
-        - _mp_backend == 'kubevirt'
-        - mp_kubevirt_run_isolation is not defined
-        - hostvars[groups['molecule'][0]].mp_kubevirt_run_isolation is defined
-
-    - name: Pull KubeVirt cleanup timeout from molecule group hostvars
-      ansible.builtin.set_fact:
-        mp_kubevirt_cleanup_timeout: "{{ hostvars[groups['molecule'][0]].mp_kubevirt_cleanup_timeout }}"
-      when:
-        - _mp_backend == 'kubevirt'
-        - mp_kubevirt_cleanup_timeout is not defined
-        - hostvars[groups['molecule'][0]].mp_kubevirt_cleanup_timeout is defined
-
-    - name: Validate backend
-      ansible.builtin.assert:
-        that: _mp_backend in mp_supported_backends
-        fail_msg: >-
-          mp_backend must be one of {{ mp_supported_backends | join(', ') }}
-          (got '{{ _mp_backend or '(unset)' }}'). Set it in
-          inventory/group_vars/molecule.yml.
-
-    - name: Pull AWS role options from molecule group hostvars
-      ansible.builtin.set_fact:
-        __mp_aws_options_loaded: true
-        mp_aws_wait_timeout: >-
-          {{ mp_aws_wait_timeout | default(
-             hostvars[groups['molecule'][0]].mp_aws_wait_timeout | default(omit)) }}
-        mp_aws_windows_wait_timeout: >-
-          {{ mp_aws_windows_wait_timeout | default(
-             hostvars[groups['molecule'][0]].mp_aws_windows_wait_timeout | default(omit)) }}
-        mp_aws_cleanup_timeout: >-
-          {{ mp_aws_cleanup_timeout | default(
-             hostvars[groups['molecule'][0]].mp_aws_cleanup_timeout | default(omit)) }}
-        mp_aws_max_instances: >-
-          {{ mp_aws_max_instances | default(
-             hostvars[groups['molecule'][0]].mp_aws_max_instances | default(omit)) }}
-        mp_aws_ssh_key_path: >-
-          {{ mp_aws_ssh_key_path | default(
-             hostvars[groups['molecule'][0]].mp_aws_ssh_key_path | default(omit)) }}
-        mp_aws_print_diagnostic_tails: >-
-          {{ mp_aws_print_diagnostic_tails | default(
-             hostvars[groups['molecule'][0]].mp_aws_print_diagnostic_tails | default(omit)) }}
-        mp_aws_role_defaults: >-
-          {{ mp_aws_role_defaults | default(
-             hostvars[groups['molecule'][0]].mp_aws_role_defaults | default(omit)) }}
-      when: _mp_backend == 'aws'
-
-    - name: Pull VMware role options from molecule group hostvars
-      ansible.builtin.set_fact:
-        mp_vmware_provision_timeout: >-
-          {{ mp_vmware_provision_timeout | default(hostvars[groups['molecule'][0]].mp_vmware_provision_timeout |
-          default(omit))
-          }}
-        mp_vmware_tools_timeout: >-
-          {{ mp_vmware_tools_timeout | default(hostvars[groups['molecule'][0]].mp_vmware_tools_timeout |
-          default(omit)) }}
-        mp_vmware_wait_timeout: >-
-          {{ mp_vmware_wait_timeout | default(hostvars[groups['molecule'][0]].mp_vmware_wait_timeout | default(omit)) }}
-        mp_vmware_windows_wait_timeout: >-
-          {{ mp_vmware_windows_wait_timeout |
-          default(hostvars[groups['molecule'][0]].mp_vmware_windows_wait_timeout | default(omit))
-          }}
-        mp_vmware_cleanup_timeout: >-
-          {{ mp_vmware_cleanup_timeout | default(hostvars[groups['molecule'][0]].mp_vmware_cleanup_timeout |
-          default(omit))
-          }}
-        mp_vmware_concurrency: >-
-          {{ mp_vmware_concurrency | default(hostvars[groups['molecule'][0]].mp_vmware_concurrency | default(omit)) }}
-        mp_vmware_role_defaults: >-
-          {{ mp_vmware_role_defaults | default(hostvars[groups['molecule'][0]].mp_vmware_role_defaults |
-          default(omit)) }}
-      when: _mp_backend == 'vmware'
-
-    - name: Run provisioner destroy
+    - name: Destroy the instance
       ansible.builtin.include_role:
-        name: "david_igou.molecule_provisioners.{{ _mp_backend }}"
+        name: david_igou.molecule_provisioners.{{ mp_backend }}
         tasks_from: destroy
+      when: mp_backend | default('') in mp_backends

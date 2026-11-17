@@ -1,39 +1,167 @@
 ---
 argument_specs:
   create:
-    short_description: Provision disposable VMware guests with saved ownership.
-    options: &vmware_options
-      mp_vmware_provision_timeout:
-        type: int
-        default: 7200
-        description: Per-guest provision timeout in seconds.
-      mp_vmware_tools_timeout:
-        type: int
-        default: 600
-        description: Per-guest tools timeout in seconds.
+    short_description: Clone one vCenter VM per molecule host
+    description:
+      - Each host's settings are C(mp_vmware_instance_defaults), then
+        C(mp_defaults.vmware), then the host's C(mp.vmware), merged
+        recursively in that order and validated against the C(instance) entry point.
+      - VMs are named C(<inventory_hostname>-<mp_run_id>) and carry an
+        annotation naming the run; destroy removes only VMs with that annotation.
+    options:
+      mp_vmware_instance_defaults:
+        type: dict
+        description: Instance settings applied before mp_defaults.vmware and mp.vmware.
+      mp_vmware_connection:
+        type: dict
+        default: {}
+        description:
+          - vCenter connection arguments (C(hostname), C(username), C(password),
+            C(port), C(validate_certs), ...) applied to every VMware module
+            through C(module_defaults).
+          - Empty uses C(VMWARE_HOST), C(VMWARE_USER), C(VMWARE_PASSWORD),
+            C(VMWARE_PORT) and C(VMWARE_VALIDATE_CERTS) from the controller environment.
       mp_vmware_wait_timeout:
         type: int
         default: 600
-        description: Per-guest wait timeout in seconds.
-      mp_vmware_windows_wait_timeout:
-        type: int
-        default: 900
-        description: Per-guest windows wait timeout in seconds.
-      mp_vmware_cleanup_timeout:
-        type: int
-        default: 7200
-        description: Per-guest cleanup timeout in seconds.
-      mp_vmware_concurrency:
-        type: int
-        default: 4
-        description: Maximum simultaneous per-host operations.
-      mp_vmware_role_defaults:
+        description: Seconds to wait for the guest's IPv4 address.
+  destroy:
+    short_description: Delete this run's VMs
+    description:
+      - Finds C(<inventory_hostname>-<mp_run_id>) in the host's folder, checks
+        its annotation and deletes it. Succeeds when the VM does not exist.
+    options:
+      mp_vmware_instance_defaults:
+        type: dict
+        description: Instance settings applied before mp_defaults.vmware and mp.vmware.
+      mp_vmware_connection:
         type: dict
         default: {}
-        description: Base VMware host settings overridden by shared defaults and per-host settings.
+        description: vCenter connection arguments, as for create.
   prepare:
-    short_description: Authenticate disposable VMware guests with saved ownership.
-    options: *vmware_options
-  destroy:
-    short_description: Remove disposable VMware guests with saved ownership.
-    options: *vmware_options
+    short_description: Wait until each guest accepts connections and cloud-init has finished
+    options:
+      mp_vmware_wait_timeout:
+        type: int
+        default: 600
+        description: Seconds to wait for the connection and for cloud-init.
+  instance:
+    short_description: Per-host settings (mp.vmware), validated by create
+    description:
+      - Not a task entry point. Documents the merged C(mp.vmware) settings of
+        one host. Unknown keys fail validation.
+    options:
+      vmware:
+        type: dict
+        required: true
+        description: The merged settings of one host.
+        mutually_exclusive:
+          - - cluster
+            - esxi_hostname
+        required_if:
+          - - linked_clone
+            - true
+            - - snapshot_src
+        options:
+          datacenter:
+            type: str
+            required: true
+            description: Datacenter name.
+          cluster:
+            type: str
+            description: Cluster to place the VM in.
+          esxi_hostname:
+            type: str
+            description: ESXi host to place the VM on, instead of C(cluster).
+          resource_pool:
+            type: str
+            description: Resource pool. Omitted uses the cluster or host default.
+          folder:
+            type: str
+            required: true
+            description:
+              - Existing VM folder such as C(/dc1/vm/molecule). Destroy looks the VM up here.
+          datastore:
+            type: str
+            description: Datastore for the clone. Omitted keeps the template's.
+          template:
+            type: str
+            required: true
+            description: Template or VM to clone.
+          snapshot_src:
+            type: str
+            description: Snapshot of C(template) to clone from.
+          linked_clone:
+            type: bool
+            default: false
+            description: Create a linked clone of C(snapshot_src).
+          hardware:
+            type: dict
+            default: {}
+            description:
+              - M(community.vmware.vmware_guest) C(hardware), for example
+                C(num_cpus) and C(memory_mb). Empty keeps the template's.
+          disks:
+            type: list
+            elements: dict
+            default: []
+            description:
+              - M(community.vmware.vmware_guest) C(disk). Entries map to the
+                template's disks in order; extra entries add disks.
+          networks:
+            type: list
+            elements: dict
+            default: []
+            description:
+              - NICs, set with M(community.vmware.vmware_guest_network) before the
+                first boot. Entry n configures the template's NIC n; extra
+                entries add NICs. Empty keeps the template's NICs.
+              - Every NIC is set to connect at power-on.
+            options:
+              name:
+                type: str
+                required: true
+                description: Port group (network) name.
+              switch:
+                type: str
+                description: (Distributed) switch of the port group, when the name is ambiguous.
+              device_type:
+                type: str
+                description: Adapter type of an added NIC; the module's default is C(vmxnet3).
+              mac_address:
+                type: str
+                description: MAC address of an added NIC; generated when omitted.
+          bootstrap:
+            type: str
+            default: guestinfo
+            choices:
+              - guestinfo
+              - none
+            description:
+              - C(guestinfo) passes cloud-init metadata and user data through
+                VMware GuestInfo; the template needs cloud-init with the VMware
+                datasource. It creates C(ssh_user) with the run's SSH key and
+                passwordless sudo and sets the hostname to the inventory name.
+              - C(none) only clones and powers on; C(connection_vars) must supply
+                credentials the template already accepts.
+              - vSphere guest customization is never used.
+          ssh_user:
+            type: str
+            default: cloud-user
+            description: Connection user; created by cloud-init with C(bootstrap=guestinfo).
+          cloud_init:
+            type: dict
+            description: GuestInfo cloud-init contents.
+            options:
+              user_data:
+                type: dict
+                default: {}
+                description:
+                  - Cloud-config merged over the management user. Lists such
+                    as C(users), C(runcmd) and C(write_files) are appended.
+          connection_vars:
+            type: dict
+            default: {}
+            description:
+              - Host variables merged over the generated connection settings,
+                such as C(ansible_password) or C(ansible_ssh_common_args).

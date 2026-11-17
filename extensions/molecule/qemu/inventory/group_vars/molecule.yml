@@ -1,0 +1,18 @@
+---
+mp_backend: qemu
+
+mp_defaults:
+  qemu:
+    image: https://cloud-images.ubuntu.com/releases/noble/release-20260518/ubuntu-24.04-server-cloudimg-amd64.img
+    image_checksum: sha256:53fdde898feed8b027d94baa9cfe8229867f330a1d9c49dc7d84465ee7f229f7
+    cpus: 2
+    memory: 1024
+    ssh_user: tester
+    disk_size: 8G
+    cloud_init:
+      user_data:
+        users:
+          - name: auditor
+        write_files:
+          - path: /etc/mp-selftest
+            content: from user_data

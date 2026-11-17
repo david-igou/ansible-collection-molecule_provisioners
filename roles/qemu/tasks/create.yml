@@ -1,51 +1,161 @@
 ---
-- name: qemu | Merge per-host specifications
-  ansible.builtin.include_tasks: _spec_merge.yml
+- name: Validate the guest settings
+  ansible.builtin.validate_argument_spec:
+    argument_spec: >-
+      {{ (lookup('ansible.builtin.file', role_path ~ '/meta/argument_specs.yml')
+          | from_yaml).argument_specs.instance.options }}
+    provided_arguments: "{{ _mp_spec }}"
 
-- name: qemu | Validate merged specifications
-  ansible.builtin.include_tasks: _validate.yml
+- name: Check that UEFI firmware is available
+  ansible.builtin.assert:
+    that: mp_qemu_ovmf_code | length > 0
+    fail_msg: >-
+      firmware: uefi needs OVMF. Install edk2-ovmf (Fedora) or ovmf (Debian/Ubuntu),
+      or set mp_qemu_ovmf_code and mp_qemu_ovmf_vars.
+    quiet: true
+  when: _mp_uefi
 
-- name: qemu | Verify controller capabilities before allocating resources
-  ansible.builtin.include_tasks: _capabilities.yml
-
-- name: qemu | Reserve run identity and endpoints
-  ansible.builtin.include_tasks: _run_state.yml
-
-- name: qemu | Ensure private image cache directory
-  ansible.builtin.file:
-    path: "{{ mp_qemu_image_cache_dir }}"
-    state: directory
-    mode: "0700"
-
-- name: qemu | Cache base images
-  ansible.builtin.include_tasks: _image_cache.yml
-
-- name: qemu | Build bootstrap media
-  ansible.builtin.include_tasks: _seed_iso.yml
-
-- name: qemu | Create root overlays
-  ansible.builtin.include_tasks: _overlay.yml
-
-- name: qemu | Create managed data disks
-  ansible.builtin.include_tasks: _data_disks.yml
-
-- name: qemu | Inspect KVM availability
+- name: Check for KVM
   ansible.builtin.stat:
     path: /dev/kvm
-  register: __mp_qemu_kvm_stat
+  register: _mp_kvm_stat
+  run_once: true
 
-- name: qemu | Select acceleration
-  ansible.builtin.set_fact:
-    _mp_qemu_kvm_ok: >-
-      {{ __mp_qemu_kvm_stat.stat.exists
-         and __mp_qemu_kvm_stat.stat.readable
-         and __mp_qemu_kvm_stat.stat.writeable }}
+- name: Create the run and cache directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0700"
+  loop:
+    - "{{ _mp_dir }}"
+    - "{{ _mp_cache }}"
+    - "{{ _mp_file }}-seed"
 
-- name: qemu | Launch guests in socket listener order
-  ansible.builtin.include_tasks: _launch_host.yml
-  loop: "{{ _mp_qemu_run.launch_order }}"
+- name: Download the image
+  ansible.builtin.get_url:
+    url: "{{ _mp_spec.image }}"
+    dest: "{{ _mp_image_src }}"
+    checksum: "{{ _mp_spec.image_checksum }}"
+    timeout: "{{ mp_qemu_download_timeout }}"
+    mode: "0644"
+  register: _mp_download
+  until: _mp_download is succeeded
+  retries: 3
+  throttle: 1 # hosts sharing an image download it once
+  when: "'://' in _mp_spec.image"
+
+- name: Unzip the image
+  ansible.builtin.unarchive:
+    src: "{{ _mp_image_src }}"
+    dest: "{{ _mp_cache }}"
+    remote_src: true
+    creates: "{{ _mp_image }}"
+  throttle: 1
+  when: _mp_image_ext == '.zip'
+
+- name: Decompress the image
+  community.general.decompress:
+    src: "{{ _mp_image_src }}"
+    dest: "{{ _mp_image }}"
+    format: "{{ _mp_image_ext[1:] }}"
+    remove: false
+  throttle: 1
+  when: _mp_image_ext in ['.xz', '.gz', '.bz2']
+
+- name: Inspect the image
+  ansible.builtin.command:
+    argv:
+      - qemu-img
+      - info
+      - --output=json
+      - "{{ _mp_image }}"
+  register: _mp_image_info
+  changed_when: false
+
+- name: Check that disk_size does not shrink the image
+  ansible.builtin.assert:
+    that: _mp_spec.disk_size | human_to_bytes >= (_mp_image_info.stdout | from_json)['virtual-size']
+    fail_msg: >-
+      disk_size {{ _mp_spec.disk_size }} is smaller than the image
+      ({{ (_mp_image_info.stdout | from_json)['virtual-size'] }} bytes).
+    quiet: true
+  when: _mp_spec.disk_size | length > 0
+
+- name: Create the SSH key pair
+  community.crypto.openssh_keypair:
+    path: "{{ _mp_key }}"
+    type: ed25519
+  register: _mp_keypair
+  run_once: true
+
+- name: Create the root disk overlay
+  ansible.builtin.command:
+    argv: >-
+      {{ ['qemu-img', 'create', '-f', 'qcow2', '-b', _mp_image,
+          '-F', (_mp_image_info.stdout | from_json).format, _mp_file ~ '.qcow2']
+         + ([_mp_spec.disk_size] if _mp_spec.disk_size else []) }}
+    creates: "{{ _mp_file }}.qcow2"
+
+- name: Create the data disks
+  ansible.builtin.command:
+    argv:
+      - qemu-img
+      - create
+      - -f
+      - qcow2
+      - "{{ _mp_file }}-{{ item.name }}.qcow2"
+      - "{{ item.size }}"
+    creates: "{{ _mp_file }}-{{ item.name }}.qcow2"
+  loop: "{{ _mp_spec.data_disks }}"
   loop_control:
-    loop_var: __mp_qemu_host
+    label: "{{ item.name }}"
 
-- name: qemu | Write runtime connection inventory
-  ansible.builtin.include_tasks: _runtime_inventory.yml
+- name: Copy the UEFI variable store
+  ansible.builtin.copy:
+    src: "{{ mp_qemu_ovmf_vars }}"
+    dest: "{{ _mp_file }}-OVMF_VARS.fd"
+    mode: "0600"
+    force: false
+  when: _mp_uefi
+
+- name: Write the cloud-init seed files
+  ansible.builtin.copy:
+    content: "{{ item.value }}"
+    dest: "{{ _mp_file }}-seed/{{ item.key }}"
+    mode: "0600"
+  loop: "{{ _mp_seed | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Build the cloud-init seed ISO
+  community.general.iso_create:
+    src_files: "{{ _mp_seed.keys() | map('regex_replace', '^', _mp_file ~ '-seed/') }}"
+    dest_iso: "{{ _mp_file }}-seed.iso"
+    vol_ident: cidata
+    interchange_level: 4
+    rock_ridge: "1.09"
+    joliet: 3
+
+- name: Check that the SSH port is free
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ _mp_ssh_port }}"
+    state: stopped
+    timeout: 1
+    msg: Port {{ _mp_ssh_port }} is in use; set mp_qemu_ssh_port_base to a free range.
+
+- name: Start the guest
+  vars:
+    _mp_kvm: "{{ _mp_kvm_stat.stat.readable | default(false) and _mp_kvm_stat.stat.writeable | default(false) }}"
+  ansible.builtin.command:
+    argv: "{{ _mp_argv }}"
+    creates: "{{ _mp_file }}.pid"
+
+- name: Record the connection settings
+  ansible.builtin.set_fact:
+    mp_runtime:
+      ansible_host: 127.0.0.1
+      ansible_port: "{{ _mp_ssh_port | int }}"
+      ansible_user: "{{ _mp_spec.ssh_user }}"
+      ansible_ssh_private_key_file: "{{ _mp_key }}"
+      ansible_ssh_common_args: -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null

@@ -1,7 +1,0 @@
----
-# Retained for callers including the former task file directly.
-- name: qemu | Launch owned guests
-  ansible.builtin.include_tasks: _launch_host.yml
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    loop_var: __mp_qemu_host

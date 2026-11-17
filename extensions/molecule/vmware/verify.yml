@@ -1,0 +1,96 @@
+---
+- name: Verify the VMware guests
+  hosts: molecule
+  gather_facts: true
+  vars:
+    _spec: "{{ mp_defaults.vmware | combine(mp.vmware | default({}), recursive=true) }}"
+  tasks:
+    - name: Check sizing, hostname and the management user
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.processor_vcpus == _spec.hardware.num_cpus
+          - ansible_facts.memtotal_mb > _spec.hardware.memory_mb * 0.8
+          - ansible_facts.memtotal_mb <= _spec.hardware.memory_mb
+          - ansible_facts.hostname == inventory_hostname
+          - ansible_facts.user_id == 'tester'
+        fail_msg: >-
+          {{ inventory_hostname }}: {{ ansible_facts.processor_vcpus }} vCPUs,
+          {{ ansible_facts.memtotal_mb }} MiB, hostname {{ ansible_facts.hostname }},
+          user {{ ansible_facts.user_id }}.
+
+    - name: Run a command with sudo
+      ansible.builtin.command: id -u
+      become: true
+      register: _root
+      changed_when: false
+
+    - name: Read the cloud-init datasource
+      ansible.builtin.command: cloud-id
+      register: _cloud_id
+      changed_when: false
+
+    - name: Read the user_data effects
+      ansible.builtin.command: cat /etc/mp-selftest
+      register: _marker
+      changed_when: false
+
+    - name: Look up the user_data user
+      ansible.builtin.command: getent passwd auditor
+      changed_when: false
+
+    - name: Check sudo, GuestInfo and user_data
+      ansible.builtin.assert:
+        that:
+          - _root.stdout == '0'
+          - _cloud_id.stdout == 'vmware'
+          - _marker.stdout == 'from user_data'
+
+    - name: Look up the VM in vCenter
+      community.vmware.vmware_guest_info:
+        datacenter: "{{ _spec.datacenter }}"
+        uuid: "{{ mp_vmware_instance_uuid }}"
+        use_instance_uuid: true
+      delegate_to: localhost
+      register: _vm
+
+    - name: Check the VM name, folder, annotation, address and NICs
+      vars:
+        _run_id: "{{ mp_vmware_name | regex_replace('^' ~ inventory_hostname ~ '-', '') }}"
+        _guest_macs: >-
+          {{ ansible_facts.interfaces | map('regex_replace', '-', '_') | map('extract', ansible_facts)
+             | selectattr('macaddress', 'defined') | map(attribute='macaddress') }}
+      ansible.builtin.assert:
+        that:
+          - _run_id is match('^[a-z0-9]{8}$')
+          - _vm.instance.hw_name == mp_vmware_name
+          - _vm.instance.hw_folder == _spec.folder
+          - _vm.instance.annotation is search('run ' ~ _run_id ~ ',')
+          - _vm.instance.ipv4 == ansible_host
+          - _vm.instance.hw_processor_count == _spec.hardware.num_cpus
+          - _vm.instance.hw_memtotal_mb == _spec.hardware.memory_mb
+          - _vm.instance.hw_interfaces | length == _spec.networks | length
+          - >-
+            _vm.instance.hw_interfaces | map('regex_replace', '^', 'hw_') | map('extract', _vm.instance)
+            | map(attribute='macaddress')
+            | difference(_guest_macs) == []
+        fail_msg: >-
+          {{ _vm.instance | dict2items
+             | selectattr('key', 'match', 'hw_name|hw_folder|annotation|ipv4|hw_processor_count|hw_memtotal_mb|hw_eth')
+             | items2dict | to_json }}
+
+    - name: Check the grown root disk and the added disk
+      when: _spec.disks | default([]) | length > 0
+      block:
+        - name: List the disk sizes
+          ansible.builtin.command: lsblk --bytes --nodeps --noheadings --output SIZE
+          register: _disks
+          changed_when: false
+
+        - name: Check the disk sizes
+          ansible.builtin.assert:
+            that:
+              - (ansible_facts.mounts | selectattr('mount', '==', '/') | first).size_total > 26 * 1024 ** 3
+              - (1024 ** 3) | string in _disks.stdout_lines | map('trim')
+            fail_msg: >-
+              Root {{ ansible_facts.mounts | selectattr('mount', '==', '/') | map(attribute='size_total') }},
+              disks {{ _disks.stdout_lines }}.

@@ -1,0 +1,24 @@
+---
+mp_backend: vmware
+
+# Placement and templates come from the environment; see the role README.
+# The vCenter connection uses VMWARE_HOST, VMWARE_USER and VMWARE_PASSWORD.
+mp_defaults:
+  vmware:
+    datacenter: "{{ lookup('ansible.builtin.env', 'MP_TEST_VMWARE_DATACENTER', default=Undefined) }}"
+    cluster: "{{ lookup('ansible.builtin.env', 'MP_TEST_VMWARE_CLUSTER', default=Undefined) }}"
+    folder: "{{ lookup('ansible.builtin.env', 'MP_TEST_VMWARE_FOLDER', default=Undefined) }}"
+    datastore: "{{ lookup('ansible.builtin.env', 'MP_TEST_VMWARE_DATASTORE', default=Undefined) }}"
+    networks:
+      - name: "{{ lookup('ansible.builtin.env', 'MP_TEST_VMWARE_NETWORK', default=Undefined) }}"
+    hardware:
+      num_cpus: 1
+      memory_mb: 2048
+    ssh_user: tester
+    cloud_init:
+      user_data:
+        users:
+          - name: auditor
+        write_files:
+          - path: /etc/mp-selftest
+            content: from user_data

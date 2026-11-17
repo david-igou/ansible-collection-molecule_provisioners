@@ -1,199 +1,139 @@
 ---
 argument_specs:
-  main:
-    short_description: Use create, destroy or prepare lifecycle entry points.
-    options: {}
   create:
-    short_description: Create owned local QEMU guests.
+    short_description: Boot one QEMU guest per molecule host
+    description:
+      - Each host's guest is C(mp_qemu_instance_defaults), then C(mp_defaults.qemu),
+        then the host's C(mp.qemu), merged in that order and validated against the
+        C(instance) entry point.
+      - Guests run as daemonized C(qemu-system-x86_64) processes with user-mode
+        networking and SSH forwarded from 127.0.0.1.
     options:
-      mp_qemu_role_defaults:
+      mp_qemu_instance_defaults:
         type: dict
-        description: >-
-          Defaults overridden by mp_defaults.qemu and mp.qemu;
-          the merged host schema is validated before provisioning.
-        options:
-          image:
-            type: str
-            description: Base disk URL, including file URLs for local images.
-          image_checksum:
-            type: str
-            description: Optional algorithm:digest checksum for a downloaded image.
-          cpus:
-            type: int
-            default: 2
-            description: Positive guest CPU count.
-          memory:
-            type: int
-            default: 1024
-            description: Positive memory size in MiB.
-          ssh_user:
-            type: str
-            default: cloud-user
-            description: Generated bootstrap user and default connection user.
-          firmware:
-            type: str
-            default: bios
-            choices:
-              - bios
-              - uefi
-            description: Firmware type.
-          cpu_model:
-            type: str
-            default: ""
-            description: Empty selects host under KVM or Nehalem under TCG.
-          disk_size:
-            type: str
-            description: Absolute root-overlay size, such as 8G, at least as large as its base.
-          extra_args:
-            type: list
-            elements: str
-            description: Raw QEMU arguments excluding reserved identity, network IDs and host-forward options.
-          ssh_port:
-            type: int
-            default: 22
-            description: Guest management listener port.
-          ssh_host_port:
-            type: raw
-            default: auto
-            description: Explicit integer controller port or auto.
-          connection:
-            type: str
-            default: ssh
-            choices:
-              - ssh
-              - network_cli
-            description: Management connection plugin.
-          connection_probe:
-            type: str
-            description: Caller-selected read-only CLI command required for authenticated network_cli preparation.
-          connection_vars:
-            type: dict
-            no_log: true
-            description: Ansible connection variables excluding managed host, port and plugin.
-          cloud_init:
-            type: dict
-            no_log: true
-            description: >-
-              NoCloud configuration; enabled and inject_ssh_key default to true for SSH and false for network_cli.
-            options:
-              enabled:
-                type: bool
-                description: Attach bootstrap media.
-              inject_ssh_key:
-                type: bool
-                description: Merge the generated access key into the configured user.
-              mode:
-                type: str
-                choices:
-                  - merge
-                  - replace
-                description: Merge user-data over defaults or replace the defaults entirely.
-              user_data:
-                type: dict
-                description: Cloud-config mapping, with lists replacing default lists.
-              metadata:
-                type: dict
-                description: NoCloud metadata; instance-id is reserved.
-              network_data:
-                type: dict
-                description: NoCloud network-config mapping.
-          data_disks:
-            type: list
-            elements: dict
-            description: Blank disks or image-backed disposable overlays.
-            options:
-              name:
-                type: str
-                required: true
-                description: Unique disk name.
-              size:
-                type: str
-                description: Absolute disk size; required for blank disks.
-              image:
-                type: str
-                description: Optional disk image URL.
-              image_checksum:
-                type: str
-                description: Optional image checksum.
-              bus:
-                type: str
-                choices:
-                  - virtio
-                  - scsi
-                  - sata
-                description: Disk attachment bus; defaults to virtio.
-              serial:
-                type: str
-                description: Stable guest-visible disk serial.
-              read_only:
-                type: bool
-                description: Attach disk read-only; defaults to false.
-          networks:
-            type: list
-            elements: dict
-            description: Named user backends or isolated two-peer socket links.
-          nics:
-            type: list
-            elements: dict
-            description: Extra NICs with name, network, optional model and MAC address.
-          application_ports:
-            type: list
-            elements: dict
-            description: Named TCP or UDP forwards with guest port, optional host_port and bind_address.
-          diagnostics:
-            type: dict
-            description: Serial capture, retained logs and bounded failure tails.
-      mp_qemu_run_isolation:
-        type: bool
-        default: true
-        description: Allocate management ports automatically; false selects the legacy port base.
-      mp_qemu_runtime_cache_dir:
+        description: Guest settings applied before mp_defaults.qemu and mp.qemu.
+      mp_qemu_cache_dir:
         type: path
-        description: Shared controller lock and reservation directory; defaults to runtime beneath the image cache.
-      mp_qemu_ssh_key_path:
-        type: path
-        description: Generated bootstrap key; defaults to identity_file in the ephemeral directory.
-      mp_qemu_image_cache_dir:
-        type: path
-        description: Persistent image cache directory.
-      mp_qemu_image_download_timeout:
+        default: ~/.cache/molecule_provisioners/qemu
+        description: Image cache, honouring C(XDG_CACHE_HOME).
+      mp_qemu_download_timeout:
         type: int
         default: 60
-        description: Seconds allowed per image download request.
-      mp_qemu_image_download_retries:
+        description: Read timeout in seconds for image downloads.
+      mp_qemu_binary:
+        type: str
+        default: qemu-system-x86_64
+        description: QEMU system emulator.
+      mp_qemu_ssh_port_base:
         type: int
-        default: 5
-        description: Image download retry count.
-      mp_qemu_slirp_port_base:
-        type: int
-        default: 2222
-        description: Legacy base used when isolation is disabled and no explicit host port is set.
+        default: 20000
+        description:
+          - First forwarded SSH port. Each run uses a block of 20 ports picked
+            from its run id within the 10000 ports above this base.
       mp_qemu_ovmf_code:
         type: path
-        default: /usr/share/edk2/ovmf/OVMF_CODE.fd
-        description: Read-only UEFI firmware image.
+        description: UEFI firmware code image. Defaults to the first of C(mp_qemu_ovmf_code_paths) that exists.
       mp_qemu_ovmf_vars:
         type: path
-        default: /usr/share/edk2/ovmf/OVMF_VARS.fd
-        description: UEFI variable template copied only when no per-guest file exists.
+        description: UEFI variable store template. Defaults to C(mp_qemu_ovmf_code) with C(_CODE) replaced by C(_VARS).
+      mp_qemu_ovmf_code_paths:
+        type: list
+        elements: path
+        description: Candidate OVMF code images for Fedora, Debian, Ubuntu, Arch and SUSE.
   destroy:
-    short_description: Destroy all manifest-owned guests independently of current inventory.
+    short_description: Stop the guests and remove the run's files
+    description:
+      - Only stops processes whose command line names this run's guest, so a reused
+        PID is skipped rather than killed. Succeeds when nothing was created.
     options:
-      mp_qemu_cleanup_timeout:
+      mp_qemu_stop_timeout:
         type: int
         default: 30
-        description: Seconds to wait after SIGTERM before forcing an owned process to exit.
-      mp_qemu_runtime_cache_dir:
-        type: path
-        description: Same shared reservation directory used during create.
+        description: Seconds to wait for a guest to exit after SIGTERM.
   prepare:
-    short_description: Verify authenticated SSH or appliance access and report boot failures.
+    short_description: Wait until each guest accepts an Ansible connection
+    description:
+      - Shows the end of the guest's serial log when the wait fails.
     options:
       mp_qemu_wait_timeout:
         type: int
-        default: 180
-        description: Guest connection timeout in seconds.
-      mp_qemu_print_diagnostic_tails:
-        type: bool
-        default: false
-        description: Explicitly print private guest console and stderr tails on preparation failure.
+        default: 300
+        description: Seconds to wait for the connection.
+  instance:
+    short_description: Per-host guest settings (mp.qemu and mp_defaults.qemu)
+    description:
+      - Not a lifecycle entry point. Documents and validates the merged C(mp.qemu) dict.
+    options:
+      image:
+        type: str
+        required: true
+        description:
+          - URL or local path of a disk image in any format qemu-img reads.
+          - C(.zip), C(.xz), C(.gz) and C(.bz2) images are unpacked first; the
+            archive must hold one image named like the archive without its extension.
+      image_checksum:
+        type: str
+        default: ""
+        description: Checksum for the download, in M(ansible.builtin.get_url) C(checksum) format.
+      cpus:
+        type: int
+        default: 2
+        description: Virtual CPUs.
+      memory:
+        type: int
+        default: 1024
+        description: Memory in MiB.
+      ssh_user:
+        type: str
+        default: cloud-user
+        description: User created by cloud-init with the run's SSH key and passwordless sudo.
+      firmware:
+        type: str
+        default: bios
+        choices:
+          - bios
+          - uefi
+        description: Boot firmware. C(uefi) needs OVMF on the controller.
+      cpu_model:
+        type: str
+        default: ""
+        description: QEMU C(-cpu) model. Empty selects C(host) under KVM and C(Nehalem) under TCG.
+      disk_size:
+        type: str
+        default: ""
+        description: Root disk size such as C(20G). Empty keeps the image's size; it cannot shrink.
+      cloud_init:
+        type: dict
+        description: NoCloud seed contents.
+        options:
+          user_data:
+            type: dict
+            default: {}
+            description:
+              - Cloud-config merged over the generated management user. Lists such
+                as C(users), C(runcmd) and C(write_files) are appended.
+          network_data:
+            type: dict
+            default: {}
+            description: Cloud-init network-config. Empty lets the guest use DHCP.
+      data_disks:
+        type: list
+        elements: dict
+        default: []
+        description: Blank qcow2 disks, visible in the guest as C(/dev/disk/by-id/virtio-<name>).
+        options:
+          name:
+            type: str
+            required: true
+            description: Disk name and serial.
+          size:
+            type: str
+            required: true
+            description: Size such as C(1G).
+      extra_args:
+        type: list
+        elements: str
+        default: []
+        description:
+          - Arguments appended verbatim to the QEMU command line, for extra NICs,
+            port forwards or devices.

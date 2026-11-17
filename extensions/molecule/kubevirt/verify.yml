@@ -1,0 +1,82 @@
+---
+- name: Verify every guest
+  hosts: molecule
+  gather_facts: true
+  tasks:
+    - name: Check the CPU count from mp_defaults and the per-host override
+      ansible.builtin.assert:
+        that: ansible_facts.processor_cores * ansible_facts.processor_count
+          == (1 if inventory_hostname == 'kv-custom' else 2)
+        quiet: true
+
+    - name: Check that the management user can use sudo
+      ansible.builtin.command: id -un
+      become: true
+      register: _whoami
+      changed_when: false
+      failed_when: _whoami.stdout != 'root'
+
+- name: Verify the customised guest
+  hosts: kv-custom
+  gather_facts: true
+  tasks:
+    - name: Check the hostname from cloud-init user data
+      ansible.builtin.assert:
+        that: ansible_facts.hostname == 'kv-custom-guest'
+        quiet: true
+
+    - name: Read the runcmd marker
+      ansible.builtin.slurp:
+        src: /var/tmp/mp-marker
+      register: _marker
+
+    - name: Read the management user's groups
+      ansible.builtin.command: id -nG ubuntu
+      register: _groups
+      changed_when: false
+
+    - name: Check that runcmd ran and the management user kept its extra group
+      ansible.builtin.assert:
+        that:
+          - _marker.content | b64decode | trim == 'cloud-init-ran'
+          - "'adm' in _groups.stdout.split()"
+        quiet: true
+
+    - name: Check the custom interface from interfaces and network_data
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.mgmt0.macaddress == '02:00:00:00:00:a1'
+          - ansible_facts.mgmt0.ipv4.address is defined
+        quiet: true
+
+    - name: Write and read back a block on the data disk
+      ansible.builtin.shell: |
+        set -euo pipefail
+        disk=$(lsblk -bdno NAME,SIZE | awk '$2 > 1500000000 && $2 < 2500000000 { print "/dev/" $1 }')
+        echo mp-data-disk | dd of="$disk" bs=512 count=1 conv=fsync status=none
+        dd if="$disk" bs=12 count=1 status=none
+      args:
+        executable: /bin/bash
+      become: true
+      register: _disk
+      changed_when: true
+      failed_when: _disk.stdout != 'mp-data-disk'
+
+    - name: Read the VirtualMachine labels
+      kubernetes.core.k8s_info:
+        api_version: kubevirt.io/v1
+        kind: VirtualMachine
+        namespace: "{{ mp_defaults.kubevirt.namespace }}"
+        label_selectors:
+          - molecule-provisioners/test=overridden
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+      delegate_to: localhost
+      register: _vms
+
+    - name: Check that vm_overrides reached the VirtualMachine
+      ansible.builtin.assert:
+        that:
+          - _vms.resources | length == 1
+          - _vms.resources[0].metadata.labels['app.kubernetes.io/managed-by'] == 'molecule_provisioners'
+        quiet: true

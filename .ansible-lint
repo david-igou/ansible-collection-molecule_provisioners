@@ -1,25 +1,15 @@
 ---
-# ansible-lint configuration for david_igou.molecule_provisioners
-profile: basic
+profile: production
 
 skip_list:
-  # The collection uses an mp_podman_* / mp_kubevirt_* namespace convention
-  # that intentionally differs from the role-name prefix that lint expects.
+  # User-facing variables share the collection-wide mp_ prefix instead of the
+  # role-name prefix (mp_podman_*, mp_kubevirt_*), so mp_defaults.<backend>
+  # and mp.<backend> read the same in every role.
   - var-naming[no-role-prefix]
 
-# ansible-lint walks the whole repo by default. These paths are tooling /
-# CI / docs — not collection content — so they shouldn't be linted
-# against ansible-lint's rules.
 exclude_paths:
   - .build/
-  - collections/
-  - .venv/
-  - .ansible/
-  - .devcontainer/
+  # Placeholder converge for consumers to replace; its role does not exist here.
+  - docs/examples/default/converge.yml
   - .github/
-  - .pre-commit-config.yaml
-  - .vscode/
   - changelogs/
-  - pyproject.toml
-  - tests/integration/conftest.py
-  - tox-ansible.ini

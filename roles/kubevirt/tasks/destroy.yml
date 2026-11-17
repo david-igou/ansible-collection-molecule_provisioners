@@ -1,23 +1,23 @@
 ---
-- name: Load any saved run identity
-  ansible.builtin.include_tasks: _load_run.yml
-
-- name: Destroy resources using the saved mapping
-  ansible.builtin.include_tasks: _destroy_run.yml
-  when: __mp_kubevirt_run_file.stat.exists
-
-- name: Explain an isolated destroy without saved state
-  ansible.builtin.debug:
-    msg: >-
-      No kubevirt_run.yml exists; no isolated resources will be deleted.
-      This is normal before create. If state was lost, restore it or follow
-      the label-based recovery instructions in roles/kubevirt/README.md.
-  when:
-    - mp_kubevirt_run_isolation | bool
-    - not __mp_kubevirt_run_file.stat.exists
-
-- name: Destroy legacy fixed-name resources
-  ansible.builtin.include_tasks: _destroy_fixed.yml
-  when:
-    - not mp_kubevirt_run_isolation | bool
-    - not __mp_kubevirt_run_file.stat.exists
+# Foreground deletion removes the VM's DataVolumes and VMI before the VM.
+- name: Delete the instance resources
+  kubernetes.core.k8s:
+    state: absent
+    api_version: "{{ item.api_version }}"
+    kind: "{{ item.kind }}"
+    namespace: "{{ _mp_spec.namespace }}"
+    label_selectors:
+      - molecule-provisioners/instance={{ _mp_name }}
+    delete_options:
+      propagationPolicy: Foreground
+    wait: true
+    wait_timeout: "{{ mp_kubevirt_wait_timeout }}"
+  loop:
+    - api_version: kubevirt.io/v1
+      kind: VirtualMachine
+    - api_version: v1
+      kind: Service
+    - api_version: v1
+      kind: Secret
+  loop_control:
+    label: "{{ item.kind }}"

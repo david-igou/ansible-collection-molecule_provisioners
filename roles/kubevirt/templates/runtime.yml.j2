@@ -1,0 +1,41 @@
+{#- Host vars for converge and verify; connection_vars are merged over this. -#}
+{%- set s = _mp_spec -%}
+{%- set ns = namespace(host=s.connection_ip | default(none)) -%}
+{%- if s.ssh_service.type == 'PodIP' -%}
+{%-   set ns.host = (_mp_vmi.resources[0].status.interfaces | selectattr('name', 'equalto', _mp_pod_networks[0].name) | first).ipAddress -%}
+{%- elif ns.host is none -%}
+{#-   First Ready node; every node forwards NodePorts. -#}
+{%-   for n in _mp_nodes.resources if ns.host is none
+        and 'True' in n.status.conditions | selectattr('type', 'equalto', 'Ready') | map(attribute='status') -%}
+{%-     set ns.host = (n.status.addresses | selectattr('type', 'equalto', 'InternalIP') | first).address -%}
+{%-   endfor -%}
+{%- endif -%}
+{%- set host = ns.host -%}
+{%- set node_ports = dict(_mp_service.result.spec.ports | map(attribute='name')
+      | zip(_mp_service.result.spec.ports | map(attribute='nodePort'))) if _mp_service is not skipped else {} -%}
+ansible_host: {{ host | to_json }}
+ansible_port: {{ node_ports.management | default(_mp_guest_port) }}
+ansible_connection: {{ s.connection }}
+{% if s.connection == 'ssh' %}
+ansible_user: {{ s.ssh_user | to_json }}
+ansible_ssh_private_key_file: {{ _mp_key | to_json }}
+ansible_ssh_common_args: -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+{% elif s.connection == 'psrp' %}
+ansible_psrp_protocol: https
+ansible_psrp_auth: ntlm
+ansible_psrp_cert_validation: ignore
+{% else %}
+ansible_winrm_scheme: https
+ansible_winrm_transport: ntlm
+ansible_winrm_server_cert_validation: ignore
+{% endif %}
+mp_kubevirt_endpoints:
+{% for p in s.application_ports %}
+  {{ p.name | to_json }}:
+    host: {{ host | to_json }}
+    port: {{ node_ports[p.name] | default(p.target_port | default(p.port)) }}
+    guest_port: {{ p.target_port | default(p.port) }}
+    protocol: {{ p.protocol | default('TCP') }}
+{% else %}
+  {}
+{% endfor %}

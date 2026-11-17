@@ -1,0 +1,23 @@
+---
+# Lifecycle plays target the molecule hosts so each host sees its own
+# inventory variables, but every task runs on the controller. Play vars
+# outrank inventory, so these override any connection settings the scenario
+# declares for converge and verify.
+ansible_connection: local
+ansible_become: false
+ansible_shell_type: sh
+ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+mp_backends:
+  - podman
+  - docker
+  - qemu
+  - kubevirt
+  - vmware
+
+# Short identifier for this Molecule run, persisted in the ephemeral directory
+# so destroy finds what create made. Backends that name shared resources
+# (VMs, services, processes) suffix it to avoid collisions between runs.
+mp_run_id: >-
+  {{ lookup('ansible.builtin.password', molecule_ephemeral_directory ~ '/mp_run_id',
+            chars=['ascii_lowercase', 'digits'], length=8) }}

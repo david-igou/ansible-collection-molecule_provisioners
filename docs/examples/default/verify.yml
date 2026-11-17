@@ -1,0 +1,8 @@
+---
+- name: Verify
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Check the service the role manages answers
+      ansible.builtin.uri:
+        url: http://localhost:8080/health
