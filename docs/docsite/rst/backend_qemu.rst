@@ -13,12 +13,43 @@ Every option of the ``create``, ``destroy`` and ``prepare`` entry points and the
 Scenarios use the collection's lifecycle playbooks; the role is not called
 directly.
 
+Requirements
+------------
+
+On the machine that runs Molecule:
+
+- ``qemu-system-x86_64`` and ``qemu-img``
+- the ``pycdlib`` Python package (seed ISO)
+- OVMF for ``firmware: uefi`` (``edk2-ovmf`` on Fedora, ``ovmf`` on Debian/Ubuntu)
+- ``/dev/kvm`` access for usable speed; TCG works but is slow
+
+The collections they use are installed by Molecule's ``dependency`` step together with this collection.
+
 Quick start
 -----------
 
+These files belong to a scenario set up as in
+:ref:`ansible_collections.david_igou.molecule_provisioners.docsite.guide_getting_started`;
+only the inventory differs from that guide:
+
+.. code-block:: text
+
+   extensions/molecule/default/
+   ├── molecule.yml
+   ├── create.yml
+   ├── prepare.yml
+   ├── destroy.yml
+   ├── converge.yml
+   ├── verify.yml
+   └── inventory/
+       ├── hosts.yml                 # the instances
+       └── group_vars/
+           └── molecule.yml          # backend choice and shared settings
+
 .. code:: yaml
 
-   # inventory/group_vars/molecule.yml
+   # extensions/molecule/default/inventory/group_vars/molecule.yml
+   ---
    mp_backend: qemu
    mp_defaults:
      qemu:
@@ -26,7 +57,10 @@ Quick start
        ssh_user: debian
        memory: 2048
 
-   # inventory/hosts.yml
+.. code:: yaml
+
+   # extensions/molecule/default/inventory/hosts.yml
+   ---
    all:
      children:
        molecule:
@@ -48,7 +82,7 @@ How it works
 
 - **create**: validates the merged settings, downloads the image into the
   cache (once per image), unpacks it, then writes everything for the run to
-  ``<molecule_ephemeral_directory>/qemu/``: an overlay qcow2, data disks, the
+  ``$MOLECULE_EPHEMERAL_DIRECTORY/qemu/``: an overlay qcow2, data disks, the
   seed ISO, serial log (``<host>.log``) and pidfile. The guest runs daemonized
   as ``-name <host>-<run id>``. KVM is used when ``/dev/kvm`` is accessible.
 - **prepare**: waits for an Ansible connection; on timeout the error shows the
@@ -56,17 +90,6 @@ How it works
 - **destroy**: stops each guest whose process command line still carries the
   run's name (a stale pidfile whose PID was reused is ignored), then removes the
   run directory. It succeeds when nothing was created.
-
-Prerequisites
--------------
-
-On the controller:
-
-- ``qemu-system-x86_64`` and ``qemu-img``
-- the ``pycdlib`` Python package (seed ISO)
-- OVMF for ``firmware: uefi`` (``edk2-ovmf`` on Fedora, ``ovmf`` on Debian/Ubuntu)
-- collections ``community.general`` and ``community.crypto``
-- ``/dev/kvm`` access for usable speed; TCG works but is slow
 
 Notes
 -----
@@ -80,6 +103,7 @@ Notes
 
   .. code:: yaml
 
+     # in mp_defaults.qemu, or under one host's mp.qemu
      extra_args:
        - -netdev
        - user,id=api,net=10.0.3.0/24,hostfwd=tcp::8728-10.0.3.15:8728

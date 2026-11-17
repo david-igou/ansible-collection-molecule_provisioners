@@ -14,12 +14,42 @@ Every option of the ``create``, ``destroy`` and ``prepare`` entry points and the
 Scenarios use the collection's lifecycle playbooks; the role is not called
 directly.
 
+Requirements
+------------
+
+- The ``pyvmomi`` Python package on the machine that runs Molecule.
+- vCenter credentials; see `vCenter connection`_.
+- A route from the controller to the guest addresses VMware Tools reports.
+  When guests are only reachable another way, set ``connection_vars``, e.g.
+  ``ansible_ssh_common_args`` with a ``ProxyJump``.
+
+The collections they use are installed by Molecule's ``dependency`` step together with this collection.
+
 Quick start
 -----------
 
+These files belong to a scenario set up as in
+:ref:`ansible_collections.david_igou.molecule_provisioners.docsite.guide_getting_started`;
+only the inventory differs from that guide:
+
+.. code-block:: text
+
+   extensions/molecule/default/
+   ├── molecule.yml
+   ├── create.yml
+   ├── prepare.yml
+   ├── destroy.yml
+   ├── converge.yml
+   ├── verify.yml
+   └── inventory/
+       ├── hosts.yml                 # the instances
+       └── group_vars/
+           └── molecule.yml          # backend choice and shared settings
+
 .. code:: yaml
 
-   # inventory/group_vars/molecule.yml
+   # extensions/molecule/default/inventory/group_vars/molecule.yml
+   ---
    mp_backend: vmware
    mp_defaults:
      vmware:
@@ -36,7 +66,8 @@ Quick start
 
 .. code:: yaml
 
-   # inventory/hosts.yml
+   # extensions/molecule/default/inventory/hosts.yml
+   ---
    all:
      children:
        molecule:
@@ -71,6 +102,8 @@ password in a vault or lookup in your inventory, not in the role:
 
 .. code:: yaml
 
+   # extensions/molecule/default/inventory/group_vars/molecule.yml
+   ---
    mp_vmware_connection:
      hostname: vcenter.example.com
      username: molecule@vsphere.local
@@ -87,13 +120,16 @@ advanced settings, CPU, memory, disks, NICs) and power operations.
 Bootstrap
 ---------
 
-- **``guestinfo``**: the template needs cloud-init with the VMware datasource
+``bootstrap`` (in ``mp_defaults.vmware`` or a host's ``mp.vmware``) chooses how
+a clone is set up:
+
+- ``guestinfo`` (the default): the template needs cloud-init with the VMware datasource
   (cloud-init 21.3 or later with open-vm-tools), and is reset so cloud-init runs
   again for a new instance id. The role sets ``guestinfo.metadata`` (instance id
   ``<host>-<run id>``, hostname) and ``guestinfo.userdata`` before power-on.
   Addressing is DHCP unless the template or ``cloud_init.user_data`` says
   otherwise. Prepare waits for ``cloud-init status --wait``.
-- **``none``**: clone and power on only. The template must already accept a
+- ``none``: clone and power on only. The template must already accept a
   connection; supply credentials through ``connection_vars``
   (``ansible_password``, ``ansible_ssh_private_key_file``, ...).
 
@@ -117,23 +153,9 @@ How it works
   refuses to delete it unless its annotation is this run's, then powers it
   off and deletes it with its disks. It succeeds when the VM does not exist.
 
-Requirements
-------------
-
-- Collections ``community.vmware`` (6.x) and ``community.crypto``.
-- Python ``pyvmomi`` on the controller.
-- A route from the controller to the guest addresses VMware Tools reports.
-  When guests are only reachable another way, set ``connection_vars``, e.g.
-  ``ansible_ssh_common_args`` with a ``ProxyJump``.
-
 Notes
 -----
 
 - Hosts run in parallel up to Ansible's ``forks``.
 - A clone interrupted before vCenter sets its annotation is left alone by
   destroy; delete it by hand.
-- The self-test scenario ``extensions/molecule/vmware`` reads its placement from
-  ``MP_TEST_VMWARE_DATACENTER``, ``MP_TEST_VMWARE_CLUSTER``,
-  ``MP_TEST_VMWARE_FOLDER``, ``MP_TEST_VMWARE_DATASTORE``,
-  ``MP_TEST_VMWARE_NETWORK``, ``MP_TEST_VMWARE_TEMPLATE`` and
-  ``MP_TEST_VMWARE_SECOND_TEMPLATE``; run it with ``make test-vmware``.

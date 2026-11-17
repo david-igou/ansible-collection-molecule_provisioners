@@ -1,6 +1,4 @@
 ---
-# Copy to extensions/molecule/requirements-test.yml. Pin an exact release so
-# provisioning cannot change between runs without a change in your repository.
 collections:
   - name: david_igou.molecule_provisioners
     version: 0.0.8-alpha

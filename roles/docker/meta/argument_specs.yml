@@ -40,6 +40,6 @@ argument_specs:
   prepare:
     short_description: Wait until each container can run Ansible modules
     description:
-      - Waits up to 60 seconds for each container to run an Ansible module, which
-        catches images without Python before converge.
+      - Runs an Ansible module in each container, which catches images
+        without Python before converge.
     options: {}

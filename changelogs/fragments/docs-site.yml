@@ -4,3 +4,7 @@ doc_changes:
     Add a documentation site built with antsibull-docs and published to
     GitHub Pages. Guides live in docs/docsite/rst; role pages come from the
     argument specs, which now describe every entry point.
+minor_changes:
+  - >-
+    podman and docker - containers take the inventory host name as their
+    hostname by default, as molecule-plugins platforms did.

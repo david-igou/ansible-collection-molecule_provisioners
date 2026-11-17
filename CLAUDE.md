@@ -26,7 +26,8 @@ Follow [AGENTS.md](AGENTS.md). Keep plans and session notes out of the repositor
 - `docs/docsite/` — the documentation site (`make docs`): guides in `rst/`,
   their order in `extra-docs.yml`. Role pages come from `meta/argument_specs.yml`.
   `.github/workflows/docs.yml` publishes it to GitHub Pages from `main`.
-- `docs/examples/` — files consumers copy.
+- `docs/examples/` — files consumers copy; they are the Getting started guide's
+  code blocks verbatim, so change both together.
 
 ## Commands
 

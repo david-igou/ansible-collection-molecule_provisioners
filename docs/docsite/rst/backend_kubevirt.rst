@@ -9,32 +9,48 @@ directly.
 
 Every option of the ``create``, ``destroy`` and ``prepare`` entry points and the per-host ``instance`` settings is listed in the :ref:`role reference <ansible_collections.david_igou.molecule_provisioners.kubevirt_role>`.
 
-.. code:: yaml
-
-   # create.yml (likewise destroy.yml and prepare.yml)
-   ---
-   - name: Create the instances
-     ansible.builtin.import_playbook: david_igou.molecule_provisioners.create
-
 Requirements
 ------------
 
 - A cluster with KubeVirt, selected by ``KUBECONFIG`` (or the usual
   ``K8S_AUTH_*`` variables). CDI is needed for ``data_volume`` boot sources and
   ``data_disks``.
-- On the controller: the Python ``kubernetes`` library and the
-  ``kubernetes.core`` and ``community.crypto`` collections. Windows guests also
-  need ``pypsrp`` (psrp) or ``pywinrm`` (winrm), and ``ansible.windows`` for the
-  readiness check in prepare.
-- The controller must reach the guest: a node's InternalIP for ``NodePort``, the
-  pod network for ``PodIP``, or ``connection_ip`` for ``None``.
+- An existing namespace for the VMs (``namespace``, default ``molecule``) where
+  your account may create VirtualMachines, Services and Secrets; see `RBAC`_.
+  Create does not create the namespace.
+- The ``kubernetes`` Python package on the machine that runs Molecule. Windows
+  guests also need ``pypsrp`` (psrp) or ``pywinrm`` (winrm).
+- A network path from that machine to the guests. ``ssh_service.type`` decides
+  which: ``NodePort`` (the default) connects to a node's InternalIP, ``PodIP``
+  to the pod network, and ``None`` to the ``connection_ip`` you set.
+
+The collections they use are installed by Molecule's ``dependency`` step together with this collection.
 
 Quick start
 -----------
 
+These files belong to a scenario set up as in
+:ref:`ansible_collections.david_igou.molecule_provisioners.docsite.guide_getting_started`;
+only the inventory differs from that guide:
+
+.. code-block:: text
+
+   extensions/molecule/default/
+   ├── molecule.yml
+   ├── create.yml
+   ├── prepare.yml
+   ├── destroy.yml
+   ├── converge.yml
+   ├── verify.yml
+   └── inventory/
+       ├── hosts.yml                 # the instances
+       └── group_vars/
+           └── molecule.yml          # backend choice and shared settings
+
 .. code:: yaml
 
-   # inventory/group_vars/molecule.yml
+   # extensions/molecule/default/inventory/group_vars/molecule.yml
+   ---
    mp_backend: kubevirt
    mp_defaults:
      kubevirt:
@@ -47,7 +63,8 @@ Quick start
 
 .. code:: yaml
 
-   # inventory/hosts.yml
+   # extensions/molecule/default/inventory/hosts.yml
+   ---
    all:
      children:
        molecule:
@@ -75,7 +92,7 @@ of the argument spec, and unknown keys fail:
 
 1. generates an ed25519 key at ``$MOLECULE_EPHEMERAL_DIRECTORY/identity_file``
 2. stores the cloud-init data in a Secret
-3. renders the VirtualMachine from ``templates/vm.yml.j2``, merges
+3. renders the VirtualMachine from the host's settings, merges
    ``vm_overrides`` over it, applies it and waits for the ``Ready`` condition
 4. for ``NodePort``, applies a Service (server-side, so allocated NodePorts
    survive a rerun)
@@ -102,6 +119,7 @@ Boot sources
 
 .. code:: yaml
 
+   # in mp_defaults.kubevirt, or under one host's mp.kubevirt
    boot_source:            # an ephemeral container disk
      type: container_disk
      image: quay.io/containerdisks/fedora:43
@@ -137,6 +155,7 @@ For ``ssh`` guests cloud-init is on by default. The management user
 
 .. code:: yaml
 
+   # in mp_defaults.kubevirt, or under one host's mp.kubevirt
    cloud_init:
      user_data:
        hostname: web-1
@@ -163,6 +182,7 @@ Data disks
 
 .. code:: yaml
 
+   # in mp_defaults.kubevirt, or under one host's mp.kubevirt
    data_disks:
      - name: scratch       # disk and volume name
        size: 10Gi
@@ -194,6 +214,7 @@ Multus address:
 
 .. code:: yaml
 
+   # in mp_defaults.kubevirt, or under one host's mp.kubevirt
    interfaces:
      - name: lab
        bridge: {}
@@ -216,6 +237,7 @@ Use a sysprep-generalized golden image with WinRM over HTTPS enabled.
 
 .. code:: yaml
 
+   # a host in extensions/molecule/default/inventory/hosts.yml
    mp:
      kubevirt:
        boot_source:
@@ -251,6 +273,7 @@ interfaces and networks, firmware, or labels:
 
 .. code:: yaml
 
+   # in mp_defaults.kubevirt, or under one host's mp.kubevirt
    vm_overrides:
      metadata:
        labels:
@@ -293,11 +316,3 @@ core                ``secrets``, ``services``   get, list, create, patch, delete
 Plus cluster-scoped ``get, list`` on ``nodes`` for ``NodePort`` without
 ``connection_ip``. Cloning from a DataSource in another namespace also needs
 CDI clone permission there.
-
-Testing
--------
-
-``extensions/molecule/kubevirt`` is the self-test. Run it with ``make test-kubevirt``
-against the cluster in ``KUBECONFIG``, or with ``scripts/test-kubevirt-kind.sh``,
-which creates a disposable kind cluster with KubeVirt and CDI and deletes it
-afterwards.

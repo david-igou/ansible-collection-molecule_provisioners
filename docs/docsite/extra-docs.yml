@@ -2,6 +2,7 @@
 sections:
   - title: Guides
     toctree:
+      - guide_getting_started
       - guide_scenarios
       - guide_migration
   - title: Backends

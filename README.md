@@ -21,36 +21,37 @@ Documentation: **https://david-igou.github.io/ansible-collection-molecule_provis
 
 ## Quick start
 
-Copy [`docs/examples/`](docs/examples/) into your collection: a pinned
-dependency, a shared `extensions/molecule/config.yml`, and a scenario whose
-`create.yml`, `prepare.yml` and `destroy.yml` import this collection's
-playbooks. Then describe the instances in the scenario inventory:
+A scenario is a few small files in your collection. The
+[Getting started guide](https://david-igou.github.io/ansible-collection-molecule_provisioners/docsite/guide_getting_started.html) builds this
+one step by step, and [`docs/examples/`](docs/examples/) has every file ready
+to copy:
 
-```yaml
-# inventory/group_vars/molecule.yml
-mp_backend: "{{ lookup('ansible.builtin.env', 'PROVISIONER') | default('podman', true) }}"
-mp_defaults:
-  podman:
-    image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
-  qemu:
-    image: https://cloud-images.ubuntu.com/releases/noble/release-20260518/ubuntu-24.04-server-cloudimg-amd64.img
-    ssh_user: ubuntu
-
-# inventory/hosts.yml
-all:
-  children:
-    molecule:
-      hosts:
-        server: {}
-        client: {}
+```text
+my_collection/
+├── galaxy.yml
+└── extensions/
+    └── molecule/
+        ├── config.yml              # settings shared by every scenario
+        ├── requirements-test.yml   # pins this collection
+        └── default/
+            ├── molecule.yml        # the scenario's name
+            ├── create.yml          # import_playbook: david_igou.molecule_provisioners.create
+            ├── prepare.yml         # import_playbook: david_igou.molecule_provisioners.prepare
+            ├── destroy.yml         # import_playbook: david_igou.molecule_provisioners.destroy
+            ├── converge.yml        # runs the content you are testing
+            ├── verify.yml          # checks the result
+            └── inventory/
+                ├── hosts.yml       # the instances
+                └── group_vars/
+                    └── molecule.yml   # mp_backend and shared settings
 ```
 
-`make test` (or `molecule test` from the collection root with
-`MOLECULE_GLOB=extensions/molecule/*/molecule.yml`) runs the scenario in
-containers; `PROVISIONER=qemu` runs it on VMs. The
-[scenario guide](https://david-igou.github.io/ansible-collection-molecule_provisioners/docsite/guide_scenarios.html) explains the layout and
-settings merge, and the [migration guide](https://david-igou.github.io/ansible-collection-molecule_provisioners/docsite/guide_migration.html)
-covers `platforms:` scenarios and 0.0.7-alpha.
+```console
+$ MOLECULE_GLOB='extensions/molecule/*/molecule.yml' molecule test -s default
+```
+
+Moving a `platforms:`/`driver:` scenario? See the
+[migration guide](https://david-igou.github.io/ansible-collection-molecule_provisioners/docsite/guide_migration.html).
 
 ## Developing
 
@@ -61,7 +62,7 @@ make test            # containers scenario on podman, then docker
 make test-qemu       # two local VMs: BIOS and UEFI
 make test-kubevirt   # needs KUBECONFIG for a cluster with KubeVirt and CDI
 make docs            # lint and build the documentation site into .build/docs/build/html
-make test-vmware     # needs VMWARE_* and MP_TEST_VMWARE_* (see the VMware backend guide)
+make test-vmware     # needs VMWARE_* plus MP_TEST_VMWARE_{DATACENTER,CLUSTER,FOLDER,DATASTORE,NETWORK,TEMPLATE,SECOND_TEMPLATE}
 scripts/test-kubevirt-kind.sh   # the KubeVirt scenario on a throwaway kind cluster
 ```
 

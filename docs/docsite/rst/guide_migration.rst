@@ -1,143 +1,239 @@
 .. _ansible_collections.david_igou.molecule_provisioners.docsite.guide_migration:
 
-Migration
-=========
+Migrating from platforms and drivers
+====================================
 
-From a ``platforms:`` scenario
-------------------------------
+Molecule scenarios written for ``molecule-plugins`` list their instances under
+``platforms:`` and pick a ``driver:`` such as ``podman`` or ``docker``. This
+guide moves such a scenario to this collection: the instances move into an
+Ansible inventory, and Molecule's ``create``, ``prepare`` and ``destroy`` steps
+import playbooks from this collection. Your ``converge.yml`` and ``verify.yml``
+do not change.
 
-Molecule's older scenario shape lists instances under ``platforms:`` and picks a
-``driver:``. With this collection the instances move into inventory and the
-lifecycle playbooks become imports.
+The guide uses a collection with one scenario named ``default``. If you have
+never run a scenario with this collection, work through
+:ref:`ansible_collections.david_igou.molecule_provisioners.docsite.guide_getting_started`
+first.
 
-1. Pin the collection in ``extensions/molecule/requirements-test.yml`` and share
-   the Molecule settings through ``extensions/molecule/config.yml``. Copy both
-   from `docs/examples/ <https://github.com/david-igou/ansible-collection-molecule_provisioners/tree/main/docs/examples>`__.
-2. Reduce each scenario's ``molecule.yml`` to its name. Delete ``driver:``,
-   ``platforms:`` and ``provisioner:``, and drop ``molecule-plugins`` from your
-   requirements.
-3. Replace ``create.yml``, ``destroy.yml`` and ``prepare.yml`` with imports of
-   ``david_igou.molecule_provisioners.create``, ``.destroy`` and ``.prepare``.
-   Plays that did scenario-specific setup can stay before or after the import.
-4. Move every platform into ``inventory/hosts.yml`` as a host of the ``molecule``
-   group, with its settings under ``mp.<backend>``. Put shared settings in
-   ``mp_defaults.<backend>`` and ``mp_backend`` in
-   ``inventory/group_vars/molecule.yml``.
+Before
+------
 
-For Podman and Docker platforms, keep the key names Molecule passed to the
-container modules (``image``, ``command``, ``privileged``, ``volumes``, ``env``, ...);
-the table below covers the few that differ.
+A typical ``molecule-plugins`` scenario in a collection:
 
-From 0.0.7-alpha
-----------------
+.. code-block:: text
 
-The playbook imports and the ``mp_backend``/``mp_defaults``/``mp`` layout are
-unchanged. A host no longer needs an ``mp.<backend>`` block when
-``mp_defaults.<backend>`` covers it. Settings changed as follows.
+   my_collection/
+   ├── galaxy.yml
+   └── extensions/
+       └── molecule/
+           └── default/
+               ├── molecule.yml
+               ├── converge.yml
+               └── verify.yml
 
-All backends
-~~~~~~~~~~~~
+.. code-block:: yaml
 
-- The ``aws`` backend and the ``reset`` playbook are removed. The ``vmware`` backend
-  on ``main`` after 0.0.7-alpha was never released; its replacement is described
-  in the :ref:`VMware backend guide <ansible_collections.david_igou.molecule_provisioners.docsite.backend_vmware>`.
-- Role defaults dicts are renamed from ``mp_<backend>_role_defaults`` to
-  ``mp_<backend>_instance_defaults``.
-- Molecule runs the lifecycle against the molecule hosts, so role variables such
-  as ``mp_kubevirt_wait_timeout`` can live in ``group_vars/molecule.yml``, in
-  ``group_vars/all.yml``, or on single hosts.
+   # extensions/molecule/default/molecule.yml
+   dependency:
+     name: galaxy
+   driver:
+     name: podman
+   platforms:
+     - name: web
+       image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
+       command: /sbin/init
+       privileged: true
+       pre_build_image: true
+       groups:
+         - webservers
+     - name: db
+       image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
+       command: /sbin/init
+       privileged: true
+       pre_build_image: true
+       env:
+         ROLE: database
+   provisioner:
+     name: ansible
+   verifier:
+     name: ansible
 
-podman and docker
-~~~~~~~~~~~~~~~~~
+After
+-----
 
-``mp.podman`` and ``mp.docker`` are now passed unchanged to
-``containers.podman.podman_container`` and ``community.docker.docker_container``.
-Any option of those modules works, and keys must use the module's names. The
-default command is ``sleep infinity``, and prepare no longer installs ``sudo``.
+.. code-block:: text
 
-+------------------------------------------------+------------------------------------------------+
-| 0.0.7-alpha                                    | Now                                            |
-+================================================+================================================+
-| podman ``podman_network``                      | ``network`` (names) plus                       |
-|                                                | ``mp_podman_networks`` (``podman_network``     |
-|                                                | arguments)                                     |
-+------------------------------------------------+------------------------------------------------+
-| podman ``security_opts``                       | ``security_opt``                               |
-+------------------------------------------------+------------------------------------------------+
-| podman ``devices``                             | ``device``                                     |
-+------------------------------------------------+------------------------------------------------+
-| podman ``restart_retries: 3``                  | ``restart_policy: on-failure:3``               |
-+------------------------------------------------+------------------------------------------------+
-| podman ``extra_opts``, ``cgroup_manager``,     | ``cmd_args`` (raw ``podman`` flags)            |
-| ``storage_opt``, ``storage_driver``            |                                                |
-+------------------------------------------------+------------------------------------------------+
-| docker ``networks`` creation                   | ``mp_docker_networks`` (``docker_network``     |
-|                                                | arguments); ``networks`` only attaches         |
-+------------------------------------------------+------------------------------------------------+
-| docker ``override_command: false``             | ``command: null``                              |
-+------------------------------------------------+------------------------------------------------+
-| docker ``purge_networks``                      | removed                                        |
-+------------------------------------------------+------------------------------------------------+
+   my_collection/
+   ├── galaxy.yml
+   └── extensions/
+       └── molecule/
+           ├── config.yml                  # new: settings shared by every scenario
+           ├── requirements-test.yml       # new: pins this collection
+           └── default/
+               ├── molecule.yml            # now only the scenario name
+               ├── create.yml              # new
+               ├── prepare.yml             # new
+               ├── destroy.yml             # new
+               ├── converge.yml            # unchanged
+               ├── verify.yml              # unchanged
+               └── inventory/              # new: replaces platforms:
+                   ├── hosts.yml
+                   └── group_vars/
+                       └── molecule.yml
 
-qemu
-~~~~
+Steps
+-----
 
-+------------------------------------------------+------------------------------------------------+
-| 0.0.7-alpha                                    | Now                                            |
-+================================================+================================================+
-| ``application_ports``, ``networks``, ``nics``  | ``extra_args``                                 |
-|                                                | (``-netdev user,...,hostfwd=...`` and          |
-|                                                | ``-device``)                                   |
-+------------------------------------------------+------------------------------------------------+
-| ``connection: network_cli``,                   | Override ``prepare.yml`` with your own         |
-| ``connection_probe``                           | readiness plays                                |
-+------------------------------------------------+------------------------------------------------+
-| ``diagnostics``                                | Prepare prints the end of the serial log on    |
-|                                                | failure                                        |
-+------------------------------------------------+------------------------------------------------+
-| ``mp_qemu_run_isolation``,                     | ``mp_qemu_ssh_port_base`` (each run takes 20   |
-| ``mp_qemu_slirp_port_base``, ``ssh_host_port`` | ports from it)                                 |
-+------------------------------------------------+------------------------------------------------+
-| ``mp_qemu_image_cache_dir``,                   | ``mp_qemu_cache_dir`` (images only; run files  |
-| ``mp_qemu_runtime_cache_dir``                  | live in the ephemeral directory)               |
-+------------------------------------------------+------------------------------------------------+
+1. **Add the shared files.** Create ``extensions/molecule/config.yml`` and
+   ``extensions/molecule/requirements-test.yml`` exactly as shown in
+   :ref:`steps 2 and 3 of Getting started <ansible_collections.david_igou.molecule_provisioners.docsite.guide_getting_started>`.
+   ``config.yml`` replaces the ``dependency``, ``provisioner`` and ``verifier``
+   sections that every old ``molecule.yml`` repeated.
 
-Destroy guests created by 0.0.7-alpha with 0.0.7-alpha before upgrading.
+2. **Shrink molecule.yml.** Keep only the scenario name. If the old file set
+   other scenario-specific options (``provisioner.env``, ``config_options``, a
+   custom ``test_sequence``), keep those too; Molecule applies them on top of
+   ``config.yml``. Move ``provisioner.inventory`` host and group variables into
+   ``inventory/host_vars/`` and ``inventory/group_vars/``.
 
-kubevirt
-~~~~~~~~
+   .. code-block:: yaml
 
-+------------------------------------------------+------------------------------------------------+
-| 0.0.7-alpha                                    | Now                                            |
-+================================================+================================================+
-| ``boot_source.type: data_volume_url`` with     | ``type: data_volume`` with                     |
-| ``url``                                        | ``source: {http: {url: ...}}``                 |
-+------------------------------------------------+------------------------------------------------+
-| ``boot_source.type: data_volume_pvc`` with     | ``type: data_volume`` with                     |
-| ``source``                                     | ``source: {pvc: {name: ..., namespace: ...}}`` |
-+------------------------------------------------+------------------------------------------------+
-| ``boot_source.type: data_volume_source_ref``   | ``type: data_volume`` with ``source_ref``      |
-+------------------------------------------------+------------------------------------------------+
-| ``extra_disks``, ``extra_volumes``,            | ``vm_overrides`` (lists are appended)          |
-| ``extra_interfaces``, ``extra_networks``       |                                                |
-+------------------------------------------------+------------------------------------------------+
-| ``vm_definition``                              | ``vm_overrides``, or                           |
-|                                                | ``interfaces``/``networks``/``data_disks``     |
-+------------------------------------------------+------------------------------------------------+
-| ``admin_user``, ``admin_password``             | ``connection_vars.ansible_user``,              |
-|                                                | ``connection_vars.ansible_password``           |
-+------------------------------------------------+------------------------------------------------+
-| ``cloud_init.user_data_secret``,               | ``cloud_init.enabled: false`` plus a           |
-| ``network_data_secret``, ``inject_ssh_key``    | cloud-init volume in ``vm_overrides``          |
-+------------------------------------------------+------------------------------------------------+
-| ``instancetype``/``preference`` as a mapping   | The name as a string                           |
-+------------------------------------------------+------------------------------------------------+
-| ``memory_limit``                               | ``vm_overrides``                               |
-+------------------------------------------------+------------------------------------------------+
-| ``mp_kubevirt_run_isolation``,                 | Removed; every run is isolated and             |
-| ``mp_kubevirt_cleanup_timeout``                | ``mp_kubevirt_wait_timeout`` covers cleanup    |
-+------------------------------------------------+------------------------------------------------+
+      # extensions/molecule/default/molecule.yml
+      ---
+      scenario:
+        name: default
 
-Resource names are now ``<host>-<run id>`` and carry the label
-``molecule-provisioners/run-id``. Destroy guests created by 0.0.7-alpha with
-0.0.7-alpha before upgrading.
+3. **Add the lifecycle playbooks.** Each one imports the matching playbook from
+   this collection. If the scenario had its own ``create.yml``,
+   ``prepare.yml`` or ``destroy.yml``, keep any scenario-specific plays and
+   put them before or after the import.
+
+   .. code-block:: yaml
+
+      # extensions/molecule/default/create.yml
+      ---
+      - name: Create instances
+        import_playbook: david_igou.molecule_provisioners.create
+
+   .. code-block:: yaml
+
+      # extensions/molecule/default/prepare.yml
+      ---
+      - name: Prepare instances
+        import_playbook: david_igou.molecule_provisioners.prepare
+
+   .. code-block:: yaml
+
+      # extensions/molecule/default/destroy.yml
+      ---
+      - name: Destroy instances
+        import_playbook: david_igou.molecule_provisioners.destroy
+
+4. **Move the platforms into inventory.** Each platform becomes a host of the
+   ``molecule`` group, named after the platform's ``name``. Settings that every
+   platform shared go in ``mp_defaults.<backend>``; settings that differ go on
+   the host under ``mp.<backend>``. The backend is the old driver name.
+
+   .. code-block:: yaml
+
+      # extensions/molecule/default/inventory/group_vars/molecule.yml
+      ---
+      mp_backend: podman
+      mp_defaults:
+        podman:
+          image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
+          command: /sbin/init
+          privileged: true
+
+   .. code-block:: yaml
+
+      # extensions/molecule/default/inventory/hosts.yml
+      ---
+      all:
+        children:
+          molecule:
+            hosts:
+              web: {}
+              db:
+                mp:
+                  podman:
+                    env:
+                      ROLE: database
+          webservers:          # was "groups: [webservers]" on the web platform
+            hosts:
+              web: {}
+
+   A host listed under another group, like ``webservers`` here, is the same
+   host; Ansible merges the two entries.
+
+5. **Run it** from the collection root:
+
+   .. code-block:: console
+
+      $ MOLECULE_GLOB='extensions/molecule/*/molecule.yml' molecule test -s default
+
+   Molecule installs the pinned collection, creates the containers, runs your
+   unchanged ``converge.yml`` and ``verify.yml``, and removes the containers.
+
+6. **Drop the old driver.** Remove ``molecule-plugins`` (and extras such as
+   ``molecule-plugins[podman]``) from your Python requirements.
+
+Platform keys
+-------------
+
+With the ``podman`` and ``docker`` backends, ``mp.podman`` and ``mp.docker`` are
+passed to ``containers.podman.podman_container`` and
+``community.docker.docker_container``. Those modules accept most old platform
+keys under the same names or as aliases (``volumes``, ``published_ports``,
+``env`` and so on). Each container's hostname is its inventory name, as before.
+The exceptions:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - Platform key
+     - What to do
+   * - ``name``
+     - Becomes the inventory host name.
+   * - ``groups``, ``children``
+     - Make the host a member of those inventory groups, as in step 4. Do not
+       copy ``groups`` into ``mp``: both modules read it as the container's
+       supplementary Unix groups.
+   * - ``pre_build_image``
+     - Delete it; the image is always used as given. When it was ``false`` or
+       not set, molecule-plugins built an image with Python added. Use an image
+       that already has Python, like the one above, or build one as for
+       ``dockerfile``.
+   * - ``dockerfile``, ``buildargs``
+     - Build the image before running Molecule, or in a play placed before the
+       import in ``create.yml``, and set ``image`` to the result.
+   * - ``registry``
+     - Log in to the registry before running Molecule (``podman login`` or
+       ``docker login``), and use the full image reference in ``image``.
+   * - podman ``security_opts``, ``devices``
+     - Rename to ``security_opt`` and ``device``.
+   * - podman ``tmpfs``
+     - Change the list to a mapping of path to options:
+
+       .. code-block:: yaml
+
+          tmpfs:
+            /tmp: rw
+            /run: rw
+   * - podman ``cgroup_manager``, ``extra_opts``
+     - Pass the raw flags in ``cmd_args``, for example
+       ``--cgroup-manager=cgroupfs`` as an item of the ``cmd_args`` list.
+   * - docker ``override_command``
+     - Delete it. Without a ``command``, the container runs ``sleep infinity``;
+       set ``command: null`` to keep the image's own command.
+   * - docker ``purge_networks``
+     - Delete it; ``networks`` lists every network the container joins.
+
+Other drivers
+-------------
+
+Scenarios that used a VM driver move the same way, but the instance settings
+differ. Use the ``qemu`` backend for local virtual machines, ``kubevirt`` for
+virtual machines on Kubernetes, and ``vmware`` for vSphere; each backend guide
+lists its settings with an example.
