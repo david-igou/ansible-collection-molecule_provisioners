@@ -1,7 +1,6 @@
 ---
-# Pinned test-time collection dependencies, shared by every molecule scenario in
-# a consumer repo. Wired in once via extensions/molecule/config.yml.
-# Copy to: extensions/molecule/requirements-test.yml
+# Copy to extensions/molecule/requirements-test.yml. Pin an exact release so
+# provisioning cannot change between runs without a change in your repository.
 collections:
   - name: david_igou.molecule_provisioners
-    version: 0.0.7-alpha
+    version: 0.0.8-alpha

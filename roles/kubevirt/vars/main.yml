@@ -1,0 +1,39 @@
+---
+_mp_spec: >-
+  {{ mp_kubevirt_instance_defaults
+     | combine(mp_defaults.kubevirt | default({}), mp.kubevirt | default({}), recursive=true) }}
+_mp_windows: "{{ _mp_spec.connection in ['psrp', 'winrm'] }}"
+
+# Resource names and labels. The run id keeps parallel runs apart.
+_mp_name: >-
+  {{ (inventory_hostname | lower | regex_replace('[^a-z0-9]+', '-'))[:40]
+     | regex_replace('^-+|-+$', '') }}-{{ mp_run_id }}
+_mp_labels:
+  app.kubernetes.io/managed-by: molecule_provisioners
+  molecule-provisioners/run-id: "{{ mp_run_id }}"
+  molecule-provisioners/instance: "{{ _mp_name }}"
+
+_mp_key: "{{ molecule_ephemeral_directory }}/identity_file"
+_mp_guest_port: "{{ _mp_spec.ssh_service.port | default(5986 if _mp_windows else 22) }}"
+_mp_cloud_init: "{{ _mp_spec.cloud_init.enabled | default(not _mp_windows) }}"
+
+# Cloud-config with the management user merged in by name: keys the caller
+# sets on a user of that name win, lists (such as ssh_authorized_keys) append.
+_mp_user_data: "{{ _mp_spec.cloud_init.user_data | default({}) }}"
+_mp_users: "{{ _mp_user_data.users | default([]) }}"
+_mp_user_match: "{{ _mp_users | select('mapping') | selectattr('name', 'equalto', _mp_spec.ssh_user) | list }}"
+_mp_user:
+  name: "{{ _mp_spec.ssh_user }}"
+  ssh_authorized_keys:
+    - "{{ lookup('ansible.builtin.file', _mp_key ~ '.pub') }}"
+  sudo: ALL=(ALL) NOPASSWD:ALL
+  shell: /bin/bash
+_mp_cloud_config: >-
+  {{ _mp_user_data if _mp_windows else _mp_user_data | combine({'users':
+       (_mp_users | reject('in', _mp_user_match) | list)
+       + [_mp_user | combine(_mp_user_match | first | default({}), recursive=true, list_merge='append')]}) }}
+
+_mp_vm: >-
+  {{ lookup('ansible.builtin.template', 'vm.yml.j2') | from_yaml
+     | combine(_mp_spec.vm_overrides, recursive=true, list_merge='append_rp') }}
+_mp_pod_networks: "{{ _mp_vm.spec.template.spec.networks | default([]) | selectattr('pod', 'defined') | list }}"

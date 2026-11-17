@@ -1,195 +1,152 @@
-# VMware
+# david_igou.molecule_provisioners.vmware
 
-Create disposable vCenter guests through the public `create`, `prepare` and
-`destroy` playbook imports. Select `mp_backend: vmware`, share inputs under
-`mp_defaults.vmware`, and override them per host under `mp.vmware`.
+Runs each Molecule host as a VM cloned from a vCenter template. By default
+the clone gets cloud-init metadata and user data through VMware GuestInfo
+before its first boot: a management user with the run's SSH key and
+passwordless sudo, and the inventory name as hostname. The controller
+connects to the address VMware Tools reports.
 
-This backend implements the contract proposed in [issue 81](https://github.com/david-igou/ansible-collection-molecule_provisioners/issues/81).
-Runtime parity requires the live acceptance evidence listed there. See
-[local testing](../../docs/TESTING.md#vmware) for the current test scope.
+Scenarios use the collection's lifecycle playbooks; the role is not called
+directly.
 
-## Requirements
-
-The collection requires Ansible Core 2.19 or newer. Installing it also installs
-`community.vmware` and `vmware.vmware` through `galaxy.yml`. Install controller-side
-Python dependencies from the packaged `requirements.txt`, or let Ansible Builder
-discover them. See [collection installation](../../README.md#installing).
-
-Linux access requires an SSH client and ssh-keygen. `make ee` builds the shared
-Python 3.12 test EE used by the AWS and VMware test targets.
-
-Set `VMWARE_HOST`, `VMWARE_USER`, `VMWARE_PASSWORD`, optional `VMWARE_PORT`
-and `VMWARE_VALIDATE_CERTS` in the controller environment, or supply the
-`vcenter` mapping below. Explicit fields override environment values. TLS
-validation defaults to true. Install the lab CA in the controller's trust store,
-or explicitly set `vcenter.validate_certs: false` for a disposable lab.
-All hosts in one run use one vCenter endpoint/authentication/TLS configuration.
-
-The API identity needs inventory reads, source clone/snapshot reads, datastore
-allocation, network and resource-pool assignment, VM configuration/customization,
-power and removal, and Guest Operations for Tools bootstrap. Existing inventory
-objects are referenced; the role does not create folders, networks or datastores.
-The controller needs a route to guest IPs as well as to vCenter.
-
-## Inventory
+## Quick start
 
 ```yaml
----
+# inventory/group_vars/molecule.yml
+mp_backend: vmware
+mp_defaults:
+  vmware:
+    datacenter: dc1
+    cluster: compute
+    folder: /dc1/vm/molecule
+    datastore: ssd
+    networks:
+      - name: Lab DHCP
+    ssh_user: tester
+    hardware:
+      num_cpus: 2
+      memory_mb: 2048
+```
+
+```yaml
+# inventory/hosts.yml
 all:
   children:
     molecule:
-      vars:
-        mp_backend: vmware
-        mp_defaults:
-          vmware:
-            datacenter: lab
-            cluster: compute
-            folder: /lab/vm/molecule
-            networks:
-              - name: Test Network
-                type: dhcp
-            guest:
-              credentials:
-                username: molecule
-                password: "{{ lookup('ansible.builtin.env', 'VMWARE_GUEST_PASSWORD') }}"
       hosts:
-        linux:
+        ubuntu:
           mp:
             vmware:
-              template: linux-template
+              template: ubuntu-24.04-cloud
+        centos:
+          mp:
+            vmware:
+              template: centos-stream9-cloud
               hardware:
-                num_cpus: 2
-                memory_mb: 2048
+                memory_mb: 4096
 ```
-
-Keep secret lookups in the caller's inventory. Roles consume resolved credentials;
-no vault lookups occur inside the backend. vCenter API credentials and guest OS
-credentials are separate. The journal never stores vCenter credentials or passwords.
 
 ## Host fields
 
-| Field | Contract/default |
-| --- | --- |
-| `vcenter` | `hostname`, `port`, `validate_certs`, `credentials.username/password`; environment fallback above |
-| `datacenter`, `folder`, `template` | Required; folder must exist. Source template or VM must resolve uniquely; an absolute source inventory path is supported |
-| `cluster`, `esxi_hostname` | Exactly one, through vCenter |
-| `resource_pool`, `datastore` | Optional existing placement; vendor defaults when omitted |
-| `name` | Optional fixed VM display name; otherwise isolated per run. Logical inventory names remain unchanged |
-| `hardware` | Vendor hardware mapping, including CPU, RAM, firmware, controllers and hot-add options |
-| `networks` | Required ordered vendor list: DHCP/static IP, netmask, gateway, NIC type, standard/distributed port group and switch options |
-| `snapshot_src`, `linked_clone` | Existing unique source snapshot; linked defaults true when a snapshot is set, false otherwise. Explicit false makes a full clone from that snapshot |
-| `instance_os_type` | `linux` (default) or `windows` |
-| `guest.credentials` | `username`, plus `password` for Tools bootstrap or Windows |
-| `customization` | `hostname` (logical name), `dns_servers`; Windows `fullname`, `orgname` (both `molecule`), `autologon` (false), `autologoncount` (1). Password must match guest credentials |
-| `bootstrap.method` | `tools` (default), `prepared`, or Linux-only `guestinfo` |
-| `ssh_key_path` | Caller-owned private key; otherwise generate a private scenario key |
-| `connection_address` | Explicit reachable address, otherwise usable IPv4 from the first NIC; ambiguous discovery fails |
-| `connection_port` | Linux 22, Windows 5986; override supported |
-| `connection_vars` | Additional `ansible_*` transport options. Explicit endpoint/user/key/password/plugin fields are reserved |
+Set under `mp.vmware` per host or `mp_defaults.vmware` for all hosts. The
+role defaults, `mp_defaults.vmware` and `mp.vmware` are merged recursively in
+that order; lists replace. Unknown fields fail validation. Full schema:
+`ansible-doc -t role david_igou.molecule_provisioners.vmware -e instance`.
 
-Mappings merge recursively: role defaults → shared defaults → host input. Lists
-replace. Unknown wrapper fields, unsupported combinations, ambiguous names and
-foreign ownership fail before VM mutation. Vendor check mode validates nested
-hardware/network options for every host before the first allocation.
-
-## Bootstrap and connections
-
-**Tools:** clone-time guest customization must be supported by the source OS and
-vSphere version. Linux sources need VMware/open-vm-tools, the applicable Perl
-customization dependencies, SSH, Python and any required sudo configuration.
-The provided existing guest account must authenticate through Guest Operations;
-Linux customization does not reset its password. A generated or caller public
-key is appended without replacing other authorized keys.
-
-Windows sources must be Sysprep-ready with running Tools. Customization sets the
-local Administrator password; it does not create/reset an arbitrary named user.
-The privileged Guest Operations account configures HTTPS WinRM, reuses an existing
-listener/certificate on retry, and opens the listener port without disabling
-firewall profiles. Default transport is NTLM and the generated self-signed listener
-uses certificate validation `ignore`. Prepared trusted listeners can use
-`connection_vars.ansible_winrm_server_cert_validation: validate`. HTTPS is explicit,
-including on custom ports. No SSH key is generated for an all-Windows run.
-
-**Prepared:** skip Tools bootstrap commands, but still run clone customization.
-Linux requires a caller key already accepted by the source. Windows requires a
-prepared listener and valid guest password.
-
-**GuestInfo:** an opt-in extension for the key-only Linux cloud templates available
-in the test lab. Set `bootstrap.method: guestinfo` and a guest username; a guest
-password is unnecessary. It supplies per-clone cloud-init metadata/user-data and
-an SSH key before first power-on, instead of vSphere guest customization. The
-source must already support the VMware cloud-init datasource. This initial mode
-supports exactly one connected DHCP NIC on a named port group, with DNS from DHCP
-and only `customization.hostname`. It clones powered off, sets GuestInfo, configures
-the existing NIC through `vmware_guest_network`, then powers on. This avoids the
-clone module inferring OS customization from a network list. Tools mode retains
-the broader network contract.
-It does not replace the Tools/Sysprep parity requirements.
-
-Prepare waits for authenticated Ansible access. GuestInfo also waits for cloud-init
-completion. Runtime inventory contains the selected transport, address, user, port,
-key/password and `mp_vmware_instance_uuid`, `mp_vmware_moid`, `mp_vmware_name`,
-`mp_vmware_bootstrap`. Native `molecule list` and Linux `molecule login` use the
-same inventory. The old VMware driver's login command was SSH-only.
-
-Disposable SSH guests default to `StrictHostKeyChecking=no`,
-`UserKnownHostsFile=/dev/null`, and `IdentitiesOnly=yes`. Override
-`connection_vars.ansible_ssh_common_args` for a caller-managed host-key policy.
-
-## Controls
-
-Set these with the other molecule group variables; public create/destroy imports
-carry them into the controller play:
-
-| Variable | Default | Scope |
+| Field | Default | Description |
 | --- | --- | --- |
-| `mp_vmware_provision_timeout` | 7200 | Clone worker and vendor customization/IP waits, seconds |
-| `mp_vmware_tools_timeout` | 600 | Per-guest Tools readiness wait, seconds |
-| `mp_vmware_wait_timeout` | 600 | Linux authenticated readiness/cloud-init waits, seconds |
-| `mp_vmware_windows_wait_timeout` | 900 | Windows authenticated readiness, seconds |
-| `mp_vmware_cleanup_timeout` | 7200 | Per-guest worker/task/deletion waits, seconds |
-| `mp_vmware_concurrency` | 4 | Maximum guests in each concurrent clone batch |
-| `mp_vmware_role_defaults` | empty mapping | Lowest-precedence host specification |
+| `datacenter` | required | Datacenter name. |
+| `folder` | required | Existing VM folder, e.g. `/dc1/vm/molecule`. Destroy looks the VM up here. |
+| `template` | required | Template or VM to clone. |
+| `cluster` / `esxi_hostname` | | Placement; at most one. |
+| `resource_pool` | | Resource pool; omitted uses the cluster or host default. |
+| `datastore` | template's | Datastore for the clone. |
+| `snapshot_src` | | Clone from this snapshot of `template`. |
+| `linked_clone` | `false` | Linked clone of `snapshot_src` (required with it). |
+| `hardware` | `{}` | `vmware_guest` `hardware`, e.g. `num_cpus`, `memory_mb`. Empty keeps the template's. |
+| `disks` | `[]` | `vmware_guest` `disk`. Entries map to the template's disks in order (sizes may grow, not shrink); extra entries add disks. |
+| `networks` | `[]` | `{name, switch, device_type, mac_address}` per NIC. Entry n sets the port group of the template's NIC n; extra entries add NICs (`device_type`, `mac_address` apply to those). Empty keeps the template's NICs. |
+| `bootstrap` | `guestinfo` | `guestinfo` or `none`, see below. |
+| `ssh_user` | `cloud-user` | Connection user, created by cloud-init with `guestinfo`. |
+| `cloud_init.user_data` | `{}` | Cloud-config merged over the management user; lists (`users`, `runcmd`, `write_files`, ...) are appended. |
+| `connection_vars` | `{}` | Host variables merged over the generated connection settings, e.g. `ansible_password`. |
 
-These are stage bounds, rather than a single wall-clock bound across all stages.
-API inspection requests use a 30-second connection/request timeout. SDK task
-completion can outlive an Ansible timeout: retain state rather than assume cancel.
+## Role variables
 
-## Ownership, retries and recovery
+| Variable | Default | Description |
+| --- | --- | --- |
+| `mp_vmware_connection` | `{}` | vCenter module arguments (`hostname`, `username`, `password`, `port`, `validate_certs`) applied through `module_defaults`. |
+| `mp_vmware_wait_timeout` | `600` | Seconds create waits for an IPv4 address, and prepare for a connection and cloud-init. |
 
-`vmware_run.yml` records non-secret run intent, source and placement, ownership
-annotation, worker IDs and exact VM/disk identities. Async worker results live in
-the persisted private `.vmware-async` directory. Files use mode 0600 and
-private directories use 0700. A controller-process lease serializes an ephemeral
-directory. Generated keys and password-bearing runtime inventory are private.
+## vCenter connection
 
-Create checkpoints submission intent before launching each asynchronous worker.
-Unchanged repeated create reuses VM identities and keys and regenerates the runtime
-overlay. Changed launch configuration requires destroy/create. Failed bootstrap
-retains the guest for retry. Clone batches account for every recorded worker.
+The VMware modules read `VMWARE_HOST`, `VMWARE_USER`, `VMWARE_PASSWORD`,
+and optionally `VMWARE_PORT` and `VMWARE_VALIDATE_CERTS`, from the controller
+environment; AAP's VMware vCenter credential sets the same variables. Set
+`mp_vmware_connection` instead to pass them from inventory, keeping the
+password in a vault or lookup in your inventory, not in the role:
 
-There are two fail-closed manual recovery windows: interrupted worker submission
-before the job ID checkpoint, and a stock-module clone interrupted before its
-post-clone annotation. No automatic retry, adoption or deletion is safe there.
-Keep the journal and worker files, establish that the old controller/worker has
-stopped, and correlate vCenter task/events, exact target folder/name, clone source
-and VM identity against the saved intent. Only after ownership is independently
-established should an operator restore the saved marker/worker checkpoint or
-remove that disposable clone. Do not delete state or clear a submission phase just
-to bypass the guard. The backend never performs a name-only sweep.
+```yaml
+mp_vmware_connection:
+  hostname: vcenter.example.com
+  username: molecule@vsphere.local
+  password: "{{ vault_vcenter_password }}"
+```
 
-Destroy checks vCenter identity and ownership, settles recorded workers and cloud
-tasks, then removes only owned clones and their own leaf disks. Source templates,
-snapshots and shared infrastructure remain caller-owned. Shared/RDM/external source
-disk layouts and changed clone disk lists are rejected. Removed inventory hosts
-remain in saved cleanup scope. Partial cleanup prunes successful hosts from runtime
-inventory and retains failed records. Caller-owned key files survive; generated
-keys and journal are removed only after confirmed cleanup.
+Certificates are validated by default. Add the vCenter CA to the controller's
+trust store, or point `SSL_CERT_FILE` at it; use `VMWARE_VALIDATE_CERTS=false`
+only for a disposable lab.
 
-Check mode performs discovery/validation only, without keys, clone/power/Guest
-Operations or journal writes. The initial implementation does not certify every
-issue-81 case: Windows, snapshots/linked backing, static/distributed networks,
-interruption recovery and older/current dependency combinations need their own
-live evidence before the parity milestone can close.
+The account needs, on the folder, datastore, network and resource pool: clone
+from the template, create and delete VMs, change configuration (annotation,
+advanced settings, CPU, memory, disks, NICs) and power operations.
 
-MIT; David Igou.
+## Bootstrap
+
+- **`guestinfo`**: the template needs cloud-init with the VMware datasource
+  (cloud-init 21.3 or later with open-vm-tools), and is reset so cloud-init runs
+  again for a new instance id. The role sets `guestinfo.metadata` (instance id
+  `<host>-<run id>`, hostname) and `guestinfo.userdata` before power-on.
+  Addressing is DHCP unless the template or `cloud_init.user_data` says
+  otherwise. Prepare waits for `cloud-init status --wait`.
+- **`none`**: clone and power on only. The template must already accept a
+  connection; supply credentials through `connection_vars`
+  (`ansible_password`, `ansible_ssh_private_key_file`, ...).
+
+vSphere guest customization is never used, so Windows/Sysprep guests are not
+supported. NICs are configured with `vmware_guest_network`, not
+`vmware_guest`'s `networks`: `vmware_guest` treats every `networks` entry as
+DHCP and starts guest customization, which renames the guest to the VM name
+and reboots it.
+
+## How it works
+
+- **create**: validates the merged settings, generates
+  `$MOLECULE_EPHEMERAL_DIRECTORY/identity_file`, clones the template powered
+  off as `<inventory_hostname>-<mp_run_id>` with an annotation naming the run,
+  sets the NICs' port groups and makes every NIC connect at power-on (clones
+  can come out disconnected), starts the VM and waits for its IPv4 address. The runtime inventory gets `ansible_host`, `ansible_user`,
+  the key, `mp_vmware_name` and `mp_vmware_instance_uuid`.
+- **prepare**: waits for an Ansible connection, then for cloud-init.
+- **destroy**: looks up `<inventory_hostname>-<mp_run_id>` in `folder`,
+  refuses to delete it unless its annotation is this run's, then powers it
+  off and deletes it with its disks. It succeeds when the VM does not exist.
+
+## Requirements
+
+- Collections `community.vmware` (6.x) and `community.crypto`.
+- Python `pyvmomi` on the controller.
+- A route from the controller to the guest addresses VMware Tools reports.
+  When guests are only reachable another way, set `connection_vars`, e.g.
+  `ansible_ssh_common_args` with a `ProxyJump`.
+
+## Notes
+
+- Hosts run in parallel up to Ansible's `forks`.
+- A clone interrupted before vCenter sets its annotation is left alone by
+  destroy; delete it by hand.
+- The self-test scenario `extensions/molecule/vmware` reads its placement from
+  `MP_TEST_VMWARE_DATACENTER`, `MP_TEST_VMWARE_CLUSTER`,
+  `MP_TEST_VMWARE_FOLDER`, `MP_TEST_VMWARE_DATASTORE`,
+  `MP_TEST_VMWARE_NETWORK`, `MP_TEST_VMWARE_TEMPLATE` and
+  `MP_TEST_VMWARE_SECOND_TEMPLATE`; run it with `make test-vmware`.

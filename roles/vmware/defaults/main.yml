@@ -1,8 +1,25 @@
 ---
-mp_vmware_provision_timeout: 7200
-mp_vmware_tools_timeout: 600
+# Every host's VM starts from this dict. mp_defaults.vmware and then the
+# host's mp.vmware are merged over it (recursively). The merged result is
+# validated against the `instance` entry point in meta/argument_specs.yml.
+# datacenter, folder and template have no default and are required.
+mp_vmware_instance_defaults:
+  linked_clone: false
+  hardware: {}
+  disks: []
+  networks: []
+  bootstrap: guestinfo
+  ssh_user: cloud-user
+  cloud_init:
+    user_data: {}
+  connection_vars: {}
+
+# vCenter connection arguments (hostname, username, password, port,
+# validate_certs, ...) given to every VMware module through module_defaults.
+# Leave empty to use VMWARE_HOST, VMWARE_USER, VMWARE_PASSWORD, VMWARE_PORT
+# and VMWARE_VALIDATE_CERTS from the controller environment.
+mp_vmware_connection: {}
+
+# Seconds create waits for a guest IPv4 address and prepare waits for an
+# Ansible connection and cloud-init.
 mp_vmware_wait_timeout: 600
-mp_vmware_windows_wait_timeout: 900
-mp_vmware_cleanup_timeout: 7200
-mp_vmware_concurrency: 4
-mp_vmware_role_defaults: {}

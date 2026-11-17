@@ -12,36 +12,32 @@ Never commit agent plans, design notes, session logs, or writing-tool state.
 Keep them outside this repository. Put user-facing documentation in `README.md`,
 the role READMEs, or `docs/`.
 
+## Rules for this collection
+
+- Ansible only: no Python plugins, modules or filters. Reach for ansible-core
+  and the declared dependency collections first.
+- Validate VM settings with the role's `instance` argument spec and
+  `ansible.builtin.validate_argument_spec`; add an assert only for a rule that
+  spans several fields.
+- Use `no_log` only on tasks that handle secrets.
+- Tests are Molecule scenarios in `extensions/molecule/` that check behavior in
+  the instances. Do not add tests that restate what a module or argument spec
+  already guarantees.
+
 ## Verification
 
-Actions validation is lint-only. Run unit, sanity, build, and backend tests
-locally with the Makefile targets documented in `docs/TESTING.md`. Do not add
-hosted test matrices or backend provisioning jobs to Actions.
+GitHub Actions runs lint only. Run `make lint` and the scenario for every
+backend you changed (`make test`, `make test-qemu`, `make test-kubevirt`,
+`make test-vmware`) from
+the collection root. Do not add hosted test matrices or backend jobs to Actions.
 
 ## Adding a Molecule scenario to a consumer collection
 
-Use this checklist when adding a Molecule scenario to a **consumer**
-collection that uses `david_igou.molecule_provisioners`. It follows the setup in
-the maintainer's reference consumer
-([`ansible-collection-armbian`](https://github.com/david-igou/ansible-collection-armbian)).
+- [ ] Pin `david_igou.molecule_provisioners` to an exact version in
+      `extensions/molecule/requirements-test.yml`.
+- [ ] Share it through `extensions/molecule/config.yml` so every scenario uses
+      one pin.
+- [ ] Run Molecule from the collection root with `MOLECULE_GLOB` set.
+- [ ] Commit an `ansible.cfg` at the collection root.
 
-### Determinism checklist
-
-- [ ] **Pin the provisioner version.** In `extensions/molecule/requirements-test.yml`,
-      pin `david_igou.molecule_provisioners` to an exact Galaxy version (e.g.
-      `0.0.7-alpha`) — never `version: main`. Copy `docs/examples/requirements-test.yml`.
-- [ ] **Centralize the pin via `config.yml`.** Add `extensions/molecule/config.yml`
-      pointing `dependency.options.requirements-file` at the pinned file, so every
-      scenario shares one version and one bump point. Copy `docs/examples/config.yml`.
-- [ ] **Run from the collection root with `MOLECULE_GLOB`.** `config.yml`
-      auto-discovery fires only from the collection root. Use `docs/examples/Makefile`
-      (`export MOLECULE_GLOB := extensions/molecule/*/molecule.yml`) and run `make test`.
-- [ ] **Commit an `ansible.cfg`.** Set `collections_path` and bump the
-      `[persistent_connection]` timeouts for `network_cli`-managed VM guests. Copy
-      `docs/examples/ansible.cfg`.
-- [ ] **Install backend prereqs explicitly.** See the README
-      "Controller-host prerequisites by backend" section for the per-backend
-      copy-paste install snippet, the `ansible-pylibssh` requirement for `network_cli`
-      guests, and the OVMF path notes for `qemu` UEFI.
-
-See the [README](README.md) for the full consumer walkthrough.
+Copy all four from [`docs/examples/`](docs/examples/).

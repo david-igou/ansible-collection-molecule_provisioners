@@ -1,54 +1,32 @@
 ---
 argument_specs:
-  main:
-    short_description: >-
-      Default entry point — does nothing on its own; use tasks_from=create|destroy|prepare.
-    options: {}
   create:
-    short_description: Create docker containers and networks for hosts in groups['molecule'].
+    short_description: Start one Docker container per molecule host
+    description:
+      - Each host's container is C(mp_docker_instance_defaults), then
+        C(mp_defaults.docker), then the host's C(mp.docker), merged in that
+        order and passed to M(community.docker.docker_container). Any option
+        of that module can be set; the container name is the inventory hostname.
     options:
-      mp_docker_role_defaults:
+      mp_docker_instance_defaults:
         type: dict
-        description: >-
-          Per-host field defaults (command_handling, privileged, capabilities, etc.).
-          Layered as: this dict <- mp_defaults.docker <- hostvars[item].mp.docker.
-      mp_docker_async_timeout:
-        type: int
-        default: 7200
-        description: Async timeout (seconds) for bulk container create.
-      mp_docker_async_retries:
-        type: int
-        default: 300
-        description: Number of times to poll for async completion.
-      mp_docker_async_delay:
-        type: int
-        default: 24
-        description: >-
-          Seconds between async_status polls. retries * delay should
-          equal async_timeout (default 300 * 24 = 7200).
-      mp_docker_reserved_networks:
+        description: Container settings applied before mp_defaults.docker and mp.docker.
+      mp_docker_networks:
         type: list
-        elements: str
-        default: [bridge, host, none]
-        description: Network names that are never created or deleted by the role.
+        elements: dict
+        default: []
+        description: M(community.docker.docker_network) arguments, one dict per network.
   destroy:
-    short_description: Destroy docker containers and (non-reserved) networks.
+    short_description: Remove the containers and networks
     options:
-      mp_docker_role_defaults:
+      mp_docker_instance_defaults:
         type: dict
-      mp_docker_async_timeout:
-        type: int
-        default: 7200
-      mp_docker_async_retries:
-        type: int
-        default: 300
-      mp_docker_async_delay:
-        type: int
-        default: 24
-      mp_docker_reserved_networks:
+        description: Container settings applied before mp_defaults.docker and mp.docker.
+      mp_docker_networks:
         type: list
-        elements: str
-        default: [bridge, host, none]
+        elements: dict
+        default: []
+        description: M(community.docker.docker_network) arguments, one dict per network.
   prepare:
-    short_description: Run docker-side preparation tasks against created containers.
+    short_description: Wait until each container can run Ansible modules
     options: {}

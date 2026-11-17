@@ -1,134 +1,48 @@
 ---
-- name: Merge per-host specs
-  ansible.builtin.include_tasks: _spec_merge.yml
-
-- name: Validate per-host specs
-  ansible.builtin.include_tasks: _validate.yml
-
-- name: Assemble per-host cmd_args
-  ansible.builtin.include_tasks: _cmd_args.yml
-
-- name: Build podman network list
-  ansible.builtin.import_tasks: _networks.yml
-
-- name: Create podman network(s)
+- name: Create the networks
   containers.podman.podman_network:
     name: "{{ item.name }}"
     executable: "{{ mp_podman_executable }}"
-    subnet: "{{ item.subnet | default(omit) }}"
-    gateway: "{{ item.gateway | default(omit) }}"
-    state: present
-  loop: "{{ __mp_podman_networks }}"
+  module_defaults:
+    containers.podman.podman_network: "{{ item }}"
+  loop: "{{ mp_podman_networks }}"
   loop_control:
     label: "{{ item.name }}"
+  run_once: true
 
-# Launch all containers simultaneously (poll: 0), then wait for each below.
-# A failure during the wait leaves still-running async jobs in flight;
-# run destroy to clean up partially-created instances.
-- name: Create molecule instance(s)
+- name: Start the container
   containers.podman.podman_container:
-    name: "{{ item }}"
+    name: "{{ inventory_hostname }}"
     executable: "{{ mp_podman_executable }}"
-    image: "{{ _mp_specs[item].image }}"
     state: started
-    recreate: false
-    command: "{{ _mp_specs[item].command | default(omit) }}"
-    privileged: "{{ _mp_specs[item].privileged | default(false) }}"
-    volume: "{{ _mp_specs[item].volumes | default(omit) }}"
-    cap_add: "{{ _mp_specs[item].capabilities | default(omit) }}"
-    expose: "{{ _mp_specs[item].exposed_ports | default(omit) }}"
-    publish: "{{ _mp_specs[item].published_ports | default(omit) }}"
-    network: "{{ _mp_specs[item].podman_network | map(attribute='name') | list | default(omit, true) }}"
-    env: "{{ _mp_specs[item].env | default({}) }}"
-    tmpfs: "{{ _mp_specs[item].tmpfs | default(omit) }}"
-    cgroupns: "{{ _mp_specs[item].cgroupns | default(omit) }}"
-    systemd: "{{ _mp_specs[item].systemd | default(omit) }}"
-    hostname: "{{ _mp_specs[item].hostname | default(omit) }}"
-    tty: "{{ _mp_specs[item].tty | default(omit) }}"
-    detach: "{{ _mp_specs[item].detach | default(omit) }}"
-    etc_hosts: "{{ _mp_specs[item].etc_hosts | default(omit) }}"
-    dns: "{{ _mp_specs[item].dns_servers | default(omit) }}"
-    pid: "{{ _mp_specs[item].pid_mode | default(omit) }}"
-    security_opt: "{{ _mp_specs[item].security_opts | default(omit) }}"
-    device: "{{ _mp_specs[item].devices | default(omit) }}"
-    ulimit: "{{ _mp_specs[item].ulimits | default(omit) }}"
-    ip: "{{ _mp_specs[item].ip | default(omit) }}"
-    # podman_container has no separate `restart_policy_attempts` (unlike docker_container);
-    # podman encodes the retry count into the policy string: `on-failure:N`. Compose here
-    # so consumers keep the docker-style restart_policy + restart_retries vocabulary.
-    restart_policy: >-
-      {{
-        omit if _mp_specs[item].restart_policy is not defined
-        else (_mp_specs[item].restart_policy ~ ':' ~ _mp_specs[item].restart_retries
-              if (_mp_specs[item].restart_policy == 'on-failure'
-                  and _mp_specs[item].restart_retries is defined)
-              else _mp_specs[item].restart_policy)
-      }}
-    cmd_args: "{{ __mp_podman_cmd_args[item] | default([]) }}"
-    label: "{{ ({'owner': 'molecule'} | combine(_mp_specs[item].labels | default({}))) }}"
-  register: __mp_podman_create
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
-  async: "{{ mp_podman_async_timeout }}"
-  poll: 0
+  module_defaults:
+    containers.podman.podman_container: "{{ _mp_spec }}"
 
-- name: Wait for instance(s) creation to complete
-  ansible.builtin.async_status:
-    jid: "{{ item.ansible_job_id }}"
-  register: __mp_podman_jobs
-  until: __mp_podman_jobs.finished
-  retries: "{{ mp_podman_async_retries }}"
-  delay: "{{ mp_podman_async_delay }}"
-  loop: "{{ __mp_podman_create.results }}"
-  loop_control:
-    label: "{{ item.item }}"
-
-- name: Allow immediate container exits to surface
+- name: Give a failing container command time to exit
   ansible.builtin.pause:
     seconds: 2
 
-- name: Verify instance(s) are still running
-  ansible.builtin.include_tasks: _check_running.yml
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    loop_var: __mp_podman_host
-    label: "{{ __mp_podman_host }}"
+- name: Read the container state
+  containers.podman.podman_container_info:
+    name: "{{ inventory_hostname }}"
+    executable: "{{ mp_podman_executable }}"
+  register: _mp_podman_info
+  no_log: true # the container environment may hold secrets
 
-# The consumer's static inventory already declares the molecule group. We
-# augment hosts with:
-#   - ansible_connection: containers.podman.podman — so subsequent phases
-#     (prepare/converge/verify) talk to the containers via the podman
-#     connection plugin.
-#   - ansible_user: root (default) — without this the connection plugin uses
-#     the controller's local user (e.g. `igou`) inside the container, then
-#     gather_facts attempts sudo for an account that doesn't exist there.
-#     Consumer-set `ansible_user` on the host wins (read from hostvars before
-#     the runtime inventory is written).
-# Each molecule phase is a separate ansible-playbook invocation, so the
-# augmentation has to be written to disk in molecule_ephemeral_directory/
-# inventory/, which is in molecule's inventory chain.
-- name: Build runtime connection dict
-  ansible.builtin.set_fact:
-    __mp_podman_runtime_hosts: >-
-      {{ __mp_podman_runtime_hosts | default({})
-         | combine({item: {
-             'ansible_connection': 'containers.podman.podman',
-             'ansible_user': hostvars[item].ansible_user | default('root')
-           }}) }}
-  loop: "{{ groups['molecule'] }}"
-  loop_control:
-    label: "{{ item }}"
-
-- name: Write runtime connection inventory file
+- name: Check that the container is still running
   vars:
-    runtime_inventory:
-      all:
-        hosts: "{{ __mp_podman_runtime_hosts }}"
-  ansible.builtin.copy:
-    content: "{{ runtime_inventory | to_nice_yaml }}"
-    dest: "{{ molecule_ephemeral_directory }}/inventory/molecule_runtime.yml"
-    mode: "0600"
+    _mp_state: "{{ _mp_podman_info.containers[0].State }}"
+  ansible.builtin.assert:
+    that: _mp_state.Running
+    fail_msg: >-
+      Container {{ inventory_hostname }} exited with code {{ _mp_state.ExitCode }}.
+      Run `{{ mp_podman_executable }} logs {{ inventory_hostname }}` to see why;
+      the image may need a different command.
+    quiet: true
 
-- name: Refresh inventory
-  ansible.builtin.meta: refresh_inventory
+- name: Record the connection settings
+  ansible.builtin.set_fact:
+    mp_runtime:
+      ansible_connection: containers.podman.podman
+      ansible_podman_executable: "{{ mp_podman_executable }}"
+      ansible_user: "{{ ansible_user | default('root') }}"

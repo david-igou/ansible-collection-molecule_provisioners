@@ -1,322 +1,91 @@
-# Migrating to `david_igou.molecule_provisioners`
+# Migration
 
-If you have a molecule scenario using the upstream `platforms:` + `driver:` shape (now called _pre ansible-native_ in molecule's own docs) and you want to use this collection, here is the field-by-field translation.
+## From a `platforms:` scenario
 
-## Controller requirements
+Molecule's older scenario shape lists instances under `platforms:` and picks a
+`driver:`. With this collection the instances move into inventory and the
+lifecycle playbooks become imports.
 
-The collection now requires Ansible Core 2.19 or newer for every backend.
-Galaxy installs runtime collection dependencies from `galaxy.yml`, including
-the VMware collections. Install controller-side Python dependencies from the
-packaged `requirements.txt`, or let Ansible Builder discover them. The separate
-VMware requirement files have been removed.
+1. Pin the collection in `extensions/molecule/requirements-test.yml` and share
+   the Molecule settings through `extensions/molecule/config.yml`. Copy both
+   from [`examples/`](examples/).
+2. Reduce each scenario's `molecule.yml` to its name. Delete `driver:`,
+   `platforms:` and `provisioner:`, and drop `molecule-plugins` from your
+   requirements.
+3. Replace `create.yml`, `destroy.yml` and `prepare.yml` with imports of
+   `david_igou.molecule_provisioners.create`, `.destroy` and `.prepare`.
+   Plays that did scenario-specific setup can stay before or after the import.
+4. Move every platform into `inventory/hosts.yml` as a host of the `molecule`
+   group, with its settings under `mp.<backend>`. Put shared settings in
+   `mp_defaults.<backend>` and `mp_backend` in
+   `inventory/group_vars/molecule.yml`.
 
-Local AWS and VMware tests share `make ee` and the `TEST_IMAGE` override.
-Replace `make ee-vmware` with `make ee`, and replace `AWS_TEST_IMAGE` or
-`VMWARE_TEST_IMAGE` overrides with `TEST_IMAGE`.
+For Podman and Docker platforms, keep the key names Molecule passed to the
+container modules (`image`, `command`, `privileged`, `volumes`, `env`, ...);
+the table below covers the few that differ.
 
-## QEMU testing features in 0.0.7-alpha
+## From 0.0.7-alpha
 
-QEMU now allocates management ports automatically and verifies VM ownership
-using persisted state. Destroy existing guests with the provisioner version
-that created them before upgrading. Guests without `qemu-state.json` are not
-automatically adopted or killed. Logical inventory names remain unchanged;
-read `ansible_port` and `mp_qemu_endpoints` from runtime inventory.
+The playbook imports and the `mp_backend`/`mp_defaults`/`mp` layout are
+unchanged. A host no longer needs an `mp.<backend>` block when
+`mp_defaults.<backend>` covers it. Settings changed as follows.
 
-For legacy fixed ports on new runs, put this in `inventory/group_vars/all.yml`:
+### All backends
 
-```yaml
----
-mp_qemu_run_isolation: false
-mp_qemu_slirp_port_base: 2222
-```
+- The `aws` backend and the `reset` playbook are removed. The `vmware` backend
+  on `main` after 0.0.7-alpha was never released; its replacement is described
+  in the [VMware role reference](../roles/vmware/README.md).
+- Role defaults dicts are renamed from `mp_<backend>_role_defaults` to
+  `mp_<backend>_instance_defaults`.
+- Molecule runs the lifecycle against the molecule hosts, so role variables such
+  as `mp_kubevirt_wait_timeout` can live in `group_vars/molecule.yml`, in
+  `group_vars/all.yml`, or on single hosts.
 
-Alternatively set an explicit `mp.qemu.ssh_host_port` per host. Both modes
-retain ownership verification. `extra_args` can no longer replace managed
-identity/PID/QMP options or reuse reserved device/network IDs; use the new
-`application_ports` interface for forwards. Writable UEFI variables and seed
-media are preserved across repeated create, and boot-configuration changes
-require destroy/create. Keep the ephemeral state directory until destroy
-succeeds. See the [QEMU role reference](../roles/qemu/README.md) for parameters,
-managed disks, cloud-init, networks, diagnostics, and connection overrides.
+### podman and docker
 
-Management MACs, and extra NIC MACs that the caller omits, are derived from
-the VM identity. A new run therefore gives them new MACs. Update prepared
-appliance images that bind network configuration to an old MAC or interface
-ID. In particular, CHR images may need a startup action that resolves the
-management interface and rebinds its DHCP client. See the appliance example
-in the role reference for the tested CHR CPU and bootstrap requirements.
+`mp.podman` and `mp.docker` are now passed unchanged to
+`containers.podman.podman_container` and `community.docker.docker_container`.
+Any option of those modules works, and keys must use the module's names. The
+default command is `sleep infinity`, and prepare no longer installs `sudo`.
 
-## Upgrading from 0.0.5-alpha to 0.0.6-alpha
-
-KubeVirt run isolation is now enabled by default. Kubernetes resource names
-include a unique run suffix; logical inventory host names remain unchanged.
-Each run saves its resource mapping in the Molecule ephemeral directory and
-uses it for retries and ownership-checked cleanup.
-
-Destroy existing fixed-name guests with 0.0.5-alpha before upgrading. If you
-have already upgraded, set this in `inventory/group_vars/molecule.yml` and
-destroy with the original inventory:
-
-```yaml
-mp_kubevirt_run_isolation: false
-```
-
-Remove the override before the next create to use isolation, or keep it if
-your scenario requires fixed names. Preserve the ephemeral directory until
-destroy succeeds. The role does not adopt existing fixed-name guests into
-an isolated run. See [run isolation and recovery](../roles/kubevirt/README.md#concurrent-runs-in-a-shared-namespace).
-
-## Before — pre-ansible-native shape
-
-```yaml
-# molecule.yml
-driver:
-  name: default
-  options:
-    managed: true
-    ansible_connection_options:
-      connection: containers.podman.podman
-
-platforms:
-  - name: ubuntu-24
-    image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
-    command: /sbin/init
-    privileged: true
-
-provisioner:
-  name: ansible
-  playbooks:
-    create: create.yml
-    destroy: destroy.yml
-    prepare: prepare.yml
-```
-
-## After — this collection's ansible-native shape
-
-```yaml
-# molecule.yml — boilerplate, identical for every consumer
-ansible:
-  executor:
-    args:
-      ansible_playbook:
-        - --inventory=inventory/
-        - --inventory=${MOLECULE_EPHEMERAL_DIRECTORY}/inventory/
-  playbooks:
-    create: create.yml
-    destroy: destroy.yml
-    prepare: prepare.yml
-    converge: converge.yml
-    verify: verify.yml
-
-scenario:
-  name: default
-  test_sequence:
-    - dependency
-    - syntax
-    - create
-    - prepare
-    - converge
-    - verify
-    - destroy
-
-verifier:
-  name: ansible
-```
-
-```yaml
-# inventory/hosts.yml — instances to test
-all:
-  children:
-    molecule:
-      hosts:
-        ubuntu-24:
-          mp:
-            podman:
-              image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
-            kubevirt:
-              boot_source:
-                type: container_disk
-                image: quay.io/containerdisks/ubuntu:24.04
-              ssh_user: ubuntu
-```
-
-```yaml
-# inventory/group_vars/molecule.yml — backend selector and shared defaults
-mp_backend: "{{ lookup('ansible.builtin.env', 'PROVISIONER') | default('podman', true) }}"
-
-mp_defaults:
-  podman:
-    command: /sbin/init
-    privileged: true
-  kubevirt:
-    namespace: molecule
-    memory: 1Gi
-    ssh_user: cloud-user
-```
-
-```yaml
-# create.yml / destroy.yml / prepare.yml — one-liners using FQCN
-- name: Provision molecule instances
-  ansible.builtin.import_playbook: david_igou.molecule_provisioners.create
-```
-
-## Field-by-field translation
-
-| Pre-ansible-native                                                        | Ansible-native (this collection)                                                                                                                                          |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `driver: name: default` + `options.ansible_connection_options.connection` | gone — the role writes `ansible_connection` per host into the runtime inventory                                                                                           |
-| `platforms[].name`                                                        | inventory host name under `all.children.molecule.hosts.<name>`                                                                                                                  |
-| `platforms[].image` (podman)                                              | `hostvars[<name>].mp.podman.image`                                                                                                                                        |
-| `platforms[].image` (kubevirt containerdisk)                              | `hostvars[<name>].mp.kubevirt.boot_source` — set `type: container_disk` and `image: <containerdisk-url>`                                                                     |
-| `platforms[].command`, `.privileged`, `.volumes`, etc.                    | `hostvars[<name>].mp.podman.<field>` (or hoisted to `mp_defaults.podman` if shared)                                                                                       |
-| `platforms[].kubevirt.namespace`, `.memory`, etc.                         | `hostvars[<name>].mp.kubevirt.<field>` (or hoisted to `mp_defaults.kubevirt`)                                                                                             |
-| `provisioner.name: ansible` + `provisioner.playbooks.*`                   | `ansible.playbooks.*`                                                                                                                                                     |
-| `provisioner.env.PROVISIONER`                                             | `mp_backend` group var (this collection populates from `lookup('ansible.builtin.env', 'PROVISIONER')` in the example boilerplate, but the contract is `mp_backend`, not the env var name) |
-
-## Steps
-
-### 1. Add the dependency
-
-Pin the dependency in `extensions/molecule/requirements-test.yml`:
-
-```yaml
-collections:
-  - name: david_igou.molecule_provisioners
-    version: 0.0.7-alpha
-```
-
-Copy [`examples/config.yml`](examples/config.yml) to
-`extensions/molecule/config.yml` so every scenario uses this requirements file.
-These docs describe `main`; use the matching release-tag documentation when
-migrating to a pinned release.
-
-### 2. Create the new inventory tree
-
-```bash
-mkdir -p extensions/molecule/<scenario>/inventory/group_vars
-```
-
-Translate each `platforms[]` entry into a host under `all.children.molecule.hosts` in `inventory/hosts.yml` (see the After example above).
-
-### 3. Replace the scenario's `molecule.yml`
-
-Copy [`examples/molecule.yml`](examples/molecule.yml) and adjust the scenario name and test sequence as needed. Copy [`examples/Makefile`](examples/Makefile) and [`examples/ansible.cfg`](examples/ansible.cfg) to the collection root.
-
-### 4. Replace the lifecycle files
-
-Replace `create.yml`/`destroy.yml`/`prepare.yml` with the one-liner FQCN imports from `docs/examples/`.
-
-### 5. Verify
-
-```bash
-export MOLECULE_GLOB='extensions/molecule/*/molecule.yml'
-ansible-galaxy collection install -r extensions/molecule/requirements-test.yml
-PROVISIONER=podman   molecule test -s <scenario>
-PROVISIONER=kubevirt molecule test -s <scenario>   # if you have a cluster with KubeVirt
-```
-
-Both should pass. If a host fails with "missing mp.<backend> in inventory", you forgot to add the backend block to that host. If validation fails with "mp_backend must be one of ...", set `mp_backend` in `inventory/group_vars/molecule.yml`.
-
-## Unsupported configurations
-
-- Azure and GCP backends.
-- QEMU via libvirtd, qemu+ssh remote URIs, or NAT/bridge networking. The QEMU backend runs local processes with SLIRP networking.
-- KubeVirt LoadBalancer or ClusterIP+port-forward services. `NodePort`, `None`, and `PodIP` are supported; see [SSH service types](../roles/kubevirt/README.md#ssh-service-types).
-- Mixing backends within a single scenario run.
-- Molecule's `shared_state` pattern.
-
-## KubeVirt schema: `image:` → `boot_source:`
-
-The bare `image:` shortcut was removed. Rewrite per-host blocks:
-
-### Before
-
-```yaml
-mp:
-  kubevirt:
-    image: quay.io/containerdisks/ubuntu:24.04
-```
-
-### After
-
-```yaml
-mp:
-  kubevirt:
-    boot_source:
-      type: container_disk
-      image: quay.io/containerdisks/ubuntu:24.04
-```
-
-Four additional boot-source modes are available: `data_volume_url`,
-`data_volume_pvc`, `data_volume_source_ref`, and `pvc`. See
-[Boot sources](../roles/kubevirt/README.md#boot-sources).
-
-## AWS EC2 driver
-
-Replace the `ec2` driver and `platforms` with `mp_backend: aws`, native inventory
-and the public create/prepare/destroy imports. Use `mp_defaults.aws` for shared
-values and `mp.aws` for per-host values. Follow the [AWS walkthrough](AWS.md)
-for installation and a complete scenario; see [the reference](../roles/aws/README.md)
-for all supported fields. AWS requires collection version 0.0.7-alpha or later.
-
-| Molecule EC2 platform option | AWS provisioner field |
+| 0.0.7-alpha | Now |
 | --- | --- |
-| `name` | Logical inventory host name |
-| `image` | `image_id` |
-| `image_name`, `image_owner`, `image_filters` | Same names |
-| `instance_type`, `region` | Same names |
-| `aws_profile` | `profile` |
-| `vpc_subnet_id`, `vpc_id` | `subnet_id`, `vpc_id` |
-| VPC/subnet filters | `vpc_filters`, `subnet_filters`; selection must be unique |
-| `assign_public_ip` | Same name; `connection_address` selects management address |
-| `security_groups` | Same name; existing groups are never modified |
-| `security_group_name`, `security_group_description` | Same names; generated names include run identity |
-| `security_group_rules`, `security_group_rules_egress` | Same names; explicit ingress required |
-| `key_inject_method`, `key_name`, `private_key_path` | Same names |
-| `public_key_path` | Not needed; derive public material from the private key |
-| `cloud_config` | `cloud_init.user_data` (structured mapping) |
-| `user_data` | Same name; opaque payload, use `ec2` or `none` injection |
-| `volumes` | Same module-shaped block mappings; disposable generated disks |
-| `network_interfaces`, `network_interfaces_ids` | Generated interfaces or explicit existing references |
-| `iam_instance_profile` | Same name; applied to the instance |
-| `tags` | Same name; ownership/Name keys reserved |
-| `instance_options` | Supported compute/placement/metadata settings; see reference |
-| `ssh_user`, `ssh_port`, `connection` | Same names |
-| `connection_options` | `connection_vars` |
-| `admin_user`, `boot_wait_seconds` | Same names |
+| podman `podman_network` | `network` (names) plus `mp_podman_networks` (`podman_network` arguments) |
+| podman `security_opts` | `security_opt` |
+| podman `devices` | `device` |
+| podman `restart_retries: 3` | `restart_policy: on-failure:3` |
+| podman `extra_opts`, `cgroup_manager`, `storage_opt`, `storage_driver` | `cmd_args` (raw `podman` flags) |
+| docker `networks` creation | `mp_docker_networks` (`docker_network` arguments); `networks` only attaches |
+| docker `override_command: false` | `command: null` |
+| docker `purge_networks` | removed |
 
-This backend's `network.mode: auto` creates an isolated run-owned network when no
-existing target is selected. Generated ingress has no unrestricted internet defaults. Launches
-use stable client tokens and cleanup follows recorded ownership rather than names.
-Windows listeners remain image/bootstrap responsibilities; choose WinRM or PSRP
-explicitly. For RDP use a client that prompts for credentials.
+### qemu
 
-## VMware driver
-
-Select `mp_backend: vmware` and replace `driver: vmware` / `platforms` with native
-inventory. The complete contract and prerequisites are in the
-[VMware role reference](../roles/vmware/README.md).
-
-| Old setting | Native inventory replacement |
+| 0.0.7-alpha | Now |
 | --- | --- |
-| `platforms[].name` | Host under the `molecule` group; optional `mp.vmware.name` for a fixed VM display name |
-| `driver.vcenter_hostname` | `mp_defaults.vmware.vcenter.hostname` or `VMWARE_HOST` |
-| `driver.vcenter_username/password` | `vcenter.credentials.username/password` or `VMWARE_USER` / `VMWARE_PASSWORD` |
-| `driver.validate_certs` | `vcenter.validate_certs`; new default true, explicit false supported |
-| `driver.datacenter/cluster/esxi_hostname/folder` | Same fields under shared or per-host VMware settings |
-| `platforms[].template/snapshot_src/resource_pool/hardware/networks` | Same fields under `mp.vmware` |
-| `driver.instance_os_type` | `instance_os_type`, default linux; per host |
-| `driver.vm_username/vm_password` | `guest.credentials.username/password` |
-| `driver.dns_servers` | `customization.dns_servers` |
-| Windows `platforms[].customization.fullname/orgname` | `customization.fullname/orgname` |
-| `driver.winrm_port/connection` | `connection_port/connection` |
-| `driver.winrm_transport/winrm_server_cert_validation` | `connection_vars.ansible_winrm_transport/ansible_winrm_server_cert_validation` |
-| `driver.ssh_connection_options` | `connection_vars.ansible_ssh_common_args` |
-| Instance config and safe files | Private native runtime inventory and retained ownership journal |
+| `application_ports`, `networks`, `nics` | `extra_args` (`-netdev user,...,hostfwd=...` and `-device`) |
+| `connection: network_cli`, `connection_probe` | Override `prepare.yml` with your own readiness plays |
+| `diagnostics` | Prepare prints the end of the serial log on failure |
+| `mp_qemu_run_isolation`, `mp_qemu_slirp_port_base`, `ssh_host_port` | `mp_qemu_ssh_port_base` (each run takes 20 ports from it) |
+| `mp_qemu_image_cache_dir`, `mp_qemu_runtime_cache_dir` | `mp_qemu_cache_dir` (images only; run files live in the ephemeral directory) |
 
-A snapshot now implies `linked_clone: true`, correcting the old driver's documented
-intent. Set `linked_clone: false` explicitly for a full clone from a snapshot.
-Windows uses a scoped listener firewall rule, and existing Linux authorized keys
-are preserved. VMware dependencies use the collection's standard Galaxy and Python
-requirements; the old standalone driver's pyvmomi-only prerequisites do not
-describe the modern VMware collection dependencies.
+Destroy guests created by 0.0.7-alpha with 0.0.7-alpha before upgrading.
+
+### kubevirt
+
+| 0.0.7-alpha | Now |
+| --- | --- |
+| `boot_source.type: data_volume_url` with `url` | `type: data_volume` with `source: {http: {url: ...}}` |
+| `boot_source.type: data_volume_pvc` with `source` | `type: data_volume` with `source: {pvc: {name: ..., namespace: ...}}` |
+| `boot_source.type: data_volume_source_ref` | `type: data_volume` with `source_ref` |
+| `extra_disks`, `extra_volumes`, `extra_interfaces`, `extra_networks` | `vm_overrides` (lists are appended) |
+| `vm_definition` | `vm_overrides`, or `interfaces`/`networks`/`data_disks` |
+| `admin_user`, `admin_password` | `connection_vars.ansible_user`, `connection_vars.ansible_password` |
+| `cloud_init.user_data_secret`, `network_data_secret`, `inject_ssh_key` | `cloud_init.enabled: false` plus a cloud-init volume in `vm_overrides` |
+| `instancetype`/`preference` as a mapping | The name as a string |
+| `memory_limit` | `vm_overrides` |
+| `mp_kubevirt_run_isolation`, `mp_kubevirt_cleanup_timeout` | Removed; every run is isolated and `mp_kubevirt_wait_timeout` covers cleanup |
+
+Resource names are now `<host>-<run id>` and carry the label
+`molecule-provisioners/run-id`. Destroy guests created by 0.0.7-alpha with
+0.0.7-alpha before upgrading.

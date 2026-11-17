@@ -1,0 +1,7 @@
+---
+- name: Converge
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Check that Ansible modules run on the guest
+      ansible.builtin.ping:

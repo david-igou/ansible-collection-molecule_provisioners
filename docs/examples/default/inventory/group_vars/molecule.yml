@@ -1,0 +1,23 @@
+---
+# PROVISIONER=qemu molecule test switches the whole scenario to VMs.
+mp_backend: "{{ lookup('ansible.builtin.env', 'PROVISIONER') | default('podman', true) }}"
+
+mp_defaults:
+  podman:
+    # Any containers.podman.podman_container option.
+    image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
+  docker:
+    # Any community.docker.docker_container option.
+    image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
+  qemu:
+    # ansible-doc -t role david_igou.molecule_provisioners.qemu -e instance
+    image: https://cloud-images.ubuntu.com/releases/noble/release-20260518/ubuntu-24.04-server-cloudimg-amd64.img
+    image_checksum: sha256:53fdde898feed8b027d94baa9cfe8229867f330a1d9c49dc7d84465ee7f229f7
+    ssh_user: ubuntu
+  kubevirt:
+    # ansible-doc -t role david_igou.molecule_provisioners.kubevirt -e instance
+    namespace: molecule
+    boot_source:
+      type: container_disk
+      image: quay.io/containerdisks/ubuntu:24.04
+    ssh_user: ubuntu

@@ -1,45 +1,45 @@
 ---
-# Defaults for david_igou.molecule_provisioners.qemu (process driver, slirp networking).
-
-# SSH keypair lives in the molecule ephemeral dir so destroy can find it.
-mp_qemu_ssh_key_path: "{{ molecule_ephemeral_directory }}/identity_file"
-
-# wait_for_connection timeout (seconds) for prepare phase.
-# Boot under TCG is much slower than KVM — keep generous.
-mp_qemu_wait_timeout: 180
-
-# Base port for SLIRP host-forwards. ansible_port = base + host index.
-mp_qemu_slirp_port_base: 2222
-
-# Base-image download robustness. get_url's default 10s read timeout is
-# too tight for cloud-image mirrors that stall before the first byte
-# (cloud.debian.org does this intermittently); retry a few times on top.
-mp_qemu_image_download_timeout: 60
-mp_qemu_image_download_retries: 5
-
-# Image cache root. Honours XDG_CACHE_HOME, falls back to ~/.cache/molecule-qemu.
-mp_qemu_image_cache_dir: >-
-  {{ (lookup('env', 'XDG_CACHE_HOME') | default(lookup('env', 'HOME') ~ '/.cache', true))
-     ~ '/molecule-qemu' }}
-
-# OVMF firmware image paths (used when firmware: uefi is set per host).
-# Override in group_vars if your distro ships OVMF at a different path.
-mp_qemu_ovmf_code: /usr/share/edk2/ovmf/OVMF_CODE.fd
-mp_qemu_ovmf_vars: /usr/share/edk2/ovmf/OVMF_VARS.fd
-
-# Per-host field defaults. Layered as: this dict <- mp_defaults.qemu <- hostvars[item].mp.qemu.
-# Only `image` is required and is therefore absent from this dict.
-mp_qemu_role_defaults:
+# Settings every guest starts from. mp_defaults.qemu and then each host's
+# mp.qemu are merged over this dict. The schema is the role's "instance"
+# argument spec. `image` has no default and is required.
+mp_qemu_instance_defaults:
+  image_checksum: ""
   cpus: 2
   memory: 1024
   ssh_user: cloud-user
   firmware: bios
-  # Empty selects host under KVM, Nehalem under TCG (BIOS and UEFI).
   cpu_model: ""
+  disk_size: ""
+  cloud_init:
+    user_data: {}
+    network_data: {}
+  data_disks: []
+  extra_args: []
 
-# Shared controller lock location must be the same for all concurrent runs.
-mp_qemu_run_isolation: true
-mp_qemu_runtime_cache_dir: "{{ mp_qemu_image_cache_dir }}/runtime"
-mp_qemu_cleanup_timeout: 30
-# Guest logs can contain secrets. File paths and status are always reported.
-mp_qemu_print_diagnostic_tails: false
+# Downloaded and decompressed images are kept here between runs.
+mp_qemu_cache_dir: >-
+  {{ lookup('ansible.builtin.env', 'XDG_CACHE_HOME')
+     | default(lookup('ansible.builtin.env', 'HOME') ~ '/.cache', true) }}/molecule_provisioners/qemu
+mp_qemu_download_timeout: 60
+
+mp_qemu_binary: qemu-system-x86_64
+
+# Guest SSH is forwarded from 127.0.0.1. Each run takes a block of 20 ports
+# derived from its run id so concurrent scenarios rarely collide.
+mp_qemu_ssh_port_base: 20000
+
+# Seconds prepare waits for the guest to accept an Ansible connection.
+mp_qemu_wait_timeout: 300
+# Seconds destroy waits for a guest to exit after SIGTERM.
+mp_qemu_stop_timeout: 30
+
+# UEFI firmware. The vars store is copied per guest.
+mp_qemu_ovmf_code: >-
+  {{ lookup('ansible.builtin.first_found', mp_qemu_ovmf_code_paths, skip=true) }}
+mp_qemu_ovmf_vars: "{{ mp_qemu_ovmf_code | replace('_CODE', '_VARS') }}"
+mp_qemu_ovmf_code_paths:
+  - /usr/share/edk2/ovmf/OVMF_CODE.fd
+  - /usr/share/OVMF/OVMF_CODE_4M.fd
+  - /usr/share/OVMF/OVMF_CODE.fd
+  - /usr/share/edk2/x64/OVMF_CODE.4m.fd
+  - /usr/share/qemu/ovmf-x86_64-code.bin

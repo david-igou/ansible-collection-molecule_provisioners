@@ -1,264 +1,318 @@
 ---
 argument_specs:
-  main:
-    short_description: >-
-      Default entry point — does nothing on its own; use tasks_from=create|destroy|prepare.
-    options: {}
   create:
-    short_description: >-
-      Create KubeVirt VirtualMachines and NodePort services for hosts in groups['molecule'].
+    short_description: Create one KubeVirt VirtualMachine per molecule host
+    description:
+      - Each host's settings are C(mp_kubevirt_instance_defaults), then
+        C(mp_defaults.kubevirt), then the host's C(mp.kubevirt), merged
+        recursively in that order and validated against the C(instance) entry point.
+      - Resources are named C(<inventory_hostname>-<mp_run_id>) and labelled with
+        the run id, so parallel runs never collide.
     options:
-      mp_kubevirt_run_isolation:
-        type: bool
-        default: true
-        description: Persist run-scoped names in the Molecule ephemeral directory; set false for fixed names.
-      mp_kubevirt_cleanup_timeout:
-        type: int
-        default: 120
-        description: Seconds to wait for isolated resources to disappear during destroy.
-      mp_kubevirt_role_defaults:
+      mp_kubevirt_instance_defaults:
         type: dict
-        description: >-
-          Per-host field defaults. Currently includes namespace, ssh_user, memory,
-          connection (default ssh), and ssh_service.type. Layered as: this dict <- mp_defaults.kubevirt
-          <- hostvars[item].mp.kubevirt. Per-host hostvars accepts a much wider
-          schema (boot_source, cpu, memory_limit, scheduling, extras, vm_overrides,
-          cloud_init, interfaces, networks, vm_definition, boot_disk, data_disks,
-          connection_vars, application_ports); see roles/kubevirt/README.md.
-      mp_kubevirt_ssh_key_path:
-        type: path
-        description: >-
-          SSH private key path; generated for simple-variable guests and supplied
-          by the caller for full definitions. Defaults to molecule_ephemeral_directory/identity_file.
-      mp_kubevirt_allowed_ssh_service_types:
-        type: list
-        elements: str
-        description: Allowlist for ssh_service.type. Supports NodePort, None, and PodIP.
-      mp_kubevirt_podip_lookup_retries:
+        description: Instance settings applied before mp_defaults.kubevirt and mp.kubevirt.
+      mp_kubevirt_wait_timeout:
         type: int
-        description: PodIP mode — retries for the VMI pod-IP lookup (default 60).
-      mp_kubevirt_podip_lookup_delay:
-        type: int
-        description: PodIP mode — delay in seconds between VMI pod-IP lookups (default 5).
-      mp_kubevirt_allowed_connections:
-        type: list
-        elements: str
-        description: >-
-          Allowlist for the per-host mp.kubevirt.connection discriminator.
-          Defaults to [ssh, psrp, winrm]. ssh injects an SSH key via cloud-init;
-          psrp/winrm drive Windows guests over WinRM-over-HTTPS (5986, NTLM,
-          cert validation off) and require admin_password (and typically a
-          sysprep_secret) in the per-host spec.
+        default: 600
+        description:
+          - Seconds to wait for the VM to become Ready (including disk imports) and for its pod IP.
   destroy:
-    short_description: Delete KubeVirt VirtualMachines and NodePort services.
+    short_description: Delete the VirtualMachines, Services and cloud-init Secrets of this run
     options:
-      mp_kubevirt_run_isolation:
-        type: bool
-        default: true
-        description: Persist run-scoped names in the Molecule ephemeral directory; set false for fixed names.
-      mp_kubevirt_cleanup_timeout:
-        type: int
-        default: 120
-        description: Seconds to wait for isolated resources to disappear during destroy.
-      mp_kubevirt_role_defaults:
+      mp_kubevirt_instance_defaults:
         type: dict
+        description: Instance settings applied before mp_defaults.kubevirt and mp.kubevirt.
+      mp_kubevirt_wait_timeout:
+        type: int
+        default: 600
+        description: Seconds to wait for the resources to disappear.
   prepare:
-    short_description: Wait for KubeVirt-provisioned hosts to be reachable.
+    short_description: Wait until each guest accepts connections and cloud-init has finished
     options:
       mp_kubevirt_wait_timeout:
         type: int
-        default: 120
-        description: wait_for_connection timeout (seconds) for ssh/Linux hosts.
+        default: 600
+        description: Seconds to wait for an SSH guest.
       mp_kubevirt_windows_wait_timeout:
         type: int
         default: 900
-        description: >-
-          wait_for_connection timeout (seconds) for Windows (psrp/winrm) hosts.
-          Generous by default to cover OOBE specialize + FirstLogonCommands.
-  definition:
-    short_description: Validate a full per-host VirtualMachine definition.
+        description: Seconds to wait for a psrp or winrm guest.
+  instance:
+    short_description: Per-host settings (mp.kubevirt), validated by create
+    description:
+      - Not a task entry point. Documents the merged C(mp.kubevirt) settings of
+        one host. Unknown keys fail validation.
     options:
-      vm_definition:
+      kubevirt:
         type: dict
         required: true
-        no_log: true
-        description: >-
-          Desired-state kubevirt.io/v1 VirtualMachine manifest replacing generated
-          VM configuration. Mutually exclusive with simple VM parameters and
-          vm_overrides. Identity remains managed by the provisioner.
-  customization:
-    short_description: Validate per-host cloud-init and network configuration before provisioning.
-    options:
-      cloud_init:
-        type: dict
-        default: {}
-        description: Guest bootstrap configuration; NoCloud is enabled by default for SSH guests.
+        description: The merged settings of one host.
+        mutually_exclusive:
+          - - instancetype
+            - cpu
+          - - instancetype
+            - memory
         options:
-          enabled:
-            type: bool
-            description: Attach cloud-init media; defaults to true for SSH and false for PSRP/WinRM.
-          inject_ssh_key:
-            type: bool
-            description: Merge generated SSH access into user data; defaults to true for SSH guests.
-          user_data:
+          boot_source:
             type: dict
-            no_log: true
-            description: Cloud-config mapping; mutually exclusive with user_data_secret.
-          user_data_secret:
+            required: true
+            description: Where the boot disk comes from.
+            required_if:
+              - - type
+                - container_disk
+                - - image
+              - - type
+                - pvc
+                - - name
+              - - type
+                - data_volume
+                - - size
+              - - type
+                - data_volume
+                - - source
+                  - source_ref
+                - true
+            mutually_exclusive:
+              - - source
+                - source_ref
+            options:
+              type:
+                type: str
+                required: true
+                choices:
+                  - container_disk
+                  - data_volume
+                  - pvc
+                description:
+                  - C(container_disk) boots an ephemeral copy of a container image.
+                  - C(data_volume) imports a disk with CDI, deleted with the VM.
+                  - C(pvc) boots an existing PersistentVolumeClaim in place.
+              image:
+                type: str
+                description: Container disk image (container_disk).
+              name:
+                type: str
+                description: Existing PVC name (pvc).
+              source:
+                type: dict
+                description: >-
+                  Raw CDI DataVolume source (data_volume), for example
+                  C({http: {url: ...}}), C({registry: {url: ...}}) or C({pvc: {name: ..., namespace: ...}}).
+              source_ref:
+                type: dict
+                description: CDI DataSource reference (data_volume). C(kind) defaults to DataSource.
+                options:
+                  name:
+                    type: str
+                    required: true
+                    description: DataSource name.
+                  namespace:
+                    type: str
+                    description: DataSource namespace.
+                  kind:
+                    type: str
+                    description: Reference kind.
+              size:
+                type: str
+                description: Requested size of the imported disk, such as C(20Gi) (data_volume).
+              storage_class:
+                type: str
+                description: Storage class; the cluster default when omitted.
+              volume_mode:
+                type: str
+                choices:
+                  - Filesystem
+                  - Block
+                description: Volume mode; CDI's StorageProfile decides when omitted.
+              access_modes:
+                type: list
+                elements: str
+                description: Access modes; CDI's StorageProfile decides when omitted.
+          namespace:
             type: str
-            description: Existing same-namespace Secret containing userdata; requires inject_ssh_key false.
-          network_data:
+            description: Namespace for every resource of the host. Defaults to C(molecule).
+          ssh_user:
+            type: str
+            description: Management user created by cloud-init with the generated SSH key. Defaults to C(cloud-user).
+          cpu:
             type: dict
-            no_log: true
-            description: Cloud-init network-config mapping; mutually exclusive with network_data_secret.
-          network_data_secret:
+            description: Guest CPU topology. Excludes instancetype.
+            options:
+              cores:
+                type: int
+                description: Cores per socket.
+              sockets:
+                type: int
+                description: Sockets.
+              threads:
+                type: int
+                description: Threads per core.
+              model:
+                type: str
+                description: CPU model, such as C(host-passthrough).
+          memory:
             type: str
-            description: Existing same-namespace Secret containing networkdata.
-      interfaces:
-        type: list
-        elements: dict
-        description: KubeVirt interfaces replacing the default masquerade interface; extras still append.
-      networks:
-        type: list
-        elements: dict
-        description: KubeVirt networks replacing the default pod network; extras still append.
-  access:
-    short_description: Validate per-host management and application access.
-    options:
-      connection_vars:
-        type: dict
-        no_log: true
-        description: Ansible connection options merged over defaults; endpoint and plugin fields are protected.
-      ssh_service:
-        type: dict
-        description: Management access mode and guest listener port.
-        options:
-          type:
+            description: Requested guest memory, such as C(2Gi). Defaults to C(1Gi) when no instancetype is set.
+          instancetype:
             type: str
-            description: Management endpoint mode; defaults to NodePort.
-            choices:
-              - NodePort
-              - "None"
-              - PodIP
-          port:
-            type: int
-            description: In-guest management port in every access mode; defaults to 22 or 5986.
-      application_ports:
-        type: list
-        elements: dict
-        description: Application ports on the management Service, with direct endpoints in None/PodIP mode.
-        options:
-          name:
+            description: VirtualMachineClusterInstancetype name. Excludes cpu and memory.
+          preference:
             type: str
-            required: true
-            description: Unique Service port name, at most 15 characters; management is reserved.
-          port:
-            type: int
-            required: true
-            description: Service port; also the guest port unless target_port is set.
-          target_port:
-            type: int
-            description: In-guest application port.
-          protocol:
-            type: str
-            description: Transport protocol; defaults to TCP.
-            choices:
-              - TCP
-              - UDP
-  storage:
-    short_description: Validate generated boot and data disks.
-    options:
-      boot_storage:
-        type: dict
-        description: Storage mode options read from the generated boot_source.
-        options:
-          volume_mode:
-            type: str
-            description: PVC volume mode; CDI uses its StorageProfile when omitted.
-            choices:
-              - Filesystem
-              - Block
-          access_modes:
+            description: VirtualMachineClusterPreference name.
+          node_selector:
+            type: dict
+            description: Pod node selector.
+          tolerations:
             type: list
-            elements: str
-            description: PVC access modes; CDI uses its StorageProfile when omitted.
-            choices:
-              - ReadWriteOnce
-              - ReadWriteMany
-              - ReadOnlyMany
-              - ReadWriteOncePod
-      boot_disk:
-        type: dict
-        description: Bus and optional boot order for the generated boot disk.
-        options:
-          bus:
-            type: str
-            description: Boot-disk bus; defaults to virtio.
-            choices:
-              - virtio
-              - sata
-              - scsi
-          boot_order:
-            type: int
-            description: Positive unique KubeVirt bootOrder; omitted by default.
-      data_disks:
-        type: list
-        elements: dict
-        description: Managed persistent disks backed by generated CDI DataVolume templates.
-        options:
-          name:
-            type: str
-            required: true
-            description: Unique guest disk/volume name; generated resource names remain managed.
-          size:
-            type: str
-            required: true
-            description: Requested storage quantity, such as 10Gi.
-          source:
+            elements: dict
+            description: Pod tolerations.
+          affinity:
             type: dict
-            description: Raw CDI source mapping; defaults to a blank image when neither source nor source_ref is set.
-          source_ref:
+            description: Pod affinity.
+          cloud_init:
             type: dict
-            description: DataSource reference; mutually exclusive with source.
+            description: NoCloud data, stored in a Secret.
+            options:
+              enabled:
+                type: bool
+                description: Attach cloud-init data. Defaults to true for ssh guests and false for psrp/winrm.
+              user_data:
+                type: dict
+                description: >-
+                  Cloud-config mapping. For ssh guests the management user and its key are
+                  merged into C(users) by name.
+              network_data:
+                type: dict
+                description: Cloud-init network-config mapping.
+          interfaces:
+            type: list
+            elements: dict
+            description: KubeVirt interfaces. Replace the default masquerade interface named C(default).
+          networks:
+            type: list
+            elements: dict
+            description: KubeVirt networks paired with interfaces by name. Replace the default pod network.
+          boot_disk:
+            type: dict
+            description: Boot disk device settings.
+            options:
+              bus:
+                type: str
+                choices:
+                  - virtio
+                  - sata
+                  - scsi
+                description: Disk bus; the preference or KubeVirt decides when omitted.
+              boot_order:
+                type: int
+                description: KubeVirt bootOrder.
+          data_disks:
+            type: list
+            elements: dict
+            description: Extra disks created as DataVolumes (blank unless a source is given).
+            mutually_exclusive:
+              - - source
+                - source_ref
             options:
               name:
                 type: str
                 required: true
-                description: Existing DataSource name.
-              namespace:
+                description: Disk and volume name.
+              size:
                 type: str
                 required: true
-                description: Existing DataSource namespace; cross-namespace grants are caller-owned.
-              kind:
+                description: Size, such as C(10Gi).
+              source:
+                type: dict
+                description: Raw CDI source. Defaults to a blank disk.
+              source_ref:
+                type: dict
+                description: CDI DataSource reference.
+              storage_class:
                 type: str
-                description: Reference kind; defaults to DataSource.
+                description: Storage class; the cluster default when omitted.
+              volume_mode:
+                type: str
                 choices:
-                  - DataSource
-          storage_class:
+                  - Filesystem
+                  - Block
+                description: Volume mode.
+              access_modes:
+                type: list
+                elements: str
+                description: Access modes.
+              bus:
+                type: str
+                choices:
+                  - virtio
+                  - sata
+                  - scsi
+                description: Disk bus.
+              boot_order:
+                type: int
+                description: KubeVirt bootOrder.
+          connection:
             type: str
-            description: Storage class; omitted for CDI defaults, or empty for no class.
-          volume_mode:
-            type: str
-            description: PVC volume mode; defaults come from CDI's StorageProfile.
             choices:
-              - Filesystem
-              - Block
-          access_modes:
+              - ssh
+              - psrp
+              - winrm
+            description: >-
+              Ansible connection for converge and verify. psrp and winrm use
+              HTTPS with NTLM. Defaults to C(ssh).
+          connection_vars:
+            type: dict
+            description: >-
+              Host vars merged over the generated connection settings, for example
+              C(ansible_user) and C(ansible_password) for Windows guests.
+          connection_ip:
+            type: str
+            description: Address the controller connects to. Required with ssh_service type None.
+          ssh_service:
+            type: dict
+            description: How the controller reaches the management port.
+            options:
+              type:
+                type: str
+                choices:
+                  - NodePort
+                  - PodIP
+                  - None
+                description:
+                  - C(NodePort) creates a Service and connects to a Ready node's InternalIP (or connection_ip).
+                  - C(PodIP) connects to the VMI pod network address; for controllers inside the cluster.
+                  - C(None) creates no Service and connects to connection_ip.
+              port:
+                type: int
+                description: Guest management port. Defaults to 22, or 5986 for psrp/winrm.
+          application_ports:
             type: list
-            elements: str
-            description: PVC access modes; defaults come from CDI's StorageProfile.
-            choices:
-              - ReadWriteOnce
-              - ReadWriteMany
-              - ReadOnlyMany
-              - ReadWriteOncePod
-          bus:
+            elements: dict
+            description: Extra guest ports, published to converge and verify as C(mp_kubevirt_endpoints).
+            options:
+              name:
+                type: str
+                required: true
+                description: Port name (at most 15 characters, not C(management)).
+              port:
+                type: int
+                required: true
+                description: Service port, and guest port unless target_port is set.
+              target_port:
+                type: int
+                description: Guest port.
+              protocol:
+                type: str
+                choices:
+                  - TCP
+                  - UDP
+                description: Protocol. Defaults to TCP.
+          sysprep_secret:
             type: str
-            description: Guest disk bus; defaults to virtio.
-            choices:
-              - virtio
-              - sata
-              - scsi
-          boot_order:
-            type: int
-            description: Positive unique KubeVirt bootOrder; omitted by default.
+            description: Existing Secret with C(unattend.xml) attached as a sysprep CD-ROM (Windows).
+          vm_overrides:
+            type: dict
+            description: >-
+              Merged recursively over the rendered VirtualMachine. Lists append,
+              so extra disks, volumes, interfaces and networks go here.

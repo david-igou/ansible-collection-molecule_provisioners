@@ -1,16 +1,101 @@
 ---
-- name: create | Acquire the controller lease
-  david_igou.molecule_provisioners.vmware_lock:
-    directory: "{{ molecule_ephemeral_directory }}"
-    state: held
-- name: create | Execute the create lifecycle
-  vars:
-    ansible_async_dir: "{{ molecule_ephemeral_directory }}/.vmware-async"
+- name: Validate the instance settings
+  ansible.builtin.validate_argument_spec:
+    argument_spec: >-
+      {{ (lookup('ansible.builtin.file', role_path ~ '/meta/argument_specs.yml') | from_yaml)
+         .argument_specs.instance.options }}
+    provided_arguments:
+      vmware: "{{ _mp_spec }}"
+
+- name: Generate the SSH key pair
+  community.crypto.openssh_keypair:
+    path: "{{ _mp_key }}"
+    type: ed25519
+  run_once: true
+
+- name: Create the VM
+  module_defaults:
+    group/community.vmware.vmware: "{{ mp_vmware_connection }}"
   block:
-    - name: create | Run scoped lifecycle tasks
-      ansible.builtin.include_tasks: _create.yml
-  always:
-    - name: create | Release the controller lease
-      david_igou.molecule_provisioners.vmware_lock:
-        directory: "{{ molecule_ephemeral_directory }}"
-        state: released
+    # NICs are left to vmware_guest_network: vmware_guest treats any networks
+    # entry as DHCP and runs vSphere guest customization, which renames and
+    # reboots the guest. The annotation and GuestInfo are set before power-on.
+    - name: Clone the VM
+      community.vmware.vmware_guest:
+        name: "{{ _mp_name }}"
+        datacenter: "{{ _mp_spec.datacenter }}"
+        cluster: "{{ _mp_spec.cluster | default(omit) }}"
+        esxi_hostname: "{{ _mp_spec.esxi_hostname | default(omit) }}"
+        resource_pool: "{{ _mp_spec.resource_pool | default(omit) }}"
+        folder: "{{ _mp_spec.folder }}"
+        datastore: "{{ _mp_spec.datastore | default(omit) }}"
+        template: "{{ _mp_spec.template }}"
+        snapshot_src: "{{ _mp_spec.snapshot_src | default(omit) }}"
+        linked_clone: "{{ _mp_spec.linked_clone }}"
+        hardware: "{{ _mp_spec.hardware }}"
+        disk: "{{ _mp_spec.disks }}"
+        annotation: "{{ _mp_annotation }}"
+        advanced_settings: "{{ _mp_advanced_settings if _mp_guestinfo else omit }}"
+        state: present
+      register: _mp_vm
+
+    - name: Read the clone's NICs
+      community.vmware.vmware_guest_network:
+        datacenter: "{{ _mp_spec.datacenter }}"
+        uuid: "{{ _mp_vm.instance.instance_uuid }}"
+        use_instance_uuid: true
+        gather_network_info: true
+      register: _mp_nics
+
+    # Entry n of networks configures the clone's NIC n, or adds one. Every NIC
+    # is set to connect: clones have come out of vCenter set not to.
+    - name: Configure and connect the NICs
+      vars:
+        _nic: "{{ (_mp_nics.network_info | sort(attribute='unit_number'))[idx] | default({}) }}"
+        _net: "{{ _mp_spec.networks[idx] | default({}) }}"
+      community.vmware.vmware_guest_network:
+        datacenter: "{{ _mp_spec.datacenter }}"
+        uuid: "{{ _mp_vm.instance.instance_uuid }}"
+        use_instance_uuid: true
+        label: "{{ _nic.label | default(omit) }}"
+        network_name: "{{ _net.name | default(_nic.network_name) }}"
+        switch: "{{ _net.switch | default(omit) }}"
+        device_type: "{{ omit if _nic else _net.device_type | default(omit) }}"
+        mac_address: "{{ omit if _nic else _net.mac_address | default(omit) }}"
+        force: "{{ not _nic }}" # add even when a NIC is on the same network
+        connected: true
+        start_connected: true
+      loop: "{{ range([_mp_nics.network_info | length, _mp_spec.networks | length] | max) | list }}"
+      loop_control:
+        loop_var: idx
+
+    - name: Start the VM
+      community.vmware.vmware_guest:
+        datacenter: "{{ _mp_spec.datacenter }}"
+        uuid: "{{ _mp_vm.instance.instance_uuid }}"
+        use_instance_uuid: true
+        state: poweredon
+
+    - name: Wait for the guest IPv4 address
+      community.vmware.vmware_guest_info:
+        datacenter: "{{ _mp_spec.datacenter }}"
+        uuid: "{{ _mp_vm.instance.instance_uuid }}"
+        use_instance_uuid: true
+      register: _mp_info
+      until: >-
+        _mp_info.instance.ipv4 is string
+        and not _mp_info.instance.ipv4.startswith('169.254.')
+      retries: "{{ mp_vmware_wait_timeout // 5 }}"
+      delay: 5
+
+- name: Record the connection settings
+  ansible.builtin.set_fact:
+    mp_runtime: >-
+      {{ {'ansible_host': _mp_info.instance.ipv4,
+          'ansible_user': _mp_spec.ssh_user,
+          'ansible_ssh_common_args': '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null',
+          'mp_vmware_name': _mp_name,
+          'mp_vmware_instance_uuid': _mp_info.instance.instance_uuid}
+         | combine({'ansible_ssh_private_key_file': _mp_key} if _mp_guestinfo else {},
+                   _mp_spec.connection_vars) }}
+  no_log: "{{ _mp_spec.connection_vars | length > 0 }}" # may hold passwords

@@ -1,0 +1,39 @@
+---
+_mp_spec: >-
+  {{ mp_vmware_instance_defaults
+     | combine(mp_defaults.vmware | default({}), mp.vmware | default({}), recursive=true) }}
+_mp_guestinfo: "{{ _mp_spec.bootstrap == 'guestinfo' }}"
+
+# The run id keeps parallel runs apart; the annotation marks the VM as ours
+# and destroy removes only a VM that carries it.
+_mp_name: "{{ inventory_hostname }}-{{ mp_run_id }}"
+_mp_annotation: >-
+  Molecule instance {{ inventory_hostname }} of run {{ mp_run_id }},
+  created by david_igou.molecule_provisioners. molecule destroy deletes it.
+_mp_key: "{{ molecule_ephemeral_directory }}/identity_file"
+
+# GuestInfo bootstrap: cloud-init's VMware datasource reads these before the
+# first boot. List keys of user_data (users, runcmd, write_files, ...) append
+# to the management user.
+_mp_user_data:
+  users:
+    - name: "{{ _mp_spec.ssh_user }}"
+      sudo: ALL=(ALL) NOPASSWD:ALL
+      shell: /bin/bash
+      ssh_authorized_keys:
+        - "{{ lookup('ansible.builtin.file', _mp_key ~ '.pub') }}"
+_mp_user_data_doc: |
+  #cloud-config
+  {{ _mp_user_data | combine(_mp_spec.cloud_init.user_data, list_merge='append') | to_nice_yaml(indent=2) }}
+_mp_metadata:
+  instance-id: "{{ _mp_name }}"
+  local-hostname: "{{ inventory_hostname }}"
+_mp_advanced_settings:
+  - key: guestinfo.metadata
+    value: "{{ _mp_metadata | to_json | b64encode }}"
+  - key: guestinfo.metadata.encoding
+    value: base64
+  - key: guestinfo.userdata
+    value: "{{ _mp_user_data_doc | b64encode }}"
+  - key: guestinfo.userdata.encoding
+    value: base64

@@ -1,0 +1,36 @@
+---
+# Shared by every self-test scenario. Molecule merges this file into each
+# scenario's molecule.yml when it runs from the collection root with
+# MOLECULE_GLOB set (see the Makefile). Scenarios test this checkout through
+# the .build/ collection path, so there is no dependency step and no prerun
+# (prerun would install a copy of the checkout that shadows .build/).
+prerun: false
+
+dependency:
+  name: galaxy
+  enabled: false
+
+ansible:
+  executor:
+    args:
+      ansible_playbook:
+        - --inventory=inventory/
+        - --inventory=${MOLECULE_EPHEMERAL_DIRECTORY}/inventory/
+  playbooks:
+    create: create.yml
+    destroy: destroy.yml
+    prepare: prepare.yml
+    converge: converge.yml
+    verify: verify.yml
+
+scenario:
+  test_sequence:
+    - syntax
+    - create
+    - prepare
+    - converge
+    - verify
+    - destroy
+
+verifier:
+  name: ansible

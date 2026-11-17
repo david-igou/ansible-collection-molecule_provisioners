@@ -1,116 +1,52 @@
-# `david_igou.molecule_provisioners.podman`
+# david_igou.molecule_provisioners.podman
 
-Molecule provisioner role for podman containers. Use the collection's `playbooks/{create,destroy,prepare}.yml` dispatchers to invoke this role. They select the backend using `mp_backend` from the molecule group's hostvars.
+Runs each molecule host as a Podman container named after the host. Molecule
+then reaches it through the `containers.podman.podman` connection as `root`
+(set `ansible_user` on the host to use another account).
 
-## Entry points
+## Instance settings
 
-| `tasks_from` | What it does |
-| --- | --- |
-| `create` | Computes per-host merged specs, creates user-defined podman networks, then creates containers from `hostvars[item].mp.podman.*` for each host in `groups['molecule']`. Writes `ansible_connection: containers.podman.podman` per host into the runtime inventory file. |
-| `destroy` | Removes those containers and any non-reserved networks. |
-| `prepare` | Installs `sudo` inside each container. |
+`mp.podman` is passed straight to
+[`containers.podman.podman_container`](https://docs.ansible.com/ansible/latest/collections/containers/podman/podman_container_module.html),
+so any option of that module works. The role merges, in order:
 
-## Inputs (per-host, in inventory)
+1. `mp_podman_instance_defaults`: `command: sleep infinity`
+2. `mp_defaults.podman` from `group_vars/molecule.yml`
+3. the host's own `mp.podman`
 
 ```yaml
+# inventory/group_vars/molecule.yml
+mp_backend: podman
+mp_defaults:
+  podman:
+    image: docker.io/geerlingguy/docker-ubuntu2404-ansible:latest
+    network:
+      - molecule
+mp_podman_networks:
+  - name: molecule
+    subnet: 10.89.0.0/24
+
+# inventory/hosts.yml
 all:
   children:
     molecule:
       hosts:
-        instance:
+        web: {}
+        systemd-host:
           mp:
             podman:
-              image: docker.io/...:tag         # required
-              command: /sbin/init              # optional, role default '/sbin/init'
-              privileged: false                # optional, role default false
-              volumes: []                      # optional
-              capabilities: []                 # optional
-              podman_network: []               # optional, str | list[str] | list[{name, subnet?, gateway?}]
-              env: {}                          # optional
-              tmpfs: []                        # optional
-              exposed_ports: []                # optional
-              published_ports: []              # optional
-              systemd: always                  # optional — 'always' | 'true' | 'false'
-              cgroupns: host                   # optional — 'host' | 'private'
-              hostname: <str>                  # optional
-              tty: true                        # optional
-              detach: true                     # optional (default behavior)
-              etc_hosts: {}                    # optional — dict of host:ip
-              dns_servers: []                  # optional — list of DNS server IPs
-              pid_mode: <str>                  # optional — 'host', 'container:<id>', 'private'
-              security_opts: []                # optional — e.g. seccomp=unconfined
-              devices: []                      # optional — list of '/host:/ctr[:rwm]' mappings
-              ulimits: []                      # optional — e.g. nofile=1024:2048
-              ip: <str>                        # optional — only with a network that has a subnet
-              restart_policy: <str>            # optional — 'no', 'on-failure', 'always', 'unless-stopped'
-              restart_retries: <int>           # optional — paired with restart_policy=on-failure
-              cgroup_manager: <str>            # optional — 'systemd' | 'cgroupfs' (CLI flag)
-              storage_opt: []                  # optional — list of '--storage-opt=' values
-              storage_driver: <str>            # optional — '--storage-driver=' value
-              extra_opts: []                   # optional — raw `podman` CLI flags appended last
-              labels: {}                       # optional — merged with the default owner=molecule label
+              command: /sbin/init
+              systemd: always
 ```
 
-### Network shape
+Set `command: null` to keep the image's own command. Create fails if a
+container exits within two seconds of starting, and points you at
+`podman logs`.
 
-`podman_network` accepts three shapes:
+## Role variables
 
-One network name; the role creates the network if missing, then joins it:
-
-```yaml
-podman_network: my-net
-```
-
-A list of names; the role creates missing networks, then joins both:
-
-```yaml
-podman_network:
-  - a
-  - b
-```
-
-A list of mappings with network settings; the role creates `my-net` with the
-given subnet on first apply, then joins it:
-
-```yaml
-podman_network:
-  - name: my-net
-    subnet: 10.89.0.0/24
-    gateway: 10.89.0.1
-```
-
-Names listed in `mp_podman_reserved_networks` (default: `bridge`, `none`, `host`, `slirp4netns`, `ns`, `private`) and pseudo-references prefixed with `ns:` or `container:` are skipped during network create/destroy.
-
-Set shared defaults in `mp_defaults.podman` in `inventory/group_vars/molecule.yml`. Field resolution order: role defaults <- `mp_defaults.podman` <- `hostvars[item].mp.podman`.
-
-## Startup failures
-
-After the async create jobs finish, the role waits two seconds and checks that
-every container is still running before writing runtime inventory. An exited
-or missing container fails create with its name, state, and exit code, plus a
-command to inspect its logs. Container configuration and application logs are
-not printed automatically because they may contain credentials.
-
-Failed containers remain available for inspection; run `molecule destroy` to
-remove them and the scenario's networks. This check detects immediate exits;
-it does not establish application readiness or monitor later failures.
-
-## Connection user
-
-The role writes `ansible_user: root` into the runtime inventory by default, matching the typical container default. Override per-host by setting `ansible_user` in your static inventory (in `inventory/hosts.yml`, or in `group_vars/molecule.yml`); the role reads it from hostvars before writing the runtime inventory, so consumer-set values win.
-
-## Role-level overrides
-
-See `defaults/main.yml` (`mp_podman_role_defaults`, `mp_podman_async_*`, `mp_podman_reserved_networks`, `mp_podman_executable`).
-
-`mp_podman_executable` is read from the `MOLECULE_PODMAN_EXECUTABLE` env var and is threaded through every `containers.podman.podman_*` module call (useful for swapping in `podman-remote`).
-
-## Resetting state
-
-`playbooks/reset.yml` (exposed as `david_igou.molecule_provisioners.reset`) removes every podman container labeled `owner=molecule`. Useful when a molecule run was interrupted and left containers behind.
-
-```bash
-ansible-playbook david_igou.molecule_provisioners.reset
-```
-
-The label is applied automatically by the role's create phase; user-supplied `mp.podman.labels.owner` overrides it.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `mp_podman_networks` | `[]` | `containers.podman.podman_network` arguments, one dict per network; created first, removed last |
+| `mp_podman_instance_defaults` | see above | Lowest settings layer |
+| `mp_podman_executable` | `$MOLECULE_PODMAN_EXECUTABLE` or `podman` | Podman binary for the modules and the connection |

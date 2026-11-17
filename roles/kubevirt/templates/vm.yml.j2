@@ -1,0 +1,120 @@
+{#- Rendered per host from _mp_spec; vm_overrides is merged over the result. -#}
+{%- set s = _mp_spec -%}
+{%- set boot = s.boot_source -%}
+{#- Boot and data disks that CDI imports or creates as DataVolumes. -#}
+{%- set dv_disks = ([boot | combine({'name': 'boot'})] if boot.type == 'data_volume' else []) + s.data_disks -%}
+{%- if boot.type == 'container_disk' -%}
+{%-   set boot_volume = {'containerDisk': {'image': boot.image}} -%}
+{%- elif boot.type == 'pvc' -%}
+{%-   set boot_volume = {'persistentVolumeClaim': {'claimName': boot.name}} -%}
+{%- else -%}
+{%-   set boot_volume = {'dataVolume': {'name': _mp_name ~ '-boot'}} -%}
+{%- endif -%}
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: {{ _mp_name }}
+  namespace: {{ s.namespace | to_json }}
+  labels: {{ _mp_labels | to_json }}
+spec:
+  runStrategy: Always
+{% if s.instancetype is defined %}
+  instancetype:
+    name: {{ s.instancetype | to_json }}
+{% endif %}
+{% if s.preference is defined %}
+  preference:
+    name: {{ s.preference | to_json }}
+{% endif %}
+  dataVolumeTemplates:
+{% for d in dv_disks %}
+    - metadata:
+        name: {{ _mp_name }}-{{ d.name }}
+        labels: {{ _mp_labels | to_json }}
+      spec:
+{%   if d.source_ref is defined %}
+        sourceRef: {{ {'kind': 'DataSource'} | combine(d.source_ref) | to_json }}
+{%   else %}
+        source: {{ d.source | default({'blank': {}}) | to_json }}
+{%   endif %}
+        storage:
+          resources:
+            requests:
+              storage: {{ d.size | to_json }}
+{%   if d.storage_class is defined %}
+          storageClassName: {{ d.storage_class | to_json }}
+{%   endif %}
+{%   if d.volume_mode is defined %}
+          volumeMode: {{ d.volume_mode | to_json }}
+{%   endif %}
+{%   if d.access_modes is defined %}
+          accessModes: {{ d.access_modes | to_json }}
+{%   endif %}
+{% else %}
+    []
+{% endfor %}
+  template:
+    metadata:
+      labels: {{ _mp_labels | to_json }}
+    spec:
+      domain:
+{% if s.cpu is defined %}
+        cpu: {{ s.cpu | to_json }}
+{% endif %}
+{% if s.instancetype is not defined %}
+        resources:
+          requests:
+            memory: {{ s.memory | default('1Gi') | to_json }}
+{% endif %}
+        devices:
+          disks:
+            - name: boot
+              disk: {{ ({'bus': s.boot_disk.bus} if s.boot_disk.bus is defined else {}) | to_json }}
+{% if s.boot_disk.boot_order is defined %}
+              bootOrder: {{ s.boot_disk.boot_order }}
+{% endif %}
+{% for d in s.data_disks %}
+            - name: {{ d.name | to_json }}
+              disk: {{ ({'bus': d.bus} if d.bus is defined else {}) | to_json }}
+{%   if d.boot_order is defined %}
+              bootOrder: {{ d.boot_order }}
+{%   endif %}
+{% endfor %}
+{% if _mp_cloud_init %}
+            - name: cloudinit
+              disk:
+                bus: virtio
+{% endif %}
+{% if s.sysprep_secret is defined %}
+            - name: sysprep
+              cdrom:
+                bus: sata
+{% endif %}
+          interfaces: {{ s.interfaces | to_json }}
+      networks: {{ s.networks | to_json }}
+      nodeSelector: {{ s.node_selector | to_json }}
+      tolerations: {{ s.tolerations | to_json }}
+      affinity: {{ s.affinity | to_json }}
+      volumes:
+        - {{ {'name': 'boot'} | combine(boot_volume) | to_json }}
+{% for d in s.data_disks %}
+        - name: {{ d.name | to_json }}
+          dataVolume:
+            name: {{ _mp_name }}-{{ d.name }}
+{% endfor %}
+{% if _mp_cloud_init %}
+        - name: cloudinit
+          cloudInitNoCloud:
+            secretRef:
+              name: {{ _mp_name }}-cloudinit
+{%   if s.cloud_init.network_data is defined %}
+            networkDataSecretRef:
+              name: {{ _mp_name }}-cloudinit
+{%   endif %}
+{% endif %}
+{% if s.sysprep_secret is defined %}
+        - name: sysprep
+          sysprep:
+            secret:
+              name: {{ s.sysprep_secret | to_json }}
+{% endif %}

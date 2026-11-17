@@ -1,0 +1,68 @@
+---
+_mp_spec: >-
+  {{ mp_qemu_instance_defaults
+     | combine(mp_defaults.qemu | default({}), mp.qemu | default({}), recursive=true) }}
+
+# Per-run working directory and per-host files.
+_mp_dir: "{{ molecule_ephemeral_directory }}/qemu"
+_mp_file: "{{ _mp_dir }}/{{ inventory_hostname }}"
+_mp_name: "{{ inventory_hostname }}-{{ mp_run_id }}"
+_mp_key: "{{ _mp_dir }}/id_ed25519"
+_mp_uefi: "{{ _mp_spec.firmware == 'uefi' }}"
+_mp_ssh_port: >-
+  {{ mp_qemu_ssh_port_base + (mp_run_id | hash('sha1'))[:4] | int(base=16) % 500 * 20
+     + ansible_play_hosts_all.index(inventory_hostname) }}
+
+# Image cache: URLs download into a directory keyed by the image string;
+# .zip/.xz/.gz/.bz2 images are unpacked next to the source with the extension
+# stripped (an archive must contain a single image named that way).
+_mp_cache: "{{ mp_qemu_cache_dir }}/{{ (_mp_spec.image | hash('sha1'))[:12] }}"
+_mp_image_src: >-
+  {{ _mp_cache ~ '/' ~ _mp_spec.image | urlsplit('path') | basename
+     if '://' in _mp_spec.image else _mp_spec.image | expanduser }}
+_mp_image_ext: "{{ (_mp_image_src | splitext)[1] | lower }}"
+_mp_image: >-
+  {{ _mp_cache ~ '/' ~ (_mp_image_src | basename | splitext)[0]
+     if _mp_image_ext in ['.zip', '.xz', '.gz', '.bz2'] else _mp_image_src }}
+
+# NoCloud seed: the management user is prepended to any user_data users and
+# list keys (users, runcmd, write_files, ...) are appended.
+_mp_user_data:
+  users:
+    - name: "{{ _mp_spec.ssh_user }}"
+      sudo: ALL=(ALL) NOPASSWD:ALL
+      shell: /bin/bash
+      ssh_authorized_keys:
+        - "{{ _mp_keypair.public_key }}"
+_mp_user_data_doc: |
+  #cloud-config
+  {{ _mp_user_data | combine(_mp_spec.cloud_init.user_data, list_merge='append') | to_nice_yaml }}
+_mp_seed: >-
+  {{ {'user-data': _mp_user_data_doc,
+      'meta-data': {'instance-id': _mp_name, 'local-hostname': inventory_hostname} | to_nice_yaml}
+     | combine({'network-config': _mp_spec.cloud_init.network_data | to_nice_yaml}
+               if _mp_spec.cloud_init.network_data else {}) }}
+
+_mp_argv: >-
+  {%- set ns = namespace(args=[
+        mp_qemu_binary, '-name', _mp_name,
+        '-machine', 'accel=' ~ ('kvm' if _mp_kvm else 'tcg'),
+        '-cpu', _mp_spec.cpu_model or ('host' if _mp_kvm else 'Nehalem'),
+        '-smp', _mp_spec.cpus | string, '-m', _mp_spec.memory | string,
+        '-display', 'none', '-serial', 'file:' ~ _mp_file ~ '.log',
+        '-drive', 'if=virtio,format=qcow2,file=' ~ _mp_file ~ '.qcow2',
+        '-cdrom', _mp_file ~ '-seed.iso',
+        '-netdev', 'user,id=net0,hostfwd=tcp:127.0.0.1:' ~ _mp_ssh_port ~ '-:22',
+        '-device', 'virtio-net-pci,netdev=net0',
+        '-daemonize', '-pidfile', _mp_file ~ '.pid']) -%}
+  {%- if _mp_uefi -%}
+  {%- set ns.args = ns.args + [
+        '-drive', 'if=pflash,format=raw,readonly=on,file=' ~ mp_qemu_ovmf_code,
+        '-drive', 'if=pflash,format=raw,file=' ~ _mp_file ~ '-OVMF_VARS.fd'] -%}
+  {%- endif -%}
+  {%- for disk in _mp_spec.data_disks -%}
+  {%- set ns.args = ns.args + [
+        '-drive', 'if=none,format=qcow2,id=' ~ disk.name ~ ',file=' ~ _mp_file ~ '-' ~ disk.name ~ '.qcow2',
+        '-device', 'virtio-blk-pci,drive=' ~ disk.name ~ ',serial=' ~ disk.name] -%}
+  {%- endfor -%}
+  {{ ns.args + _mp_spec.extra_args }}

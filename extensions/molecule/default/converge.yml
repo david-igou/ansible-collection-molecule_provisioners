@@ -1,8 +1,0 @@
----
-- name: Converge — verify SSH/exec works against every molecule host
-  hosts: molecule
-  gather_facts: true
-  tasks:
-    - name: Capture hostname and OS info
-      ansible.builtin.debug:
-        msg: "{{ ansible_hostname }} on {{ ansible_distribution }} {{ ansible_distribution_version }}"

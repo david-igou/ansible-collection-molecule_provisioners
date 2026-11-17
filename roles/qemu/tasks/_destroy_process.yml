@@ -1,3 +1,0 @@
----
-- name: qemu | Destroy recorded guests independently of current inventory
-  ansible.builtin.include_tasks: destroy.yml

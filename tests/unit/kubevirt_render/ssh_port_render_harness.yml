@@ -1,4 +1,0 @@
----
-# Port regressions use the same production task as the inventory tests.
-- name: Render connection port
-  ansible.builtin.import_playbook: connection_inventory_harness.yml

@@ -1,7 +1,2 @@
-# Development and functional-test tools; runtime packages are in requirements.txt.
-pytest-ansible
-pytest-xdist
+# Runs the self-test scenarios in extensions/molecule.
 molecule
-# Authenticated network_cli regression with the RouterOS connection plugin.
-paramiko
-pexpect

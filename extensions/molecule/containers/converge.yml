@@ -1,0 +1,7 @@
+---
+- name: Converge
+  hosts: molecule
+  gather_facts: false
+  tasks:
+    - name: Run a module in each instance
+      ansible.builtin.ping:

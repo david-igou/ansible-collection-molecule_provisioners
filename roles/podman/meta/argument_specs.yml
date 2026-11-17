@@ -1,57 +1,40 @@
 ---
 argument_specs:
-  main:
-    short_description: >-
-      Default entry point — does nothing on its own; use tasks_from=create|destroy|prepare.
-    options: {}
   create:
-    short_description: Create podman containers and networks for hosts in groups['molecule'].
+    short_description: Start one Podman container per molecule host
+    description:
+      - Each host's container is C(mp_podman_instance_defaults), then
+        C(mp_defaults.podman), then the host's C(mp.podman), merged in that
+        order and passed to M(containers.podman.podman_container). Any option
+        of that module can be set; the container name is the inventory hostname.
     options:
-      mp_podman_role_defaults:
+      mp_podman_instance_defaults:
         type: dict
-        description: >-
-          Per-host field defaults (command, privileged, volumes, etc.).
-          Layered as: this dict <- mp_defaults.podman <- hostvars[item].mp.podman.
-      mp_podman_async_timeout:
-        type: int
-        default: 7200
-        description: Async timeout (seconds) for bulk container create.
-      mp_podman_async_retries:
-        type: int
-        default: 300
-        description: Number of times to poll for async completion.
-      mp_podman_async_delay:
-        type: int
-        default: 24
-        description: >-
-          Seconds between async_status polls. retries * delay should
-          equal async_timeout (default 300 * 24 = 7200).
+        description: Container settings applied before mp_defaults.podman and mp.podman.
+      mp_podman_networks:
+        type: list
+        elements: dict
+        default: []
+        description: M(containers.podman.podman_network) arguments, one dict per network.
       mp_podman_executable:
         type: str
         default: podman
-        description: >-
-          Path or name of the podman executable. Picked up from
-          MOLECULE_PODMAN_EXECUTABLE env var by default.
+        description: Podman binary. Defaults to C(MOLECULE_PODMAN_EXECUTABLE) when set.
   destroy:
-    short_description: Destroy podman containers and (non-reserved) networks.
+    short_description: Remove the containers and networks
     options:
-      mp_podman_role_defaults:
+      mp_podman_instance_defaults:
         type: dict
-      mp_podman_async_timeout:
-        type: int
-        default: 7200
-      mp_podman_async_retries:
-        type: int
-        default: 300
-      mp_podman_async_delay:
-        type: int
-        default: 24
+        description: Container settings applied before mp_defaults.podman and mp.podman.
+      mp_podman_networks:
+        type: list
+        elements: dict
+        default: []
+        description: M(containers.podman.podman_network) arguments, one dict per network.
       mp_podman_executable:
         type: str
         default: podman
-        description: >-
-          Path or name of the podman executable. Picked up from
-          MOLECULE_PODMAN_EXECUTABLE env var by default.
+        description: Podman binary. Defaults to C(MOLECULE_PODMAN_EXECUTABLE) when set.
   prepare:
-    short_description: Run podman-side preparation tasks against created containers.
+    short_description: Wait until each container can run Ansible modules
     options: {}

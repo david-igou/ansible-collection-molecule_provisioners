@@ -1,3 +1,0 @@
----
-- name: QEMU consumer create
-  ansible.builtin.import_playbook: david_igou.molecule_provisioners.create

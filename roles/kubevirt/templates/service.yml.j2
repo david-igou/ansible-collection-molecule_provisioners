@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ _mp_name }}
+  namespace: {{ _mp_spec.namespace | to_json }}
+  labels: {{ _mp_labels | to_json }}
+spec:
+  type: NodePort
+  selector:
+    molecule-provisioners/instance: {{ _mp_name }}
+  ports:
+    - name: management
+      port: {{ _mp_guest_port }}
+      protocol: TCP
+{% for p in _mp_spec.application_ports %}
+    - name: {{ p.name | to_json }}
+      port: {{ p.port }}
+      targetPort: {{ p.target_port | default(p.port) }}
+      protocol: {{ p.protocol | default('TCP') }}
+{% endfor %}

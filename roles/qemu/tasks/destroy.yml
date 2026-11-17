@@ -1,7 +1,42 @@
 ---
-- name: qemu | Destroy all guests recorded in this run
-  david_igou.molecule_provisioners.qemu_process:
-    operation: destroy
-    directory: "{{ molecule_ephemeral_directory }}"
-    cache: "{{ mp_qemu_runtime_cache_dir }}"
-    cleanup_timeout: "{{ mp_qemu_cleanup_timeout }}"
+- name: Read the guest pidfile
+  ansible.builtin.slurp:
+    src: "{{ _mp_file }}.pid"
+  register: _mp_pidfile
+  failed_when: false
+
+- name: Read the guest command line
+  ansible.builtin.slurp:
+    src: /proc/{{ _mp_pid }}/cmdline
+  vars:
+    _mp_pid: "{{ _mp_pidfile.content | b64decode | trim }}"
+  register: _mp_cmdline
+  failed_when: false
+  when: _mp_pidfile.content is defined
+
+# A pidfile can outlive its process (reboot) and the PID be reused, so only
+# a process whose command line names this run's guest is stopped.
+- name: Stop the guest
+  vars:
+    _mp_pid: "{{ _mp_pidfile.content | b64decode | trim }}"
+    _mp_ours: "{{ _mp_cmdline.content is defined and _mp_name in (_mp_cmdline.content | b64decode) }}"
+  when: _mp_ours | bool
+  block:
+    - name: Send SIGTERM to the guest
+      ansible.builtin.command:
+        argv:
+          - kill
+          - "{{ _mp_pid }}"
+      changed_when: true
+
+    - name: Wait for the guest to exit
+      ansible.builtin.wait_for:
+        path: /proc/{{ _mp_pid }}
+        state: absent
+        timeout: "{{ mp_qemu_stop_timeout }}"
+
+- name: Remove the run directory
+  ansible.builtin.file:
+    path: "{{ _mp_dir }}"
+    state: absent
+  run_once: true

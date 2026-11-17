@@ -1,9 +1,0 @@
----
-# Loaded by every dispatcher play in playbooks/.
-mp_supported_backends:
-  - podman
-  - kubevirt
-  - qemu
-  - docker
-  - aws
-  - vmware

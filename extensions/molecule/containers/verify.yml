@@ -1,0 +1,26 @@
+---
+- name: Verify the container instances
+  hosts: molecule
+  gather_facts: true
+  tasks:
+    - name: Read the layered environment variable
+      ansible.builtin.command: printenv MP_LAYER
+      register: _layer
+      changed_when: false
+
+    - name: Check that host settings override mp_defaults
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.user_id == 'root'
+          - _layer.stdout == ('host' if inventory_hostname == 'mp-node-2' else 'defaults')
+        fail_msg: "Got user {{ ansible_facts.user_id }} and MP_LAYER={{ _layer.stdout }}."
+
+    - name: Resolve the other instance on the scenario network
+      ansible.builtin.command: getent hosts {{ (groups.molecule | difference([inventory_hostname])) | first }}
+      register: _peer
+      changed_when: false
+
+    - name: Check that the peer address is on the created network
+      ansible.builtin.assert:
+        that: _peer.stdout is match('10\.89\.4[23]\.')
+        fail_msg: "Peer resolved outside mp-selftest: {{ _peer.stdout }}"

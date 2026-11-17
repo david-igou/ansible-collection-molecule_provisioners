@@ -1,5 +1,4 @@
 ---
-- name: Ensure sudo is installed
-  ansible.builtin.package:
-    name: sudo
-    state: present
+- name: Wait for the container to run Ansible modules
+  ansible.builtin.wait_for_connection:
+    timeout: 60
