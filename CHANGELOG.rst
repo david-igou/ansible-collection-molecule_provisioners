@@ -4,6 +4,45 @@ David\_igou Molecule\_provisioners Collection Release Notes
 
 .. contents:: Topics
 
+v0.0.8-alpha
+============
+
+Release Summary
+---------------
+
+Rebuilds the collection on native Ansible with no Python plugins, adds a VMware vSphere backend and a documentation site, and removes the AWS backend. Settings for the podman and docker backends now use the container modules' own option names, and the qemu, kubevirt and vmware backends validate each host's settings. Destroy instances created with 0.0.7-alpha using 0.0.7-alpha before upgrading.
+
+Major Changes
+-------------
+
+- Lifecycle plays now target the molecule hosts and run every task on the controller, so each host reads its own mp, mp_defaults and role variables straight from inventory. Hosts are provisioned in parallel through forks.
+- The qemu and kubevirt backends are rewritten with ansible-core and collection modules only. The collection no longer ships Python plugins.
+- vmware - new backend that clones vSphere templates into VMs named after the host and run id, bootstraps them through GuestInfo cloud-init, and deletes only VMs carrying the run's ownership annotation.
+
+Minor Changes
+-------------
+
+- podman and docker - containers take the inventory host name as their hostname by default, as molecule-plugins platforms did.
+
+Breaking Changes / Porting Guide
+--------------------------------
+
+- A host no longer needs an mp.<backend> block when mp_defaults.<backend> supplies its settings.
+- podman and docker - mp.podman and mp.docker are now passed unchanged to containers.podman.podman_container and community.docker.docker_container, so keys use those modules' option names (for example network, volume and security_opt instead of podman_network, volumes and security_opts). Networks move to the mp_podman_networks and mp_docker_networks lists of module arguments. The default command is now sleep infinity.
+- podman and docker - the role defaults dicts are renamed to mp_podman_instance_defaults and mp_docker_instance_defaults, and prepare no longer installs sudo.
+
+Removed Features (previously deprecated)
+----------------------------------------
+
+- The aws backend and its plugins are removed. No consumer used it; it can return as a native rewrite.
+- The pytest unit and integration suites are replaced by Molecule scenarios under extensions/molecule.
+- The reset playbook is removed.
+
+Documentation Changes
+---------------------
+
+- Add a documentation site built with antsibull-docs and published to GitHub Pages. Guides live in docs/docsite/rst; role pages come from the argument specs, which now describe every entry point.
+
 v0.0.7-alpha
 ============
 
