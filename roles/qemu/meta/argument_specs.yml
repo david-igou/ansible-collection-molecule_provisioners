@@ -1,5 +1,12 @@
 ---
 argument_specs:
+  main:
+    short_description: Local QEMU virtual machines as Molecule instances
+    description:
+      - Not called directly. Scenarios import the collection's C(create),
+        C(prepare) and C(destroy) playbooks, which include this role's entry
+        point of the same name when C(mp_backend) is C(qemu).
+    options: {}
   create:
     short_description: Boot one QEMU guest per molecule host
     description:

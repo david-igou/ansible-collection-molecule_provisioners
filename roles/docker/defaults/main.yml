@@ -4,6 +4,7 @@
 # community.docker.docker_container.
 mp_docker_instance_defaults:
   command: sleep infinity
+  hostname: "{{ inventory_hostname }}"
 
 # Arguments for community.docker.docker_network, one dict per network.
 # Created before the containers and removed after them.

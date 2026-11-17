@@ -23,7 +23,11 @@ Follow [AGENTS.md](AGENTS.md). Keep plans and session notes out of the repositor
   `module_defaults`, so the schema is the module's own.
 - `extensions/molecule/` — self-test scenarios (`containers`, `qemu`,
   `kubevirt`, `vmware`) sharing `config.yml`.
-- `docs/examples/` — files consumers copy.
+- `docs/docsite/` — the documentation site (`make docs`): guides in `rst/`,
+  their order in `extra-docs.yml`. Role pages come from `meta/argument_specs.yml`.
+  `.github/workflows/docs.yml` publishes it to GitHub Pages from `main`.
+- `docs/examples/` — files consumers copy; they are the Getting started guide's
+  code blocks verbatim, so change both together.
 
 ## Commands
 
@@ -37,6 +41,7 @@ Follow [AGENTS.md](AGENTS.md). Keep plans and session notes out of the repositor
 | VMware scenario | `make test-vmware` (uses `VMWARE_*` and `MP_TEST_VMWARE_*`) |
 | Sanity | `make sanity` |
 | Build | `make build` |
+| Docs site | `make docs` (needs `docs-requirements.txt`) |
 
 Run scenarios from the collection root; the Makefile sets `MOLECULE_GLOB` and
 puts `.build/` (this checkout) first on the collection path. `make test-kubevirt`
@@ -48,8 +53,9 @@ selects, so live-infrastructure authorization rules apply.
 1. Edit `roles/<backend>/`. For qemu, kubevirt and vmware, a new host setting needs an
    entry in `mp_<backend>_instance_defaults` and the `instance` argument spec.
 2. Cover the behavior in the backend's scenario `verify.yml`.
-3. Update `roles/<backend>/README.md` and add a changelog fragment.
-4. Run `make lint` and the backend's scenario.
+3. Update the backend guide in `docs/docsite/rst/backend_<backend>.rst` and add a
+   changelog fragment.
+4. Run `make lint`, `make docs` and the backend's scenario.
 
 ## Constraints
 

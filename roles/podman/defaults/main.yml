@@ -4,6 +4,7 @@
 # containers.podman.podman_container.
 mp_podman_instance_defaults:
   command: sleep infinity
+  hostname: "{{ inventory_hostname }}"
 
 # Arguments for containers.podman.podman_network, one dict per network.
 # Created before the containers and removed after them.

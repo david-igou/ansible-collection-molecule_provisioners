@@ -24,6 +24,8 @@ ansible:
     verify: verify.yml
 
 scenario:
+  destroy_sequence:
+    - destroy
   test_sequence:
     - syntax
     - create

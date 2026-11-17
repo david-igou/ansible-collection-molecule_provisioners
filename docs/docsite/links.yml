@@ -1,0 +1,11 @@
+---
+edit_on_github:
+  repository: david-igou/ansible-collection-molecule_provisioners
+  branch: main
+  path_prefix: ""
+
+extra_links:
+  - description: Report an issue
+    url: https://github.com/david-igou/ansible-collection-molecule_provisioners/issues/new
+  - description: Changelog
+    url: https://github.com/david-igou/ansible-collection-molecule_provisioners/blob/main/CHANGELOG.rst

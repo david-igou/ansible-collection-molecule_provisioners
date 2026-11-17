@@ -1,5 +1,12 @@
 ---
 argument_specs:
+  main:
+    short_description: Docker containers as Molecule instances
+    description:
+      - Not called directly. Scenarios import the collection's C(create),
+        C(prepare) and C(destroy) playbooks, which include this role's entry
+        point of the same name when C(mp_backend) is C(docker).
+    options: {}
   create:
     short_description: Start one Docker container per molecule host
     description:
@@ -18,6 +25,9 @@ argument_specs:
         description: M(community.docker.docker_network) arguments, one dict per network.
   destroy:
     short_description: Remove the containers and networks
+    description:
+      - Removes each host's container, then the networks in C(mp_docker_networks).
+        Succeeds when nothing exists.
     options:
       mp_docker_instance_defaults:
         type: dict
@@ -29,4 +39,7 @@ argument_specs:
         description: M(community.docker.docker_network) arguments, one dict per network.
   prepare:
     short_description: Wait until each container can run Ansible modules
+    description:
+      - Runs an Ansible module in each container, which catches images
+        without Python before converge.
     options: {}

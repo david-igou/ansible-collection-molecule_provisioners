@@ -9,7 +9,5 @@ skip_list:
 
 exclude_paths:
   - .build/
-  # Placeholder converge for consumers to replace; its role does not exist here.
-  - docs/examples/default/converge.yml
   - .github/
   - changelogs/

@@ -1,0 +1,14 @@
+---
+sections:
+  - title: Guides
+    toctree:
+      - guide_getting_started
+      - guide_scenarios
+      - guide_migration
+  - title: Backends
+    toctree:
+      - backend_podman
+      - backend_docker
+      - backend_qemu
+      - backend_kubevirt
+      - backend_vmware

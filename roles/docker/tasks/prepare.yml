@@ -1,4 +1,5 @@
 ---
-- name: Wait for the container to run Ansible modules
-  ansible.builtin.wait_for_connection:
-    timeout: 60
+# Create already waited for the container to run; this catches images
+# without the Python that Ansible modules need.
+- name: Run a module in the container
+  ansible.builtin.ping:

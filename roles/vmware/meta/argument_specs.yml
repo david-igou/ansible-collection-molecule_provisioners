@@ -1,5 +1,12 @@
 ---
 argument_specs:
+  main:
+    short_description: VMware vSphere virtual machines as Molecule instances
+    description:
+      - Not called directly. Scenarios import the collection's C(create),
+        C(prepare) and C(destroy) playbooks, which include this role's entry
+        point of the same name when C(mp_backend) is C(vmware).
+    options: {}
   create:
     short_description: Clone one vCenter VM per molecule host
     description:
@@ -40,6 +47,9 @@ argument_specs:
         description: vCenter connection arguments, as for create.
   prepare:
     short_description: Wait until each guest accepts connections and cloud-init has finished
+    description:
+      - Waits for an SSH connection, then for C(cloud-init status --wait) when the
+        guest was bootstrapped through GuestInfo.
     options:
       mp_vmware_wait_timeout:
         type: int

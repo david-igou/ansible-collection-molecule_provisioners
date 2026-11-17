@@ -1,11 +1,9 @@
 ---
-# Copy to extensions/molecule/config.yml. Molecule merges it into every
-# scenario's molecule.yml when run from the collection root with
-# MOLECULE_GLOB=extensions/molecule/*/molecule.yml (see the Makefile).
 dependency:
   name: galaxy
   options:
     requirements-file: extensions/molecule/requirements-test.yml
+    role-file: extensions/molecule/requirements-test.yml
 
 ansible:
   executor:
@@ -21,6 +19,9 @@ ansible:
     verify: verify.yml
 
 scenario:
+  destroy_sequence:
+    - dependency
+    - destroy
   test_sequence:
     - dependency
     - syntax

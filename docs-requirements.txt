@@ -1,0 +1,5 @@
+# Builds the documentation site (make docs).
+ansible-pygments==0.1.2
+antsibull-docs==2.28.0
+sphinx==9.2.0
+sphinx-ansible-theme==0.10.4
