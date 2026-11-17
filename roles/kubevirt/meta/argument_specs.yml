@@ -1,5 +1,12 @@
 ---
 argument_specs:
+  main:
+    short_description: KubeVirt virtual machines as Molecule instances
+    description:
+      - Not called directly. Scenarios import the collection's C(create),
+        C(prepare) and C(destroy) playbooks, which include this role's entry
+        point of the same name when C(mp_backend) is C(kubevirt).
+    options: {}
   create:
     short_description: Create one KubeVirt VirtualMachine per molecule host
     description:
@@ -19,6 +26,10 @@ argument_specs:
           - Seconds to wait for the VM to become Ready (including disk imports) and for its pod IP.
   destroy:
     short_description: Delete the VirtualMachines, Services and cloud-init Secrets of this run
+    description:
+      - Deletes the VirtualMachine, Service and Secret labelled with each host's
+        run-specific name, with foreground propagation so DataVolumes go too.
+        Succeeds when nothing exists.
     options:
       mp_kubevirt_instance_defaults:
         type: dict
@@ -29,6 +40,10 @@ argument_specs:
         description: Seconds to wait for the resources to disappear.
   prepare:
     short_description: Wait until each guest accepts connections and cloud-init has finished
+    description:
+      - Waits for an Ansible connection (C(mp_kubevirt_windows_wait_timeout) for
+        psrp and winrm guests), then for C(cloud-init status --wait) on Linux guests
+        that use cloud-init.
     options:
       mp_kubevirt_wait_timeout:
         type: int

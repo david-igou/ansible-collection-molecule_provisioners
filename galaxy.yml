@@ -33,7 +33,7 @@ dependencies:
   kubernetes.core: ">=3.0.0"
 
 repository: https://github.com/david-igou/ansible-collection-molecule_provisioners
-documentation: https://github.com/david-igou/ansible-collection-molecule_provisioners
+documentation: https://david-igou.github.io/ansible-collection-molecule_provisioners/
 homepage: https://github.com/david-igou/ansible-collection-molecule_provisioners
 issues: https://github.com/david-igou/ansible-collection-molecule_provisioners/issues
 
@@ -53,4 +53,5 @@ build_ignore:
   - CLAUDE.md
   - changelogs/fragments
   - lint-requirements.txt
+  - docs-requirements.txt
   - test-requirements.txt

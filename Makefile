@@ -8,7 +8,7 @@ COLLECTION := $(CURDIR)/.build/ansible_collections/david_igou/molecule_provision
 export ANSIBLE_COLLECTIONS_PATH := $(CURDIR)/.build:$(ANSIBLE_COLLECTIONS_PATH)
 export MOLECULE_GLOB := extensions/molecule/*/molecule.yml
 
-.PHONY: help install lint test test-podman test-docker test-qemu test-kubevirt test-vmware sanity build clean
+.PHONY: help install lint test test-podman test-docker test-qemu test-kubevirt test-vmware sanity build docs clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_%-]+:.*?## / {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -35,6 +35,16 @@ sanity: $(COLLECTION) ## Run ansible-test sanity in a container
 
 build: ## Build the collection artifact
 	ansible-galaxy collection build --force
+
+DOCS := $(CURDIR)/.build/docs
+
+docs: $(COLLECTION) ## Lint the docs and build the site into .build/docs/build/html
+	antsibull-docs lint-collection-docs --plugin-docs --validate-collection-refs=all .
+	install -d -m 700 $(DOCS)
+	antsibull-docs sphinx-init --use-current --squash-hierarchy --fail-on-error \
+	  --project david_igou.molecule_provisioners --copyright 'David Igou' \
+	  --title 'Molecule provisioners' --dest-dir $(DOCS) david_igou.molecule_provisioners
+	$(DOCS)/build.sh
 
 clean: ## Remove build artifacts
 	rm -rf .build *.tar.gz

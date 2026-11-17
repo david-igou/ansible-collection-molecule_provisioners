@@ -9,8 +9,8 @@ are followed.
 ## Agent working files
 
 Never commit agent plans, design notes, session logs, or writing-tool state.
-Keep them outside this repository. Put user-facing documentation in `README.md`,
-the role READMEs, or `docs/`.
+Keep them outside this repository. Put user-facing documentation in the
+documentation site sources under `docs/docsite/`, or in `README.md`.
 
 ## Rules for this collection
 
